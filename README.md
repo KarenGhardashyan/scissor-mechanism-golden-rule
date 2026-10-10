@@ -152,7 +152,7 @@ A pre-compiled standalone executable is provided in the repository:
 1. Install **[Godot Engine 4.3+](https://godotengine.org/download)**.
 2. Clone this repository:
    ```bash
-   git clone https://github.com/YOUR_GITHUB_USERNAME/scissor-pantograph-mechanics.git
+   git clone https://github.com/KarenGhardashyan/scissor-mechanism-golden-rule.git
    ```
 3. Open Godot, click **Import**, select `project.godot`, and press **Run** (`F5`).
 
