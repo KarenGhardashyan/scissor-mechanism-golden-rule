@@ -1,11 +1,17 @@
 # Sim-to-Real Verification of the Golden Rule of Mechanics
 ### Experimental Physics Investigation, Additive Manufacturing & Interactive 3D Digital Twin
 
+[![Live Demo](https://img.shields.io/badge/Live%20Simulation-Play%20in%20Browser-0071E3?style=for-the-badge&logo=googlechrome&logoColor=white)](https://karenghardashyan.github.io/scissor-mechanism-golden-rule/)
+[![Download Executable](https://img.shields.io/badge/Standalone%20App-Windows%20x64%20(ZIP)-34C759?style=for-the-badge&logo=windows&logoColor=white)](build/ScissorPantograph_Windows_x64.zip)
+
 [![Godot 4](https://img.shields.io/badge/Engine-Godot%204.5-478CBF?logo=godotengine&logoColor=white)](https://godotengine.org)
 [![Physics](https://img.shields.io/badge/Physics-Classical%20Mechanics-orange)](#-theoretical-principles)
 [![School](https://img.shields.io/badge/Institution-A.%20Shahinyan%20Phys--Math%20School-red)](https://physmath.am)
 [![Aesthetic](https://img.shields.io/badge/Aesthetic-Apple%20Liquid%20Glass-black)](https://developer.apple.com/visionos/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+> ### 🌐 [▶ Click Here to Launch the Live 3D Simulation](https://karenghardashyan.github.io/scissor-mechanism-golden-rule/)
+> **Interact with the physical rigs, adjust suspended masses ($m$), change spring constants ($k$), toggle mechanical efficiency ($\eta$), and inspect the real-time $L(m)$ displacement curves directly in your web browser.**
 
 An end-to-end scientific and engineering research project investigating the **Golden Rule of Mechanics** (*Goldene Regel der Mechanik*) and the **Principle of Virtual Work** through custom 3D-printed scissor pantograph mechanisms, physical laboratory testing, statistical regression modeling, and a real-time 3D simulation bench built in Godot Engine 4.
 
