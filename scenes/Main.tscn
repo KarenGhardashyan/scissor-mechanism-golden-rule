@@ -1,0 +1,29 @@
+[gd_scene load_steps=4 format=3 uid="uid://d1c2g3h4j5k6"]
+
+[ext_resource type="Script" path="res://scripts/Main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/OrbitCamera.gd" id="2_cam"]
+[ext_resource type="Script" path="res://scripts/PantographRig.gd" id="3_rig"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="OrbitCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.99863, 0.052336, 0, -0.052336, 0.99863, 0, 1.80, 5.8)
+fov = 58.0
+script = ExtResource("2_cam")
+target_point = Vector3(0, 1.80, 0)
+default_distance = 5.8
+
+[node name="RigA" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.60, 3.5, 0)
+script = ExtResource("3_rig")
+n_stages = 3
+rig_name = "Rig A (n=3)"
+is_left_rig = true
+
+[node name="RigB" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.60, 3.5, 0)
+script = ExtResource("3_rig")
+n_stages = 5
+rig_name = "Rig B (n=5)"
+is_left_rig = false
