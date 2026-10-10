@@ -30,3 +30,6 @@ anti_aliasing/quality/screen_space_aa=0
 lights_and_shadows/directional_shadow/size=2048
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=1
 environment/defaults/default_clear_color=Color(0.12, 0.15, 0.2, 1)
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.web="gl_compatibility"
+

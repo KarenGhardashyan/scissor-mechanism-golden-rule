@@ -1,0 +1,14 @@
+# Physical Experiment Data: Scissor Pantograph (n = 5 stages) with Linear Steel Spring
+# Author: Karen Ghardashyan (A. Shahinyan Phys-Math Special School)
+# Date: 2025
+# Apparatus: 3D-Printed PLA Scissor Linkages (l_arm = 6 cm), Steel Tension Spring
+mass_kg,L_cm,H_cm,lambda_ratio
+0.00,26.0,5.0,5.20
+0.10,27.5,5.5,5.00
+0.20,30.0,6.0,5.00
+0.25,30.4,6.2,4.90
+0.30,32.5,6.5,5.00
+0.35,32.8,6.7,4.89
+0.40,34.3,7.0,4.90
+0.50,36.1,7.4,4.87
+1.15,43.5,9.2,4.73
