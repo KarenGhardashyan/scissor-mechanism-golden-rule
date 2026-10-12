@@ -19,27 +19,74 @@ An end-to-end scientific and engineering research project investigating the **Go
 
 ---
 
-## 👨‍🔬 Authorship & Academic Affiliation
+## 👨‍🔬 Authorship, Timeline & Academic Trajectory
 
-- **Student Researcher:** **Karen Ghardashyan** (10th Grade)
+- **Student Researcher:** **Karen Ghardashyan**
+  - *Phase I (Physical Prototyping & Lab Experiments):* 10th Grade (Spring 2024–2025)
+  - *Phase II (Sim-to-Real Digital Twin & Symplectic Solver):* 12th Grade (2025–2026)
 - **Academic Advisor:** **Bilor Kourghinyan**
 - **Institution:** **A. Shahinyan Special Phys-Math School under Yerevan State University (YSU)**, Yerevan, Armenia
-- **Academic Year:** 2024–2025 · Semester II
+- **Official STEM Project Classification:** Interdisciplinary · Constructive / Design-Build · Challenge-Driven · Individual Research
+
+> **Note on Project Trajectory (Phase I to Phase II):**
+> This project represents a multi-year engineering evolution. In 10th grade, the research originated as a physical investigation to solve high school laboratory pedagogical gaps: design, 3D printing, and empirical verification. In 12th grade, having observed real-world mechanical bottlenecks (joint friction hysteresis, non-linear elastomer creep, harmonic oscillations), the author engineered a real-time 3D **Digital Twin** in Godot 4.5. This closed the complete **Sim-to-Real loop**, synthesizing CAD/CAM, experimental physics, numerical differential equations, and interactive computer graphics.
 
 ---
 
-## 📌 Executive Summary
+## 📌 Executive Summary & Research Value
 
-The project establishes a rigorous **Sim-to-Real loop** across three integrated engineering domains:
-1. **Mechanical Design & Digital Fabrication (CAD/CAM):** Parametric SolidWorks modeling of modular scissor arms ($6\text{ cm}$ and $3\text{ cm}$) and precision 3D printing (Ultimaker Cura, $0.1\text{ mm}$ fine PLA) to minimize pivot friction. Includes both uniform pantographs ($n=3$, $n=5$) and a progressive variable-pitch pantograph with arm ratios **1:2:3**.
-2. **Physical Load Testing & Desmos Statistical Regression:** Calibrated static load testing ($m \in [0.0\text{ kg}, 1.15\text{ kg}]$) on 3-stage ($n=3$) and 5-stage ($n=5$) testbenches using both Hookean steel springs and hyperelastic rubber polymers, analyzed via Desmos regressions ($R^2 > 0.99$).
-3. **Interactive 3D Digital Twin & Simulation Architecture (Godot 4):** A real-time virtual testbench rendered in an Apple VisionOS *"Light Liquid Glass"* aesthetic, featuring:
-   - **Rig A (Electric Blue):** Uniform 3-stage rhombus pantograph ($\lambda_A = 3.000\times$).
-   - **Rig C (Emerald Green):** Progressive 1:2:3 variable-pitch pantograph ($\lambda_C = 6.000\times$).
-   - **Rig B (Ultra Orange):** Uniform 5-stage rhombus pantograph ($\lambda_B = 5.000\times$).
-   - **Interactive LaTeX Modal (KaTeX):** Full mathematical derivation window covering Virtual Work, joint friction dissipation, 2nd-order damped ODE dynamics, and celestial gravity.
-   - **Planetary Gravity ($g$):** Real-time gravitational acceleration slider ($0.0 - 25.0\text{ m/s}^2$) with presets for Zero-G, Moon, Mars, Earth, and Jupiter.
-   - **Harmonic Oscillations & Gliding:** Configurable 2nd-order spring-mass oscillator (damping ratio $\zeta \in [0.0, 0.6]$, circular frequency $\omega_n(k, m)$, dynamic impulse trigger).
+The project solves a fundamental educational and mechanical problem:
+1. **The Pedagogical Dilemma:** In high school physics, the Golden Rule of Mechanics (*"What is gained in force is lost in distance"*) is traditionally taught via static 2D chalkboard diagrams or ideal levers. Students struggle to grasp coupled kinematics, internal elasticity, and dynamic energy dissipation.
+2. **The Engineering Loop (CAD $\to$ Print $\to$ Test $\to$ Debug $\to$ Sim):**
+   - **SolidWorks Parametric CAD:** Parametric modeling of modular linkages ($6\text{ cm}$ and $3\text{ cm}$) with low-stress filleted corners and hinge holes.
+   - **Ultimaker Cura Additive Manufacturing:** Slicing optimization with fine $0.1\text{ mm}$ layer resolution and gyroid infill to minimize Coulomb joint friction.
+   - **Empirical Testing & Desmos Regression:** Load testing ($m \in [0.0\text{ kg}, 1.15\text{ kg}]$) on $n=3$, $n=5$, and non-linear rubber bands.
+   - **Engineering Failure Modes & Debugging:** Identifying real-world backlash ($\approx 0.15\text{ mm}$ pin clearance), hysteresis, link bending moments, and self-weight deflection.
+   - **Sim-to-Real Computational Twin (Godot 4.5):** Translating the physical discoveries into an interactive 3D digital twin featuring three rigs (Uniform $n=3$, Progressive $1:2:3$, and Uniform $n=5$), planetary gravity, and 2nd-order damped ODE dynamics.
+
+---
+
+## ⚙️ Engineering Journey: CAD Design, 3D Printing & Debugging
+
+```mermaid
+flowchart LR
+    A["CAD Modeling<br>(SolidWorks 2024)"] --> B["CAM Slicing<br>(Ultimaker Cura 0.1mm)"]
+    B --> C["Additive Manufacturing<br>(FDM PLA Extrusion)"]
+    C --> D["Bench Assembly &<br>Hardware Debugging"]
+    D --> E["Empirical Testing<br>& Desmos Regression"]
+    E --> F["Computational Digital Twin<br>(Godot 4.5 GDScript)"]
+```
+
+### 1. Parametric CAD Modeling (SolidWorks)
+The pantograph links were modeled parametrically from scratch:
+- **Primary Scissor Bars ($6.0\text{ cm} \times 1.0\text{ cm}$):** Designed with 3 symmetrical hinge holes ($\varnothing = 4.0\text{ mm}$ via Hole Wizard) at both extremities and the exact geometric midpoint ($3.0\text{ cm}$).
+- **Terminal Half-Bars ($3.0\text{ cm} \times 1.0\text{ cm}$):** Dual-pivot links for mounting to the upper fixed gantry clamp.
+- **Stress-Relief Filleting ($R = 0.5\text{ cm}$):** Applied to all bar ends using the Fillet tool. This crucial geometry prevents adjacent links from colliding during scissor compression and eliminates stress concentrations near the pivot pins.
+
+| SolidWorks CAD Assembly & STL Mesh | Cura Slicing Profiles ($0.1\text{ mm}$) |
+| :---: | :---: |
+| ![SolidWorks Model](docs/images/hardware/solidworks_stl_model.jpeg) | ![Cura Profile](docs/images/hardware/cura_slicing_profiles.png) |
+| *Parametric scissor arms with $\varnothing = 4\text{ mm}$ bearing holes and $R = 0.5\text{ cm}$ fillets* | *Fine $0.1\text{ mm}$ layer height profile with custom G-code routines* |
+
+### 2. CAM Slicing & Additive Manufacturing (Ultimaker Cura)
+- **Material:** Generic Polylactic Acid (PLA), chosen for its high tensile modulus ($E \approx 3.5\text{ GPa}$) and minimal thermal shrinkage.
+- **Layer Thickness:** $0.1\text{ mm}$ (Fine Profile) to achieve ultra-smooth bearing contact faces and minimize plastic-on-plastic Coulomb friction.
+- **Print Speed:** $60\text{ mm/s}$ extrusion speed, $120\text{ mm/s}$ travel speed.
+- **Infill & Shell Geometry:** High-density Cubic/Gyroid infill with 3 perimeter walls ($1.2\text{ mm}$ shell thickness) to resist out-of-plane buckling under high tensile loads.
+
+---
+
+### 3. Engineering Challenges & Troubleshooting (What We Had to Overcome)
+
+Building a physical mechanism that matches theoretical equations revealed several non-trivial real-world engineering hurdles:
+
+| Challenge / Engineering Problem | Root Cause Analysis | Engineering Solution & Resolution |
+| :--- | :--- | :--- |
+| **1. Pivot Pin Backlash & Play** | Drill bit / nozzle tolerance caused $\approx 0.15\text{ mm}$ oversize on holes, resulting in cumulative droop across 5 stages. | Re-calibrated Cura horizontal expansion parameter (`-0.08 mm`) and standardized on precision $4.0\text{ mm}$ steel pins. |
+| **2. Joint Friction Hysteresis** | Layer-line ridges on FDM printed faces caused stick-slip friction, creating a $\pm 1.5\text{ mm}$ deadband. | Switched to $0.1\text{ mm}$ layer height with ironing enabled; applied low-viscosity PTFE lubricant to pivot faces. |
+| **3. Linkage Self-Weight Sag** | Theoretical equations assumed massless linkages, but real PLA links ($m_{\text{link}} \approx 0.05\text{ kg}$) created baseline extension. | Derived new analytical formulation taking link center-of-mass into account: $P_{\text{eff}} = (m + \frac{n}{2} m_{\text{link}})g$. |
+| **4. Elastomer Viscoelastic Creep** | Rubber bands suffered from stress relaxation and strain hardening under high loads ($> 800\text{ g}$). | Replaced with linear temper-hardened steel coil springs ($k \approx 1000\text{ N/m}$); modeled rubber band using 3rd-degree polynomial. |
+| **5. High-Load Lateral Buckling** | Under $> 1\text{ kg}$ suspended load, slender 2D scissor arms tended to twist out of plane. | Reinforced link thickness ($3.6\text{ mm}$); added interlocking hub collars to maintain planar rigidity. |
 
 ---
 
@@ -213,6 +260,21 @@ graph TD
 
 ---
 
+## 🎓 Recommendations for Top Universities (MIT, Harvard, Stanford, Caltech)
+
+This project exhibits the exact traits sought by admissions committees and faculty research labs:
+
+1. **Demonstrated Intellectual Vitality & Problem-Solving Resilience:**
+   - The project does not merely state theoretical formulas; it chronicles real physical breakdowns (pin clearance backlash, Coulomb friction, out-of-plane buckling) and systematically solves each via engineering design.
+2. **True Multidisciplinary Mastery (STEM Synergy):**
+   - Combines **Mechanical Engineering** (SolidWorks CAD, tolerances, fillets), **Materials & CAM** (Cura slicing, infill patterns, FDM print orientation), **Experimental Physics** (static equilibrium, Hooke's law, Desmos regression), and **Computer Science / Computational Physics** (Godot 4, Symplectic Euler ODE solver, WebAssembly/KaTeX).
+3. **From Physical Prototype to Digital Twin:**
+   - Demonstrates modern Industry 4.0 methodology: starting with physical hardware in Grade 10, recognizing system limits, and synthesizing an interactive computational digital twin in Grade 12.
+4. **Educational Leadership:**
+   - Designed to modernize school laboratories and empower peers to understand classical mechanics through interactive visual computing and tactile experimentation.
+
+---
+
 ## 📂 Repository Structure
 
 ```text
@@ -228,6 +290,7 @@ graph TD
 │   ├── PROJECT_PASSPORT.md  # Official STEM High School Project Passport
 │   └── images/              # Documentation assets & Desmos regression plots
 │       ├── desmos/          # Laboratory regression charts from Desmos
+│       ├── hardware/        # Physical testbench photos, SolidWorks & Cura profiles
 │       └── simulation_showcase.png
 ├── scenes/                  # Godot 4 3D scene files (Main.tscn, PantographRig.tscn)
 ├── scripts/                 # Core simulation GDScript source code
