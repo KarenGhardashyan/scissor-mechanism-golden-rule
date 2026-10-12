@@ -344,7 +344,9 @@ func _build_liquid_glass_ui() -> void:
 	btn_formulas.add_theme_color_override("font_pressed_color", blue_accent)
 	btn_formulas.add_theme_color_override("font_hover_color", blue_accent)
 	btn_formulas.pressed.connect(func():
-		if formulas_modal != null:
+		if OS.has_feature("web"):
+			JavaScriptBridge.eval("window.openFormulasModal && window.openFormulasModal();")
+		elif formulas_modal != null:
 			formulas_modal.visible = not formulas_modal.visible
 	)
 	header_box.add_child(btn_formulas)
@@ -919,40 +921,33 @@ func _build_formulas_modal(root: Control) -> void:
 	scroll.add_child(content_rtl)
 
 	var t := ""
-	t += "[font_size=16][b][color=#1D1D1F]1. Conservation of Mechanical Energy & Virtual Work[/color][/b][/font_size]\n"
-	t += "[color=#3A3A3C]In an ideal static linkage, the input mechanical work supplied by spring tension [b]T[/b] over upper rhombus vertical displacement [b]δH[/b] equals the work performed on the suspended load [b]P[sub]eff[/sub][/b] over total mechanism extension [b]δL[/b]:[/color]\n\n"
-	t += "[center][color=#0056B3][font_size=14][b]δA[sub]in[/sub] = δA[sub]out[/sub]   ⟺   T · δH = P[sub]eff[/sub] · δL[/b][/font_size][/color][/center]\n\n"
-	t += "[color=#3A3A3C]Considering real mechanical transmission efficiency [b]η ∈ [0.5, 1.0][/b]:[/color]\n"
-	t += "[center][color=#0056B3][font_size=14][b]P[sub]eff[/sub] · δL = η · (T · δH)   ⟺   T = [font_size=12]λ · P[sub]eff[/sub]\n────────\nη[/font_size][/b][/font_size][/color][/center]\n\n"
+	t += "[font_size=15][b][color=#1D1D1F]1. Principle of Virtual Work & Mechanical Efficiency[/color][/b][/font_size]\n"
+	t += "[color=#3A3A3C]In static equilibrium, input mechanical work supplied by spring tension T equals output work done lifting the load P_eff minus parasitic hinge friction losses:[/color]\n\n"
+	t += "   [color=#0056B3][b]δA_in = T · δH[/b][/color]       [color=#0056B3][b]δA_out = P_eff · δL[/b][/color]\n"
+	t += "   [color=#0056B3][b]δA_out = η · δA_in   ⟹   T = (λ · P_eff) / η[/b][/color]\n\n"
+	t += "[color=#595C66]• Total Hinge Dissipation:   ΔE_loss = Σ (M_fric,i · Δθ_i) = (1 - η) · δA_in[/color]\n\n"
 
-	t += "[font_size=16][b][color=#1D1D1F]2. Kinematic Transmission Ratios (λ ≡ δL / δH)[/color][/b][/font_size]\n"
-	t += "[color=#0071E3]• [b]Rig A (n = 3 uniform):[/b][/color]   [b]L(m) = 3 · H(m)[/b]   ⟹   [color=#0071E3][b]λ[sub]A[/sub] = 3.000×[/b][/color]\n"
-	t += "[color=#1E9C3C]• [b]Rig C (1:2:3 variable scissor):[/b][/color]   [b]L(m) = (1 + 2 + 3) · H[sub]0[/sub](m) = 6 · H[sub]0[/sub](m)[/b]   ⟹   [color=#1E9C3C][b]λ[sub]C[/sub] = 6.000×[/b][/color]\n"
-	t += "[color=#FF6B0D]• [b]Rig B (n = 5 uniform):[/b][/color]   [b]L(m) = 5 · H(m)[/b]   ⟹   [color=#FF6B0D][b]λ[sub]B[/sub] = 5.000×[/b][/color]\n\n"
+	t += "[font_size=15][b][color=#1D1D1F]2. Kinematic Transmission Ratios (λ ≡ δL / δH)[/color][/b][/font_size]\n"
+	t += "[color=#0071E3]• Rig A (n = 3 uniform):[/color]     L(m) = 3 · H(m)     ⟹   [color=#0071E3][b]λ_A = 3.000×[/b][/color]\n"
+	t += "[color=#1E9C3C]• Rig C (1:2:3 variable):[/color]    L(m) = 6 · H_0(m)   ⟹   [color=#1E9C3C][b]λ_C = 6.000×[/b][/color]\n"
+	t += "[color=#FF6B0D]• Rig B (n = 5 uniform):[/color]     L(m) = 5 · H(m)     ⟹   [color=#FF6B0D][b]λ_B = 5.000×[/b][/color]\n\n"
 
-	t += "[font_size=16][b][color=#1D1D1F]3. Equilibrium of Forces with Self-Weight & Planetary Gravity (g)[/color][/b][/font_size]\n"
-	t += "[color=#3A3A3C]The total effective gravitational load acting on the mechanism includes both suspended mass [b]m[/b] and structural linkage self-weight [b]m[sub]link[/sub][/b] (evaluated at the system center of mass):[/color]\n\n"
-	t += "[center][color=#0056B3][font_size=14][b]P[sub]eff[/sub] = m · g + m[sub]struct[/sub] · g = (m + m[sub]struct[/sub]) · g[/b][/font_size][/color][/center]\n"
-	t += "[color=#595C66]• Uniform rigs (n stages):   m[sub]struct[/sub] = [font_size=11]n\n─\n2[/font_size] · m[sub]link[/sub][/color]\n"
-	t += "[color=#595C66]• 1:2:3 progressive rig:      m[sub]struct[/sub] = 3.0 · m[sub]link[/sub][/color]\n"
-	t += "[color=#595C66]• Celestial gravity presets: Zero-G (0.00), Moon (1.62), Mars (3.71), Earth (9.81), Jupiter (24.79 m/s²)[/color]\n\n"
+	t += "[font_size=15][b][color=#1D1D1F]3. Equilibrium of Forces with Self-Weight & Gravity (g)[/color][/b][/font_size]\n"
+	t += "   [b]P_eff = (m + m_struct) · g[/b]\n"
+	t += "[color=#595C66]• Uniform rigs: m_struct = (n / 2) · m_link    |   Rig C (1:2:3): m_struct = 3.0 · m_link[/color]\n\n"
 
-	t += "[font_size=16][b][color=#1D1D1F]4. Hooke's Law & Characteristic Elongation Equations[/color][/b][/font_size]\n"
-	t += "[color=#3A3A3C]Under linear spring stiffness [b]k[/b], the upper rhombus deflection [b]ΔH(m)[/b] and the total mechanism elongation [b]ΔL(m)[/b] are governed by textbook fraction equations:[/color]\n\n"
-	t += "[center][color=#0056B3][font_size=14][b]ΔH(m) = [font_size=12]T(m)\n────\nk[/font_size] = [font_size=12]λ · P[sub]eff[/sub]\n───────\nη · k[/font_size][/b][/font_size][/color][/center]\n\n"
-	t += "[center][color=#0056B3][font_size=14][b]ΔL(m) = λ · ΔH(m) = [font_size=12]λ[sup]2[/sup] · P[sub]eff[/sub]\n────────\nη · k[/font_size][/b][/font_size][/color][/center]\n\n"
+	t += "[font_size=15][b][color=#1D1D1F]4. Hooke's Law & Deflection (ΔH)[/color][/b][/font_size]\n"
+	t += "   [color=#0056B3][b]ΔH(m) = (λ · P_eff) / (η · k)[/b][/color]\n"
+	t += "   [color=#0056B3][b]ΔL(m) = (λ² · P_eff) / (η · k)[/b][/color]\n\n"
 
-	t += "[font_size=16][b][color=#1D1D1F]5. Experimental Stiffness Extraction (Linear Regression Slope)[/color][/b][/font_size]\n"
-	t += "[color=#3A3A3C]Plotting extension [b]ΔH[/b] versus suspended mass [b]m[/b] yields a characteristic linear regression slope [b]tan(α)[/b] from which physical spring stiffness [b]k[/b] is analytically extracted:[/color]\n\n"
-	t += "[center][color=#0056B3][font_size=14][b]tan(α) = [font_size=12]λ · g\n─────\nk[/font_size]   ⟹   k = [font_size=12]λ · g\n──────\ntan(α)[/font_size][/b][/font_size][/color][/center]\n\n"
+	t += "[font_size=15][b][color=#1D1D1F]5. Linear Regression Slope (Stiffness Extraction)[/color][/b][/font_size]\n"
+	t += "   [color=#0056B3][b]tan(α) = (λ · g) / k   ⟹   k = (λ · g) / tan(α)[/b][/color]\n"
 	t += "[color=#595C66]Empirical laboratory validation: k ≈ 981 N/m (Rig A)  |  k ≈ 1090 N/m (Rig B)[/color]\n\n"
 
-	t += "[font_size=16][b][color=#1D1D1F]6. Dynamic 2nd-Order Harmonic Vibration Differential Equation[/color][/b][/font_size]\n"
-	t += "[color=#3A3A3C]The dynamic response of the pantograph under damping ratio [b]ζ[/b] and natural circular frequency [b]ω[/b] obeys the 2nd-order ODE:[/color]\n\n"
-	t += "[center][color=#0056B3][font_size=14][b][font_size=12]d[sup]2[/sup]H\n────\ndt[sup]2[/sup][/font_size] + 2ζω · [font_size=12]dH\n──\ndt[/font_size] + ω[sup]2[/sup] · (H - H[sub]target[/sub]) = 0[/b][/font_size][/color][/center]\n\n"
-	t += "[color=#3A3A3C]Where natural circular frequency [b]ω[/b] dynamically couples to spring stiffness [b]k[/b] and effective inertia [b]m[sub]eff[/sub][/b]:[/color]\n\n"
-	t += "[center][color=#0056B3][font_size=14][b]ω = √([font_size=12]k[sub]eff[/sub]\n────\nm[sub]eff[/sub][/font_size])[/b][/font_size][/color][/center]\n\n"
-	t += "[color=#595C66]Integrated numerically via a high-stability 4-substep Symplectic Euler scheme.[/color]\n"
+	t += "[font_size=15][b][color=#1D1D1F]6. Dynamic 2nd-Order Damped Vibration Equation[/color][/b][/font_size]\n"
+	t += "   [color=#0056B3][b]d²H/dt² + 2ζω · (dH/dt) + ω² · (H - H_target) = 0[/b][/color]\n"
+	t += "   [color=#0056B3][b]ω = √(k_eff / m_eff)[/b][/color]\n"
+	t += "[color=#595C66]Tip: In the web browser, click Formulas & Theory to view the full interactive LaTeX / KaTeX textbook equations![/color]\n"
 
 	content_rtl.text = t
 
