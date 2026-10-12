@@ -573,7 +573,7 @@ func _build_liquid_glass_ui() -> void:
 
 	oscillations_check = CheckBox.new()
 	oscillations_check.text = "Enable Spring Oscillation / Ringing"
-	oscillations_check.button_pressed = false
+	oscillations_check.button_pressed = true
 	oscillations_check.add_theme_font_size_override("font_size", 12)
 	oscillations_check.add_theme_color_override("font_color", dark_charcoal)
 	oscillations_check.add_theme_color_override("font_pressed_color", dark_charcoal)
@@ -596,17 +596,17 @@ func _build_liquid_glass_ui() -> void:
 	damp_hbox.add_child(damp_title)
 
 	damping_val_label = Label.new()
-	damping_val_label.text = "0.65"
+	damping_val_label.text = "0.25"
 	damping_val_label.add_theme_font_size_override("font_size", 12)
 	damping_val_label.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
 	damp_hbox.add_child(damping_val_label)
 	left_vbox.add_child(damp_hbox)
 
 	damping_slider = HSlider.new()
-	damping_slider.min_value = 0.05
-	damping_slider.max_value = 1.20
-	damping_slider.step = 0.05
-	damping_slider.value = 0.65
+	damping_slider.min_value = 0.00
+	damping_slider.max_value = 0.60
+	damping_slider.step = 0.02
+	damping_slider.value = 0.25
 	damping_slider.value_changed.connect(func(val: float):
 		damping_val_label.text = "%.2f" % val
 		rig_a.set_damping_ratio(val)
