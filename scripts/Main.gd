@@ -306,21 +306,35 @@ func _build_liquid_glass_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui_layer.add_child(root)
 
-	# 1. FLOATING HEADER PILL
-	var header_panel := _create_liquid_glass_panel(Vector2(360, 16), Vector2(880, 68), 24)
+	# 1. FLOATING HEADER PILL (Centered with balanced padding and space distribution)
+	var header_panel := _create_liquid_glass_panel(Vector2(0, 16), Vector2(980, 68), 24)
+	header_panel.anchor_left = 0.5
+	header_panel.anchor_right = 0.5
+	header_panel.offset_left = -490.0
+	header_panel.offset_right = 490.0
+	header_panel.offset_top = 16.0
+	header_panel.offset_bottom = 84.0
 	root.add_child(header_panel)
 
+	var header_margin := MarginContainer.new()
+	header_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	header_margin.add_theme_constant_override("margin_left", 32)
+	header_margin.add_theme_constant_override("margin_right", 24)
+	header_margin.add_theme_constant_override("margin_top", 10)
+	header_margin.add_theme_constant_override("margin_bottom", 10)
+	header_panel.add_child(header_margin)
+
 	var header_box := HBoxContainer.new()
-	header_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	header_box.offset_left = 22
-	header_box.offset_right = -22
-	header_box.offset_top = 8
-	header_box.offset_bottom = -8
+	header_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	header_box.add_theme_constant_override("separation", 16)
 	header_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	header_panel.add_child(header_box)
+	header_margin.add_child(header_box)
 
 	var title_vbox := VBoxContainer.new()
 	title_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	title_vbox.add_theme_constant_override("separation", 3)
 
 	var main_title := Label.new()
 	main_title.text = "Scissor Pantograph Verification  ·  Golden Rule of Mechanics"
@@ -337,8 +351,8 @@ func _build_liquid_glass_ui() -> void:
 	header_box.add_child(title_vbox)
 
 	# Header Action Pills
-	var btn_formulas := _create_liquid_button("📘 Formulas & Theory")
-	btn_formulas.custom_minimum_size = Vector2(135, 30)
+	var btn_formulas := _create_liquid_button("Formulas & Theory")
+	btn_formulas.custom_minimum_size = Vector2(138, 32)
 	var blue_accent := Color(0.0, 0.443, 0.89)
 	btn_formulas.add_theme_color_override("font_color", blue_accent)
 	btn_formulas.add_theme_color_override("font_pressed_color", blue_accent)
