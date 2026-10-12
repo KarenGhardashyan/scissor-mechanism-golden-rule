@@ -103,6 +103,18 @@ $$\omega_n = \sqrt{\frac{k_{\text{eff}}}{m_{\text{eff}}}} = \sqrt{\frac{k}{\frac
 
 Raw datasets are maintained in [`experimental_data/`](experimental_data/). Statistical regression curves were plotted and validated using **Desmos Graphing Calculator**.
 
+### 🔬 Physical Hardware Apparatus & Laboratory Testbench
+The physical validation experiments were conducted using custom 3D-printed pantograph linkages mounted on a calibrated vertical test stand with high-precision suspended masses and calibrated displacement sensors.
+
+| Custom 3D-Printed Apparatus | Calibrated Load Testing Stand |
+| :---: | :---: |
+| ![Physical Scissor Apparatus](docs/images/hardware/physical_rig_apparatus.png) | ![Laboratory Testing](docs/images/hardware/physical_load_testing.png) |
+| *Modular 3D-printed precision linkages with low-friction pivot bearings* | *Calibrated static weight load testing ($m \in [0.0 - 1.15\text{ kg}]$)* |
+
+> 📹 **Upcoming:** Full video demonstrations and high-speed motion capture recordings of physical vibration and dynamic testing will be linked here directly.
+
+---
+
 ### Series 1: Five-Stage Rig ($n = 5$) with Steel Spring
 $$\lambda_{\text{theoretical}} = 5.000\times \quad \big| \quad \overline{\lambda}_{\text{empirical}} = \mathbf{4.94 \pm 0.12}$$
 
