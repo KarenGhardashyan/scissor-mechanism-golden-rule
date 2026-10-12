@@ -619,7 +619,7 @@ func _build_liquid_glass_ui() -> void:
 	# Dynamic Impulse Button
 	var btn_jolt := _create_liquid_button("Apply Dynamic Impulse (Kick)")
 	btn_jolt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var blue_accent := Color(0.0, 0.443, 0.89)
+	blue_accent = Color(0.0, 0.443, 0.89)
 	btn_jolt.add_theme_color_override("font_color", blue_accent)
 	btn_jolt.add_theme_color_override("font_pressed_color", blue_accent)
 	btn_jolt.add_theme_color_override("font_hover_color", blue_accent)

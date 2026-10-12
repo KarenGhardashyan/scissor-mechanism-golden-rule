@@ -608,7 +608,7 @@ func _build_dimension_lasers() -> void:
 	mat_badge_bg.albedo_color = Color(0.06, 0.07, 0.09, 0.92) # Deep black obsidian background
 	mat_badge_bg.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat_badge_bg.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	mat_badge_bg.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat_badge_bg.render_priority = 1
 
 	var quad_h := QuadMesh.new()
 	quad_h.size = Vector2(0.42, 0.12)
@@ -616,7 +616,6 @@ func _build_dimension_lasers() -> void:
 	badge_bg_h.name = "BadgeBgH"
 	badge_bg_h.mesh = quad_h
 	badge_bg_h.material_override = mat_badge_bg
-	badge_bg_h.render_priority = 1
 	dimension_lines_container.add_child(badge_bg_h)
 
 	var quad_l := QuadMesh.new()
@@ -625,7 +624,6 @@ func _build_dimension_lasers() -> void:
 	badge_bg_l.name = "BadgeBgL"
 	badge_bg_l.mesh = quad_l
 	badge_bg_l.material_override = mat_badge_bg
-	badge_bg_l.render_priority = 1
 	dimension_lines_container.add_child(badge_bg_l)
 
 	# Bold System Font
@@ -662,6 +660,8 @@ func _build_dimension_lasers() -> void:
 
 func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 	if not dimension_lines_container or not dimension_lines_container.visible:
+		return
+	if not line_h or not line_l or not dim_label_h or not dim_label_l or not badge_bg_h or not badge_bg_l:
 		return
 
 	var side_sign: float = laser_side_sign
