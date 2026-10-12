@@ -64,6 +64,8 @@ var arrow_l_top: MeshInstance3D
 var arrow_l_bot: MeshInstance3D
 var dim_label_h: Label3D
 var dim_label_l: Label3D
+var badge_bg_h: MeshInstance3D
+var badge_bg_l: MeshInstance3D
 var mat_laser: StandardMaterial3D
 
 # Premium Industrial Materials
@@ -594,32 +596,65 @@ func _build_dimension_lasers() -> void:
 	var label_color: Color
 	var theme: String = rig_color_theme.to_lower()
 	if theme == "green" or is_scaled_123:
-		label_color = Color(0.19, 0.82, 0.35, 1.0)
+		label_color = Color(0.25, 0.95, 0.45, 1.0) # Vivid Emerald Green
 	elif theme == "orange" or not is_left_rig:
-		label_color = Color(0.95, 0.36, 0.0, 1.0)
+		label_color = Color(1.0, 0.52, 0.10, 1.0) # Vivid Ultra Orange
 	else:
-		label_color = Color(0.0, 0.443, 0.89, 1.0)
+		label_color = Color(0.15, 0.65, 1.0, 1.0) # Vivid Electric Cyan-Blue
+
+	# Black Obsidian Badge Material
+	var mat_badge_bg := StandardMaterial3D.new()
+	mat_badge_bg.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_badge_bg.albedo_color = Color(0.06, 0.07, 0.09, 0.92) # Deep black obsidian background
+	mat_badge_bg.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat_badge_bg.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat_badge_bg.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+
+	var quad_h := QuadMesh.new()
+	quad_h.size = Vector2(0.42, 0.12)
+	badge_bg_h = MeshInstance3D.new()
+	badge_bg_h.name = "BadgeBgH"
+	badge_bg_h.mesh = quad_h
+	badge_bg_h.material_override = mat_badge_bg
+	badge_bg_h.render_priority = 1
+	dimension_lines_container.add_child(badge_bg_h)
+
+	var quad_l := QuadMesh.new()
+	quad_l.size = Vector2(0.52, 0.12)
+	badge_bg_l = MeshInstance3D.new()
+	badge_bg_l.name = "BadgeBgL"
+	badge_bg_l.mesh = quad_l
+	badge_bg_l.material_override = mat_badge_bg
+	badge_bg_l.render_priority = 1
+	dimension_lines_container.add_child(badge_bg_l)
+
+	# Bold System Font
+	var bold_font := SystemFont.new()
+	bold_font.font_weight = 750
+	bold_font.font_names = PackedStringArray(["SF Pro Display", "Helvetica Neue", "Arial", "Segoe UI", "Sans-Serif"])
 
 	dim_label_h = Label3D.new()
 	dim_label_h.name = "DimLabelH"
 	dim_label_h.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	dim_label_h.pixel_size = 0.0034
-	dim_label_h.font_size = 22
+	dim_label_h.font = bold_font
+	dim_label_h.pixel_size = 0.0035
+	dim_label_h.font_size = 25
 	dim_label_h.shaded = false
 	dim_label_h.modulate = label_color
-	dim_label_h.outline_size = 5
-	dim_label_h.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
+	dim_label_h.outline_size = 0
+	dim_label_h.render_priority = 2
 	dimension_lines_container.add_child(dim_label_h)
 
 	dim_label_l = Label3D.new()
 	dim_label_l.name = "DimLabelL"
 	dim_label_l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	dim_label_l.pixel_size = 0.0034
-	dim_label_l.font_size = 22
+	dim_label_l.font = bold_font
+	dim_label_l.pixel_size = 0.0035
+	dim_label_l.font_size = 25
 	dim_label_l.shaded = false
 	dim_label_l.modulate = label_color
-	dim_label_l.outline_size = 5
-	dim_label_l.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
+	dim_label_l.outline_size = 0
+	dim_label_l.render_priority = 2
 	dimension_lines_container.add_child(dim_label_l)
 
 	dimension_lines_container.visible = true
@@ -667,13 +702,17 @@ func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 	tick_bot.position = Vector3((x_inner_bot + x_outer_bot) * 0.5, -l_vis, 0.0)
 	tick_bot.scale = Vector3(len_bot, 1.0, 1.0)
 
-	# 4. Dimension Callout Text
+	# 4. Dimension Callout Text with Black Background Badges
 	var prefix_h: String = "H0" if is_scaled_123 else "H"
-	dim_label_h.position = Vector3(x_h + side_sign * 0.08, -h_vis * 0.5, 0.02)
+	var pos_h := Vector3(x_h + side_sign * 0.10, -h_vis * 0.5, 0.02)
+	badge_bg_h.position = pos_h
+	dim_label_h.position = Vector3(pos_h.x, pos_h.y, pos_h.z + 0.006)
 	dim_label_h.text = "%s = %.1f cm" % [prefix_h, current_H * 100.0]
 
 	var mult_str: String = " (6×)" if is_scaled_123 else (" (%d×)" % n_stages)
-	dim_label_l.position = Vector3(x_l + side_sign * 0.08, -l_vis * 0.5, 0.02)
+	var pos_l := Vector3(x_l + side_sign * 0.10, -l_vis * 0.5, 0.02)
+	badge_bg_l.position = pos_l
+	dim_label_l.position = Vector3(pos_l.x, pos_l.y, pos_l.z + 0.006)
 	dim_label_l.text = "L = %.1f cm%s" % [current_L * 100.0, mult_str]
 
 

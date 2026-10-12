@@ -28,6 +28,7 @@ var bottom_panel: PanelContainer
 var is_graph_maximized: bool = false
 var btn_graph_expand: Button
 var btn_graph_theme: Button
+var formulas_modal: PanelContainer
 
 # Comparison Pill Labels
 var label_a_delta_h: Label
@@ -323,25 +324,38 @@ func _build_liquid_glass_ui() -> void:
 
 	var main_title := Label.new()
 	main_title.text = "Scissor Pantograph Verification  ·  Golden Rule of Mechanics"
-	main_title.add_theme_font_size_override("font_size", 15)
+	main_title.add_theme_font_size_override("font_size", 14)
 	main_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
 	title_vbox.add_child(main_title)
 
-	var math_header := RichTextLabel.new()
-	math_header.bbcode_enabled = true
-	math_header.fit_content = true
-	math_header.text = "[color=#0071E3][b]Rig A: ΔL=3ΔH[/b][/color]   ·   [color=#1E9C3C][b]Rig C (1:2:3): ΔL=6ΔH[/b][/color]   ·   [color=#FF6B0D][b]Rig B: ΔL=5ΔH[/b][/color]   ·   [color=#1D1D1F][b]W_out = η · W_in[/b][/color]"
-	math_header.add_theme_font_size_override("normal_font_size", 12)
-	title_vbox.add_child(math_header)
+	var sub_title := Label.new()
+	sub_title.text = "Sim-to-Real Multi-Linkage Physics Workbench  ·  Karen Ghardashyan"
+	sub_title.add_theme_font_size_override("font_size", 11)
+	sub_title.add_theme_color_override("font_color", Color(0.40, 0.42, 0.48))
+	title_vbox.add_child(sub_title)
 
 	header_box.add_child(title_vbox)
 
 	# Header Action Pills
+	var btn_formulas := _create_liquid_button("📘 Formulas & Theory")
+	btn_formulas.custom_minimum_size = Vector2(135, 30)
+	var blue_accent := Color(0.0, 0.443, 0.89)
+	btn_formulas.add_theme_color_override("font_color", blue_accent)
+	btn_formulas.add_theme_color_override("font_pressed_color", blue_accent)
+	btn_formulas.add_theme_color_override("font_hover_color", blue_accent)
+	btn_formulas.pressed.connect(func():
+		if formulas_modal != null:
+			formulas_modal.visible = not formulas_modal.visible
+	)
+	header_box.add_child(btn_formulas)
+
 	var btn_reset_cam := _create_liquid_button("Reset View")
+	btn_reset_cam.custom_minimum_size = Vector2(92, 30)
 	btn_reset_cam.pressed.connect(func(): camera.reset_camera())
 	header_box.add_child(btn_reset_cam)
 
 	var btn_slowmo := _create_liquid_button("Slow Motion")
+	btn_slowmo.custom_minimum_size = Vector2(92, 30)
 	btn_slowmo.toggle_mode = true
 	btn_slowmo.toggled.connect(func(toggled_on: bool):
 		is_slow_motion = toggled_on
@@ -351,6 +365,7 @@ func _build_liquid_glass_ui() -> void:
 	header_box.add_child(btn_slowmo)
 
 	var btn_lasers := _create_liquid_button("Hide Lasers")
+	btn_lasers.custom_minimum_size = Vector2(92, 30)
 	btn_lasers.toggle_mode = true
 	btn_lasers.button_pressed = true
 	btn_lasers.toggled.connect(func(toggled_on: bool):
@@ -836,6 +851,108 @@ func _build_liquid_glass_ui() -> void:
 		mass_slider.value = new_m
 	)
 	graph_vbox.add_child(live_graph)
+
+	# 5. FLOATING FORMULAS & THEORY MODAL WINDOW
+	_build_formulas_modal(root)
+
+
+func _build_formulas_modal(root: Control) -> void:
+	formulas_modal = _create_liquid_glass_panel(Vector2(0, 0), Vector2(760, 560), 22, 0.96)
+	formulas_modal.anchor_left = 0.5
+	formulas_modal.anchor_right = 0.5
+	formulas_modal.anchor_top = 0.5
+	formulas_modal.anchor_bottom = 0.5
+	formulas_modal.offset_left = -380.0
+	formulas_modal.offset_right = 380.0
+	formulas_modal.offset_top = -280.0
+	formulas_modal.offset_bottom = 280.0
+	formulas_modal.visible = false
+	root.add_child(formulas_modal)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	margin.add_theme_constant_override("margin_left", 22)
+	margin.add_theme_constant_override("margin_right", 22)
+	formulas_modal.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	margin.add_child(vbox)
+
+	# Modal Header
+	var modal_header := HBoxContainer.new()
+	modal_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var modal_title := Label.new()
+	modal_title.text = "Mathematical Formulation & Principles of Mechanics"
+	modal_title.add_theme_font_size_override("font_size", 16)
+	modal_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
+	modal_header.add_child(modal_title)
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	modal_header.add_child(spacer)
+
+	var btn_close := _create_liquid_button("✕ Close")
+	btn_close.custom_minimum_size = Vector2(85, 28)
+	btn_close.pressed.connect(func(): formulas_modal.visible = false)
+	modal_header.add_child(btn_close)
+
+	vbox.add_child(modal_header)
+
+	var sep := HSeparator.new()
+	vbox.add_child(sep)
+
+	# Scroll Container for Formulas
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(scroll)
+
+	var content_rtl := RichTextLabel.new()
+	content_rtl.bbcode_enabled = true
+	content_rtl.fit_content = true
+	content_rtl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_rtl.mouse_filter = Control.MOUSE_FILTER_PASS
+	scroll.add_child(content_rtl)
+
+	var t := ""
+	t += "[font_size=15][b]1. Conservation of Mechanical Energy & Virtual Work[/b][/font_size]\n"
+	t += "[color=#2C2C2E]In an ideal static linkage, mechanical work done by input spring tension [b]T[/b] over upper rhombus vertical displacement [b]δH[/b] equals the work performed on the suspended load [b]P_eff[/b] over total mechanism extension [b]δL[/b]:[/color]\n\n"
+	t += "   [color=#0071E3][b]δA_in = δA_out   ⟺   T · δH = P_eff · δL[/b][/color]\n\n"
+	t += "[color=#595C66]Taking transmission efficiency η ∈ [0.5, 1.0] into account:[/color]\n"
+	t += "   [color=#0071E3][b]P_eff · δL = η · (T · δH)   ⟺   T = (λ · P_eff) / η[/b][/color]\n\n"
+
+	t += "[font_size=15][b]2. Kinematic Transmission Ratios (λ ≡ δL / δH)[/b][/font_size]\n"
+	t += "[color=#0071E3]• [b]Rig A (n = 3 uniform):[/b][/color]   [b]L(m) = 3 · H(m)[/b]   ⟹   [color=#0071E3][b]λ_A = 3.000×[/b][/color]\n"
+	t += "[color=#1E9C3C]• [b]Rig C (1:2:3 variable scissor):[/b][/color]   [b]L(m) = (1 + 2 + 3) · H_0(m) = 6 · H_0(m)[/b]   ⟹   [color=#1E9C3C][b]λ_C = 6.000×[/b][/color]\n"
+	t += "[color=#FF6B0D]• [b]Rig B (n = 5 uniform):[/b][/color]   [b]L(m) = 5 · H(m)[/b]   ⟹   [color=#FF6B0D][b]λ_B = 5.000×[/b][/color]\n\n"
+
+	t += "[font_size=15][b]3. Equilibrium of Forces with Linkage Self-Weight & Planetary Gravity (g)[/b][/font_size]\n"
+	t += "[color=#2C2C2E]The total effective gravitational load acting on the mechanism includes both suspended mass [b]m[/b] and structural linkage self-weight [b]m_link[/b] (evaluated at the center of mass):[/color]\n\n"
+	t += "   [b]P_eff = m · g + m_struct · g[/b]\n"
+	t += "   [color=#595C66]• Uniform rigs (n stages):   m_struct = (n / 2) · m_link[/color]\n"
+	t += "   [color=#595C66]• 1:2:3 progressive rig:      m_struct = 3.0 · m_link[/color]\n"
+	t += "   [color=#595C66]• Planetary gravity presets: Zero-G (0.0), Moon (1.62), Mars (3.71), Earth (9.81), Jupiter (24.79)[/color]\n\n"
+
+	t += "[font_size=15][b]4. Hooke's Law & Deflection (ΔH)[/b][/font_size]\n"
+	t += "[color=#2C2C2E]Under linear spring stiffness [b]k[/b], upper rhombus elongation [b]ΔH[/b] and total mechanism span elongation [b]ΔL[/b] are:[/color]\n\n"
+	t += "   [color=#0071E3][b]ΔH(m) = T(m) / k = (λ · P_eff) / (η · k)[/b][/color]\n"
+	t += "   [color=#0071E3][b]ΔL(m) = λ · ΔH(m) = (λ² · P_eff) / (η · k)[/b][/color]\n\n"
+
+	t += "[font_size=15][b]5. Experimental Stiffness Extraction (Linear Regression)[/b][/font_size]\n"
+	t += "[color=#2C2C2E]Plotting ΔH vs. suspended load mass m yields a linear regression slope [b]tan(α) = (λ · g) / k[/b]:[/color]\n\n"
+	t += "   [b]k = (λ · g) / tan(α)[/b]\n"
+	t += "   [color=#595C66]Empirical laboratory results: k ≈ 981 N/m (Rig A)  |  k ≈ 1090 N/m (Rig B)[/color]\n\n"
+
+	t += "[font_size=15][b]6. 2nd-Order Dynamic Harmonic Vibration ODE[/b][/font_size]\n"
+	t += "[color=#2C2C2E]Spring-mass kinetic equation under viscous damping ratio [b]ζ[/b] and natural frequency [b]ω[/b]:[/color]\n\n"
+	t += "   [b]d²H/dt² + 2ζω · (dH/dt) + ω² · (H - H_target) = 0[/b]\n"
+	t += "   [color=#595C66]Integrated via 4-substep Symplectic Euler with numerical stability protection.[/color]\n"
+
+	content_rtl.text = t
 
 
 
