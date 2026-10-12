@@ -5,6 +5,10 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
 		<title>Golden Rule of Mechanics - Scissor Pantograph Simulation</title>
+		<!-- KaTeX CDN for real mathematical typesetting -->
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+		<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+		<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 		<style>
 html, body, #canvas {
 	margin: 0;
@@ -112,7 +116,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":318360,"index.wasm":38057390},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":317432,"index.wasm":38057390},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -215,6 +219,302 @@ const engine = new Engine(GODOT_CONFIG);
 		}, displayFailureNotice);
 	}
 }());
+		</script>
+
+		<!-- Apple VisionOS Liquid Glass LaTeX Formulas Modal -->
+		<style>
+			#formulas-overlay {
+				position: fixed;
+				inset: 0;
+				background: rgba(15, 23, 42, 0.45);
+				backdrop-filter: blur(16px);
+				-webkit-backdrop-filter: blur(16px);
+				z-index: 99999;
+				display: none;
+				justify-content: center;
+				align-items: center;
+				padding: 20px;
+				box-sizing: border-box;
+				font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+			}
+			#formulas-card {
+				width: 100%;
+				max-width: 860px;
+				max-height: 88vh;
+				background: rgba(255, 255, 255, 0.94);
+				border: 1px solid rgba(255, 255, 255, 0.90);
+				border-radius: 24px;
+				box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				color: #1d1d1f;
+				animation: modalSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+			}
+			@keyframes modalSlideUp {
+				from { opacity: 0; transform: translateY(18px) scale(0.98); }
+				to { opacity: 1; transform: translateY(0) scale(1.0); }
+			}
+			.formulas-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 18px 24px;
+				border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+				background: rgba(255, 255, 255, 0.65);
+			}
+			.formulas-header h2 {
+				margin: 0;
+				font-size: 1.15rem;
+				font-weight: 700;
+				color: #111827;
+				letter-spacing: -0.015em;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.formulas-close-btn {
+				background: rgba(0, 0, 0, 0.05);
+				border: 1px solid rgba(0, 0, 0, 0.08);
+				border-radius: 12px;
+				padding: 6px 14px;
+				font-size: 0.88rem;
+				font-weight: 600;
+				cursor: pointer;
+				color: #374151;
+				transition: all 0.15s ease;
+			}
+			.formulas-close-btn:hover {
+				background: rgba(0, 0, 0, 0.10);
+				color: #111827;
+				transform: scale(1.02);
+			}
+			.formulas-body {
+				padding: 24px 28px;
+				overflow-y: auto;
+				display: flex;
+				flex-direction: column;
+				gap: 22px;
+				line-height: 1.55;
+				font-size: 0.94rem;
+				color: #374151;
+			}
+			.theory-section {
+				background: #f8fafc;
+				border: 1px solid #e2e8f0;
+				border-radius: 16px;
+				padding: 18px 20px;
+			}
+			.theory-section h3 {
+				margin: 0 0 10px 0;
+				font-size: 1.02rem;
+				font-weight: 700;
+				color: #0f172a;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.latex-box {
+				background: #ffffff;
+				border: 1px solid #cbd5e1;
+				border-radius: 12px;
+				padding: 14px 18px;
+				margin: 12px 0;
+				text-align: center;
+				box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+				overflow-x: auto;
+			}
+			.latex-box .katex {
+				font-size: 1.12em;
+				color: #0056b3;
+			}
+			.badge-tag {
+				display: inline-block;
+				padding: 2px 8px;
+				border-radius: 6px;
+				font-size: 0.76rem;
+				font-weight: 600;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+			}
+			.tag-work { background: #dbeafe; color: #1e40af; }
+			.tag-kinematics { background: #dcfce7; color: #166534; }
+			.tag-dissipation { background: #fee2e2; color: #991b1b; }
+			.tag-ode { background: #fef3c7; color: #92400e; }
+		</style>
+
+		<div id="formulas-overlay" onclick="if(event.target === this) closeFormulasModal();">
+			<div id="formulas-card">
+				<div class="formulas-header">
+					<h2><span>📐</span> Mathematical Mechanics & Theory · LaTeX Formulations</h2>
+					<button class="formulas-close-btn" onclick="closeFormulasModal();">✕ Close</button>
+				</div>
+				<div class="formulas-body">
+
+					<!-- Section 1: Principle of Virtual Work -->
+					<div class="theory-section">
+						<h3><span class="badge-tag tag-work">Virtual Work</span> 1. Principle of Virtual Work & Mechanical Advantage</h3>
+						<p>
+							For an ideal static scissor linkage at equilibrium, infinitesimal virtual displacements yield zero net virtual work. 
+							The input mechanical work done by the helical extension spring tension \(T\) over the upper rhombus vertical compression \(\delta H\) 
+							strictly equals the output work done lifting the suspended payload \(P_{\text{eff}}\) through total mechanism stroke \(\delta L\):
+						</p>
+						<div class="latex-box">
+							$$\delta A_{\text{in}} = \delta A_{\text{out}} \iff T \cdot \delta H = P_{\text{eff}} \cdot \delta L$$
+						</div>
+						<p>
+							Defining kinematic transmission ratio \(\lambda = \frac{\delta L}{\delta H}\), the ideal mechanical tension is:
+						</p>
+						<div class="latex-box">
+							$$T_{\text{ideal}} = \lambda \cdot P_{\text{eff}}$$
+						</div>
+					</div>
+
+					<!-- Section 2: Parasitic Energy Dissipation & Hinge Friction -->
+					<div class="theory-section">
+						<h3><span class="badge-tag tag-dissipation">Thermodynamics</span> 2. Total Parasitic Energy Dissipation & Hinge Friction</h3>
+						<p>
+							In physical 3D-printed/machined hardware, each scissor stage has multiple rotating pivot pins (top, middle scissor cross, bottom).
+							During extension or retraction through angle change \(\Delta \theta_i\), dry Coulomb contact friction and viscous bearing resistance dissipate mechanical energy into irreversible thermal losses:
+						</p>
+						<div class="latex-box">
+							$$\Delta E_{\text{dissipated}} = \sum_{i=1}^{N_{\text{hinges}}} \int M_{\text{fric}, i}(\theta_i) \, d\theta_i$$
+						</div>
+						<p>
+							Where the frictional joint moment depends on normal pin reaction force \(R_i\), pin radius \(r_{\text{pin}}\), and friction coefficient \(\mu\):
+						</p>
+						<div class="latex-box">
+							$$M_{\text{fric}, i} = \mu \cdot R_i \cdot r_{\text{pin}}$$
+						</div>
+						<p>
+							Introducing real-world mechanical transmission efficiency \(\eta \in [0.50, 1.00]\), the actual required input spring tension becomes amplified:
+						</p>
+						<div class="latex-box">
+							$$A_{\text{out}} = \eta \cdot A_{\text{in}} \iff T = \frac{\lambda \cdot P_{\text{eff}}}{\eta}$$
+						</div>
+					</div>
+
+					<!-- Section 3: Kinematic Ratios for Rigs A, C, B -->
+					<div class="theory-section">
+						<h3><span class="badge-tag tag-kinematics">Kinematics</span> 3. Multi-Linkage Architectures & Transmission Ratios (\(\lambda\))</h3>
+						<p>The total downward mechanism extension \(L(m)\) relates to the upper monitoring rhombus height \(H(m)\) through geometry:</p>
+						<ul>
+							<li><b>Rig A (Uniform \(n=3\)):</b> Three identical scissor rhombi in series.
+								<div class="latex-box">$$L_A = 3 \cdot H \implies \lambda_A = \frac{dL_A}{dH} = 3.000\times$$</div>
+							</li>
+							<li><b>Rig C (Progressive \(1:2:3\) Variable-Pitch Scissor):</b> Links scaled with arithmetic progression \(\{1\ell, 2\ell, 3\ell\}\).
+								<div class="latex-box">$$L_C = (1 + 2 + 3) \cdot H_0 = 6 \cdot H_0 \implies \lambda_C = \frac{dL_C}{dH_0} = 6.000\times$$</div>
+							</li>
+							<li><b>Rig B (Uniform \(n=5\)):</b> Five uniform scissor stages in series.
+								<div class="latex-box">$$L_B = 5 \cdot H \implies \lambda_B = \frac{dL_B}{dH} = 5.000\times$$</div>
+							</li>
+						</ul>
+					</div>
+
+					<!-- Section 4: Static Equilibrium with Planetary Gravity & Self-Weight -->
+					<div class="theory-section">
+						<h3><span class="badge-tag tag-work">Equilibrium</span> 4. Effective Gravitational Force & Celestial Acceleration (\(g\))</h3>
+						<p>
+							The effective vertical load \(P_{\text{eff}}\) accounts for suspended payload mass \(m\) plus the distributed structural mass of PLA scissor links \(m_{\text{link}}\) 
+							evaluated at their effective center of mass under arbitrary planetary gravity \(g\):
+						</p>
+						<div class="latex-box">
+							$$P_{\text{eff}} = \left(m + m_{\text{struct}}\right) \cdot g$$
+						</div>
+						<div class="latex-box">
+							$$m_{\text{struct}} = \begin{cases} \frac{n}{2} \cdot m_{\text{link}}, & \text{Uniform Rigs (A: } 1.5 \, m_{\text{link}}, \text{ B: } 2.5 \, m_{\text{link}}\text{)} \\[6pt] 3.0 \cdot m_{\text{link}}, & \text{Progressive Rig C } (1:2:3) \end{cases}$$
+						</div>
+					</div>
+
+					<!-- Section 5: Hooke's Law & Analytical Elongation -->
+					<div class="theory-section">
+						<h3><span class="badge-tag tag-kinematics">Elasticity</span> 5. Hooke's Law Deflection Equations</h3>
+						<p>
+							Combining linear elasticity \(T = k \cdot \Delta H\) with the mechanical transmission ratio yields the analytical deflection profiles:
+						</p>
+						<div class="latex-box">
+							$$\Delta H(m) = \frac{T(m)}{k} = \frac{\lambda \cdot P_{\text{eff}}}{\eta \cdot k}$$
+						</div>
+						<div class="latex-box">
+							$$\Delta L(m) = \lambda \cdot \Delta H(m) = \frac{\lambda^2 \cdot P_{\text{eff}}}{\eta \cdot k} = \frac{\lambda^2 \cdot (m + m_{\text{struct}}) \cdot g}{\eta \cdot k}$$
+						</div>
+					</div>
+
+					<!-- Section 6: Stiffness Extraction via Linear Regression -->
+					<div class="theory-section">
+						<h3><span class="badge-tag tag-work">Regression</span> 6. Stiffness Extraction via Linear Regression Slope</h3>
+						<p>
+							Differentiating \(\Delta H\) with respect to suspended mass \(m\) reveals the experimental slope \(\tan(\alpha)\):
+						</p>
+						<div class="latex-box">
+							$$\tan(\alpha) = \frac{\partial (\Delta H)}{\partial m} = \frac{\lambda \cdot g}{\eta \cdot k} \iff k = \frac{\lambda \cdot g}{\eta \cdot \tan(\alpha)}$$
+						</div>
+						<p>
+							From laboratory linear regression tests:
+							<b>\(k \approx 981 \text{ N/m}\)</b> (Rig A, \(R^2 = 0.998\)) and 
+							<b>\(k \approx 1090 \text{ N/m}\)</b> (Rig B, \(R^2 = 0.996\)).
+						</p>
+					</div>
+
+					<!-- Section 7: Dynamic 2nd-Order Harmonic Vibration ODE -->
+					<div class="theory-section">
+						<h3><span class="badge-tag tag-ode">Dynamics</span> 7. 2nd-Order Dynamic Harmonic Vibration ODE</h3>
+						<p>
+							The transient response under sudden load step changes or impulse kicks satisfies the damped harmonic oscillator equation:
+						</p>
+						<div class="latex-box">
+							$$\frac{d^2 H}{dt^2} + 2 \zeta \omega_n \frac{dH}{dt} + \omega_n^2 \left(H(t) - H_{\text{target}}\right) = 0$$
+						</div>
+						<p>
+							Where the natural circular frequency \(\omega_n\) is dynamically coupled to spring stiffness \(k\) and reflected mechanism inertia:
+						</p>
+						<div class="latex-box">
+							$$\omega_n = \sqrt{\frac{k_{\text{eff}}}{m_{\text{eff}}}} = \sqrt{\frac{k}{\frac{m + m_{\text{struct}}}{\lambda^2}}}$$
+						</div>
+						<p>
+							The viscous damping coefficient \(c\) is regulated by the user-selectable damping ratio \(\zeta \in [0.00, 0.60]\):
+						</p>
+						<div class="latex-box">
+							$$c = 2 \cdot \zeta \cdot \omega_n \cdot m_{\text{eff}}$$
+						</div>
+					</div>
+
+				</div>
+			</div>
+		</div>
+
+		<script>
+			window.openFormulasModal = function() {
+				const overlay = document.getElementById('formulas-overlay');
+				if (overlay) {
+					overlay.style.display = 'flex';
+					if (window.renderMathInElement) {
+						renderMathInElement(overlay, {
+							delimiters: [
+								{left: '$$', right: '$$', display: true},
+								{left: '\\[', right: '\\]', display: true},
+								{left: '\\(', right: '\\)', display: false},
+								{left: '$', right: '$', display: false}
+							],
+							throwOnError: false
+						});
+					}
+				}
+			};
+
+			window.closeFormulasModal = function() {
+				const overlay = document.getElementById('formulas-overlay');
+				if (overlay) {
+					overlay.style.display = 'none';
+				}
+			};
+
+			// Close with Escape key
+			window.addEventListener('keydown', function(e) {
+				if (e.key === 'Escape') {
+					window.closeFormulasModal();
+				}
+			});
 		</script>
 	</body>
 </html>
