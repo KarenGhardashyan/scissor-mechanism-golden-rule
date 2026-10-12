@@ -24,6 +24,10 @@ var oscillations_check: CheckBox
 var damping_slider: HSlider
 var damping_val_label: Label
 var live_graph: LiveGraph
+var bottom_panel: PanelContainer
+var is_graph_maximized: bool = false
+var btn_graph_expand: Button
+var btn_graph_theme: Button
 
 # Comparison Pill Labels
 var label_a_delta_h: Label
@@ -759,25 +763,70 @@ func _build_liquid_glass_ui() -> void:
 	_style_progress_bar(ratio_bar_b, Color(1.0, 0.42, 0.05))
 	right_vbox.add_child(ratio_bar_b)
 
-	# 4. BOTTOM FLOATING REALTIME 2D PLOT
-	var bottom_panel := _create_liquid_glass_panel(Vector2(0, 0), Vector2(880, 186), 22, 0.78)
+	# 4. BOTTOM FLOATING REALTIME 2D PLOT (Enhanced VisionOS Glass Card)
+	bottom_panel = _create_liquid_glass_panel(Vector2(0, 0), Vector2(920, 262), 22, 0.85)
 	bottom_panel.anchor_left = 0.5
 	bottom_panel.anchor_right = 0.5
 	bottom_panel.anchor_top = 1.0
 	bottom_panel.anchor_bottom = 1.0
-	bottom_panel.offset_left = -440.0
-	bottom_panel.offset_right = 440.0
-	bottom_panel.offset_top = -202.0
+	bottom_panel.offset_left = -460.0
+	bottom_panel.offset_right = 460.0
+	bottom_panel.offset_top = -278.0
 	bottom_panel.offset_bottom = -16.0
 	root.add_child(bottom_panel)
 
 	var graph_margin := MarginContainer.new()
 	graph_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	graph_margin.add_theme_constant_override("margin_top", 20)
-	graph_margin.add_theme_constant_override("margin_bottom", 20)
-	graph_margin.add_theme_constant_override("margin_left", 18)
-	graph_margin.add_theme_constant_override("margin_right", 18)
+	graph_margin.add_theme_constant_override("margin_top", 10)
+	graph_margin.add_theme_constant_override("margin_bottom", 12)
+	graph_margin.add_theme_constant_override("margin_left", 16)
+	graph_margin.add_theme_constant_override("margin_right", 16)
 	bottom_panel.add_child(graph_margin)
+
+	var graph_vbox := VBoxContainer.new()
+	graph_vbox.add_theme_constant_override("separation", 6)
+	graph_margin.add_child(graph_vbox)
+
+	# Graph Card Control Bar
+	var graph_bar := HBoxContainer.new()
+	graph_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var graph_card_title := Label.new()
+	graph_card_title.text = "Theoretical Sim-to-Real Curves: L(m)"
+	graph_card_title.add_theme_font_size_override("font_size", 12)
+	graph_card_title.add_theme_color_override("font_color", Color(0.17, 0.17, 0.19))
+	graph_bar.add_child(graph_card_title)
+
+	var bar_spacer := Control.new()
+	bar_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	graph_bar.add_child(bar_spacer)
+
+	btn_graph_theme = _create_liquid_button("◑ Canvas Theme")
+	btn_graph_theme.custom_minimum_size = Vector2(105, 26)
+	btn_graph_theme.pressed.connect(func():
+		if live_graph != null:
+			live_graph.toggle_theme()
+	)
+	graph_bar.add_child(btn_graph_theme)
+
+	btn_graph_expand = _create_liquid_button("⤢ Maximize Graph")
+	btn_graph_expand.custom_minimum_size = Vector2(115, 26)
+	btn_graph_expand.pressed.connect(func():
+		is_graph_maximized = not is_graph_maximized
+		if is_graph_maximized:
+			bottom_panel.offset_top = -490.0
+			bottom_panel.custom_minimum_size.y = 474.0
+			btn_graph_expand.text = "⤡ Compact View"
+		else:
+			bottom_panel.offset_top = -278.0
+			bottom_panel.custom_minimum_size.y = 262.0
+			btn_graph_expand.text = "⤢ Maximize Graph"
+		if live_graph != null:
+			live_graph.queue_redraw()
+	)
+	graph_bar.add_child(btn_graph_expand)
+
+	graph_vbox.add_child(graph_bar)
 
 	live_graph = LiveGraph.new()
 	live_graph.name = "LiveGraph"
@@ -786,7 +835,8 @@ func _build_liquid_glass_ui() -> void:
 	live_graph.mass_scrubbed.connect(func(new_m: float):
 		mass_slider.value = new_m
 	)
-	graph_margin.add_child(live_graph)
+	graph_vbox.add_child(live_graph)
+
 
 
 func _on_mass_slider_changed(val: float) -> void:
