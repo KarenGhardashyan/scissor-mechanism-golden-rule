@@ -2,4 +2,5 @@
 .godot/
 /android/
 build/
+*.import
 *.tmp

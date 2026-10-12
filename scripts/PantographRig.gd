@@ -3,15 +3,17 @@ extends Node3D
 
 ## Apple Industrial Hardware Aesthetic: Scissor Pantograph Prototype
 ## Tactile, chunky 3D hardware linkages with satin resin / space-grey anodized finishes.
-## Minimalist VisionOS design language.
+## Minimalist VisionOS design language. Supports uniform and 1:2:3 variable-pitch pantographs.
 
 signal telemetry_updated(data: Dictionary)
 
 # Physical Experiment Parameters
 @export var n_stages: int = 3
 @export var rig_name: String = "Rig A (n=3)"
-@export var physical_link_length: float = 0.06 # Arm length: 6.0 cm
-@export var physical_resting_H: float = 0.075  # Unloaded rhombus height: 7.5 cm
+@export var is_scaled_123: bool = false         # Scaled 1:2:3 Variable-Pitch Pantograph
+@export var rig_color_theme: String = "blue"   # "blue", "green", "orange"
+@export var physical_link_length: float = 0.06 # Base arm length: 6.0 cm
+@export var physical_resting_H: float = 0.075  # Base unloaded rhombus height: 7.5 cm
 @export var spring_k: float = 1000.0           # Spring stiffness in N/m [500 - 1500]
 @export var suspended_mass: float = 0.5        # Mass in kg [0.0 - 1.5]
 @export var link_mass_per_stage: float = 0.05  # Self-weight PLA per rhombus: 0.05 kg
@@ -19,8 +21,13 @@ signal telemetry_updated(data: Dictionary)
 @export var gravity: float = 9.81              # m/s²
 @export var visual_scale: float = 4.4          # 3D units per physical meter
 @export var is_left_rig: bool = true
+@export var laser_side_sign: float = -1.0      # -1.0 for left side, +1.0 for right side
 
-# Dynamic State (Smoothed Damped Physics)
+# Dynamic State & Vibration Controls
+@export var oscillations_enabled: bool = false # Toggle harmonic oscillation / smooth glide
+@export var damping_ratio_zeta: float = 0.65   # Damping ratio [0.05 - 1.50]
+@export var natural_frequency_omega: float = 20.0 # Frequency [10.0 - 35.0 rad/s]
+
 var current_H: float = 0.075
 var velocity_H: float = 0.0
 var target_H: float = 0.075
@@ -41,9 +48,7 @@ var pins_container: Node3D
 var spring_mesh_instance: MeshInstance3D
 var mass_assembly: Node3D
 var mass_cylinder: MeshInstance3D
-var mass_label_badge: Node3D
 var mass_label: Label3D
-var title_badge: Node3D
 var rig_title_label: Label3D
 
 # Extension Dimension Lasers & Ticks
@@ -78,11 +83,20 @@ var base_spring_vis_height: float = 0.33
 var anim_time: float = 0.0
 
 
+func get_base_link_length() -> float:
+	return (physical_link_length * 0.75) if is_scaled_123 else physical_link_length
+
+
+func get_base_resting_H() -> float:
+	return (physical_resting_H * 0.75) if is_scaled_123 else physical_resting_H
+
+
 func _ready() -> void:
 	_init_materials()
 	_build_rig_hierarchy()
 	_update_physics_targets()
 	current_H = target_H
+	velocity_H = 0.0
 	_update_kinematics(0.016)
 	_update_visuals()
 
@@ -94,32 +108,40 @@ func _init_materials() -> void:
 	mat_pin_accent = StandardMaterial3D.new()
 	mat_mass_metal = StandardMaterial3D.new()
 
-	if is_left_rig:
-		# RIG A (Mechanism 1): Precision Satin Anodized Electric Blue
-		mat_arm_body.albedo_color = Color(0.06, 0.45, 0.92) # Vibrant Apple Electric Blue (#0A73EB)
+	mat_laser = StandardMaterial3D.new()
+	mat_laser.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat_laser.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_laser.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	var theme: String = rig_color_theme.to_lower()
+	if theme == "green" or is_scaled_123:
+		# RIG C (Mechanism 3): Precision Satin Anodized Emerald Green (#30D158)
+		mat_arm_body.albedo_color = Color(0.19, 0.82, 0.35)
 		mat_arm_body.metallic = 0.58
 		mat_arm_body.roughness = 0.26
 
-		mat_arm_chamfer.albedo_color = Color(0.03, 0.22, 0.54) # Deep Indigo / Navy Chamfer & Inlay
+		mat_arm_chamfer.albedo_color = Color(0.08, 0.39, 0.16) # Forest Green Chamfer
 		mat_arm_chamfer.metallic = 0.85
 		mat_arm_chamfer.roughness = 0.22
 
-		# Electric Ice-Cyan Accent Collar (#4CC9F0)
-		mat_pin_accent.albedo_color = Color(0.30, 0.80, 1.0)
+		# Mint / Jade Collar (#63E6BE)
+		mat_pin_accent.albedo_color = Color(0.39, 0.90, 0.75)
 		mat_pin_accent.metallic = 0.90
 		mat_pin_accent.roughness = 0.16
 
-		# Suspended Weight: Polished Aerospace Aluminum
-		mat_mass_metal.albedo_color = Color(0.86, 0.88, 0.92)
+		# Suspended Weight: Polished Satin Titanium Billet
+		mat_mass_metal.albedo_color = Color(0.85, 0.86, 0.88)
 		mat_mass_metal.metallic = 0.95
 		mat_mass_metal.roughness = 0.18
-	else:
-		# RIG B (Mechanism 2): Precision Satin Anodized Ultra Orange
-		mat_arm_body.albedo_color = Color(1.0, 0.42, 0.05) # Vivid Apple Ultra Orange (#FF6B0D)
+
+		mat_laser.albedo_color = Color(0.19, 0.82, 0.35, 0.85)
+	elif theme == "orange" or (not is_left_rig and not is_scaled_123):
+		# RIG B (Mechanism 2): Precision Satin Anodized Ultra Orange (#FF6B0D)
+		mat_arm_body.albedo_color = Color(1.0, 0.42, 0.05)
 		mat_arm_body.metallic = 0.58
 		mat_arm_body.roughness = 0.26
 
-		mat_arm_chamfer.albedo_color = Color(0.65, 0.22, 0.02) # Deep Amber / Burnt Orange Chamfer & Inlay
+		mat_arm_chamfer.albedo_color = Color(0.65, 0.22, 0.02) # Deep Amber Chamfer
 		mat_arm_chamfer.metallic = 0.85
 		mat_arm_chamfer.roughness = 0.22
 
@@ -133,7 +155,30 @@ func _init_materials() -> void:
 		mat_mass_metal.metallic = 0.94
 		mat_mass_metal.roughness = 0.16
 
-	# Precision Turned Architectural Brass / Gold Joint Pins (Grounded, high metallic sheen)
+		mat_laser.albedo_color = Color(1.0, 0.45, 0.0, 0.85)
+	else:
+		# RIG A (Mechanism 1): Precision Satin Anodized Electric Blue (#0071E3)
+		mat_arm_body.albedo_color = Color(0.06, 0.45, 0.92)
+		mat_arm_body.metallic = 0.58
+		mat_arm_body.roughness = 0.26
+
+		mat_arm_chamfer.albedo_color = Color(0.03, 0.22, 0.54) # Deep Indigo Chamfer
+		mat_arm_chamfer.metallic = 0.85
+		mat_arm_chamfer.roughness = 0.22
+
+		# Electric Ice-Cyan Accent Collar (#4CC9F0)
+		mat_pin_accent.albedo_color = Color(0.30, 0.80, 1.0)
+		mat_pin_accent.metallic = 0.90
+		mat_pin_accent.roughness = 0.16
+
+		# Suspended Weight: Polished Aerospace Aluminum
+		mat_mass_metal.albedo_color = Color(0.86, 0.88, 0.92)
+		mat_mass_metal.metallic = 0.95
+		mat_mass_metal.roughness = 0.18
+
+		mat_laser.albedo_color = Color(0.0, 0.443, 0.89, 0.85)
+
+	# Precision Turned Architectural Brass / Gold Joint Pins
 	mat_joint_brass = StandardMaterial3D.new()
 	mat_joint_brass.albedo_color = Color(0.96, 0.78, 0.32)
 	mat_joint_brass.metallic = 0.96
@@ -150,16 +195,6 @@ func _init_materials() -> void:
 	mat_spring_chrome.albedo_color = Color(0.98, 0.98, 1.0)
 	mat_spring_chrome.metallic = 1.0
 	mat_spring_chrome.roughness = 0.06
-
-	# High Contrast Unshaded Laser Material (Visible against light studio background)
-	mat_laser = StandardMaterial3D.new()
-	mat_laser.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat_laser.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat_laser.cull_mode = BaseMaterial3D.CULL_DISABLED
-	if is_left_rig:
-		mat_laser.albedo_color = Color(0.0, 0.443, 0.89, 0.85) # Semi-transparent Electric Blue (#0071E3)
-	else:
-		mat_laser.albedo_color = Color(1.0, 0.45, 0.0, 0.85) # Semi-transparent Vivid Deep Amber/Orange (#FF7300)
 
 
 func _build_rig_hierarchy() -> void:
@@ -181,18 +216,21 @@ func _build_rig_hierarchy() -> void:
 	pins_container.name = "PinsContainer"
 	add_child(pins_container)
 
-	# 3. Create Chunky Tactile Link Arms (+48% Width, +50% Thickness: Hero Prototypes)
+	# 3. Create Chunky Tactile Link Arms
 	arm_nodes.clear()
-	var arm_vis_len: float = physical_link_length * visual_scale
-	var arm_width: float = 0.092 # Substantial 2.4 cm visual width
-	var arm_thick: float = 0.036 # 1.0 cm structural thickness
+	var base_link_len: float = get_base_link_length()
+	var arm_width: float = 0.092
+	var arm_thick: float = 0.036
 
 	for stage in range(n_stages):
+		var m_stage: float = [1.0, 2.0, 3.0][stage] if is_scaled_123 else 1.0
+		var arm_vis_len: float = base_link_len * m_stage * visual_scale
+
 		for arm_idx in range(4):
 			var arm_node := Node3D.new()
 			arm_node.name = "Arm_S%d_%d" % [stage, arm_idx]
 
-			# Main tactile arm bar with rounded chamfers
+			# Main tactile arm bar
 			var arm_mesh_inst := MeshInstance3D.new()
 			var arm_box := BoxMesh.new()
 			arm_box.size = Vector3(arm_width, arm_vis_len * 0.90, arm_thick)
@@ -225,17 +263,16 @@ func _build_rig_hierarchy() -> void:
 			links_container.add_child(arm_node)
 			arm_nodes.append(arm_node)
 
-	# 4. Large Architectural Brass / Gold Pivot Pins (+44% larger, high metallic sheen)
+	# 4. Architectural Brass / Gold Pivot Pins
 	pin_nodes.clear()
 	var total_pins: int = 1 + n_stages * 3
 	for p in range(total_pins):
 		var pin_root := Node3D.new()
 		pin_root.name = "Pin_%d" % p
 
-		# Grounded central brass/gold cylinder pin
 		var pin_mesh := MeshInstance3D.new()
 		var p_cyl := CylinderMesh.new()
-		p_cyl.top_radius = 0.026 # Larger grounded diameter
+		p_cyl.top_radius = 0.026
 		p_cyl.bottom_radius = 0.026
 		p_cyl.height = 0.092
 		p_cyl.radial_segments = 24
@@ -248,7 +285,7 @@ func _build_rig_hierarchy() -> void:
 		for z_side in [-0.044, 0.044]:
 			var washer := MeshInstance3D.new()
 			var w_cyl := CylinderMesh.new()
-			w_cyl.top_radius = 0.035 # Distinct accent collar
+			w_cyl.top_radius = 0.035
 			w_cyl.bottom_radius = 0.035
 			w_cyl.height = 0.008
 			w_cyl.radial_segments = 24
@@ -261,22 +298,22 @@ func _build_rig_hierarchy() -> void:
 		pins_container.add_child(pin_root)
 		pin_nodes.append(pin_root)
 
-	# 5. Chunky Chrome Helical Spring
-	base_spring_vis_height = physical_resting_H * visual_scale
+	# 5. Chunky Chrome Helical Spring (Located across Stage 0)
+	base_spring_vis_height = get_base_resting_H() * visual_scale
 	spring_mesh_instance = MeshInstance3D.new()
 	spring_mesh_instance.name = "UpperLinearSpring"
 	spring_mesh_instance.material_override = mat_spring_chrome
 	spring_mesh_instance.mesh = SpringMeshGenerator.generate_spring(
 		base_spring_vis_height,
-		0.048, # Chunkier coil radius
+		0.048,
 		7.5,
-		0.010, # Thick wire gauge
+		0.010,
 		90,
 		10
 	)
 	add_child(spring_mesh_instance)
 
-	# 6. Bottom Suspended Mass Assembly (Machined Aerospace Billet Weight)
+	# 6. Bottom Suspended Mass Assembly
 	mass_assembly = Node3D.new()
 	mass_assembly.name = "SuspendedMassAssembly"
 	add_child(mass_assembly)
@@ -299,7 +336,7 @@ func _build_rig_hierarchy() -> void:
 	mass_cylinder.mesh = cyl_mesh
 	mass_assembly.add_child(mass_cylinder)
 
-	# 7. Clean Laser Engraved Mass Indicator on Weight (No black quad)
+	# 7. Clean Laser Engraved Mass Indicator on Weight
 	mass_label = Label3D.new()
 	mass_label.name = "MassLabel"
 	mass_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -311,7 +348,7 @@ func _build_rig_hierarchy() -> void:
 	mass_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.95)
 	mass_assembly.add_child(mass_label)
 
-	# 8. Overhead Rig Header (Clean unshaded typography with subtle halo, no black quad)
+	# 8. Overhead Rig Header
 	rig_title_label = Label3D.new()
 	rig_title_label.name = "RigTitleLabel"
 	rig_title_label.position = Vector3(0, 0.38, 0.12)
@@ -319,19 +356,24 @@ func _build_rig_hierarchy() -> void:
 	rig_title_label.pixel_size = 0.0040
 	rig_title_label.font_size = 24
 	rig_title_label.shaded = false
-	if is_left_rig:
-		rig_title_label.text = "RIG A  (n=3)"
-		rig_title_label.modulate = Color(0.0, 0.443, 0.89) # Electric Tech-Blue #0071E3
-	else:
+
+	var theme: String = rig_color_theme.to_lower()
+	if theme == "green" or is_scaled_123:
+		rig_title_label.text = "RIG C  (1:2:3)"
+		rig_title_label.modulate = Color(0.19, 0.82, 0.35)
+	elif theme == "orange" or not is_left_rig:
 		rig_title_label.text = "RIG B  (n=5)"
-		rig_title_label.modulate = Color(0.95, 0.36, 0.0) # Vivid Ultra Orange
+		rig_title_label.modulate = Color(0.95, 0.36, 0.0)
+	else:
+		rig_title_label.text = "RIG A  (n=3)"
+		rig_title_label.modulate = Color(0.0, 0.443, 0.89)
+
 	rig_title_label.outline_size = 5
 	rig_title_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.95)
 	add_child(rig_title_label)
 
 	# 9. Build Extension Dimension Lasers & Ticks
 	_build_dimension_lasers()
-
 
 
 func _process(delta: float) -> void:
@@ -343,35 +385,57 @@ func _process(delta: float) -> void:
 
 
 func _update_physics_targets() -> void:
-	effective_load_P = suspended_mass * gravity + (n_stages * link_mass_per_stage * gravity) / 2.0
+	var effective_n: float = 6.0 if is_scaled_123 else float(n_stages)
+	var struct_weight_factor: float = 3.0 if is_scaled_123 else (float(n_stages) * 0.5)
+
+	effective_load_P = suspended_mass * gravity + struct_weight_factor * link_mass_per_stage * gravity
 	var eta_safe: float = clampf(efficiency_eta, 0.50, 1.00)
-	tensile_force_T = (float(n_stages) * effective_load_P) / eta_safe
+	tensile_force_T = (effective_n * effective_load_P) / eta_safe
 
 	spring_delta_H = tensile_force_T / spring_k
-	var max_rhombus_h: float = physical_link_length * 2.0 * 0.96
-	target_H = clampf(physical_resting_H + spring_delta_H, 0.04, max_rhombus_h)
+	var base_link_len: float = get_base_link_length()
+	var base_rest_h: float = get_base_resting_H()
+	var max_rhombus_h: float = base_link_len * 2.0 * 0.96
+	target_H = clampf(base_rest_h + spring_delta_H, 0.035, max_rhombus_h)
 
-	total_delta_L = float(n_stages) * (target_H - physical_resting_H)
-	transmission_ratio_lambda = float(n_stages)
+	total_delta_L = effective_n * (target_H - base_rest_h)
+	transmission_ratio_lambda = effective_n
 
 
 func _update_kinematics(delta: float) -> void:
-	# Critically damped spring-mass settling motion
-	var omega: float = 24.0 # Natural frequency
-	var damping: float = 2.0 * omega * 0.72 # Damping ratio zeta = 0.72
+	# Prevent time spikes from causing numerical instability
+	var dt: float = clampf(delta, 0.0005, 0.033)
 
-	var error: float = target_H - current_H
-	var accel: float = omega * omega * error - damping * velocity_H
-	velocity_H += accel * delta
-	current_H += velocity_H * delta
+	if not oscillations_enabled:
+		# Butter-smooth critically damped glide with ZERO overshoot or jitter
+		var smooth_speed: float = 14.0
+		current_H = lerpf(current_H, target_H, clampf(dt * smooth_speed, 0.0, 1.0))
+		velocity_H = 0.0
+	else:
+		# Stable sub-stepped symplectic integration
+		var sub_steps: int = 4
+		var sub_dt: float = dt / float(sub_steps)
+		var omega: float = natural_frequency_omega
+		var damping: float = 2.0 * omega * damping_ratio_zeta
 
-	current_H = clampf(current_H, 0.035, physical_link_length * 2.0 * 0.96)
+		for step in range(sub_steps):
+			var error: float = target_H - current_H
+			var accel: float = omega * omega * error - damping * velocity_H
+			velocity_H += accel * sub_dt
+			current_H += velocity_H * sub_dt
+
+	var base_link_len: float = get_base_link_length()
+	current_H = clampf(current_H, 0.030, base_link_len * 2.0 * 0.96)
 
 	var half_h: float = current_H * 0.5
-	var ratio: float = clampf(half_h / physical_link_length, 0.0, 0.999)
+	var ratio: float = clampf(half_h / base_link_len, 0.0, 0.999)
 	current_theta = acos(ratio)
-	current_W = 2.0 * physical_link_length * sin(current_theta)
-	current_L = float(n_stages) * current_H
+	current_W = 2.0 * base_link_len * sin(current_theta)
+
+	if is_scaled_123:
+		current_L = 6.0 * current_H
+	else:
+		current_L = float(n_stages) * current_H
 
 
 func _update_visuals() -> void:
@@ -379,19 +443,25 @@ func _update_visuals() -> void:
 	var W_vis: float = current_W * visual_scale
 	var L_vis: float = current_L * visual_scale
 
-	# 1. Update Scissor Arms with Thick Z-Clearance
+	# 1. Update Scissor Arms
 	var arm_counter: int = 0
+	var current_y: float = 0.0
+
 	for stage in range(n_stages):
-		var y_top: float = -float(stage) * H_vis
-		var y_mid: float = -(float(stage) + 0.5) * H_vis
-		var y_bot: float = -float(stage + 1) * H_vis
+		var m_stage: float = [1.0, 2.0, 3.0][stage] if is_scaled_123 else 1.0
+		var h_s: float = m_stage * H_vis
+		var w_s: float = m_stage * W_vis
+
+		var y_top: float = current_y
+		var y_mid: float = current_y - 0.5 * h_s
+		var y_bot: float = current_y - h_s
+		current_y = y_bot
 
 		var p_top := Vector3(0, y_top, 0)
-		var p_left := Vector3(-W_vis * 0.5, y_mid, 0)
-		var p_right := Vector3(W_vis * 0.5, y_mid, 0)
+		var p_left := Vector3(-w_s * 0.5, y_mid, 0)
+		var p_right := Vector3(w_s * 0.5, y_mid, 0)
 		var p_bot := Vector3(0, y_bot, 0)
 
-		# Distinct Z-offsets so 1.0cm thick arms glide smoothly
 		_position_arm(arm_nodes[arm_counter], p_top, p_left, 0.020)
 		arm_counter += 1
 
@@ -409,20 +479,26 @@ func _update_visuals() -> void:
 	pin_nodes[pin_counter].position = Vector3(0, 0, 0)
 	pin_counter += 1
 
+	var pin_y: float = 0.0
 	for stage in range(n_stages):
-		var y_mid: float = -(float(stage) + 0.5) * H_vis
-		var y_bot: float = -float(stage + 1) * H_vis
+		var m_stage: float = [1.0, 2.0, 3.0][stage] if is_scaled_123 else 1.0
+		var h_s: float = m_stage * H_vis
+		var w_s: float = m_stage * W_vis
 
-		pin_nodes[pin_counter].position = Vector3(-W_vis * 0.5, y_mid, 0)
+		var y_mid: float = pin_y - 0.5 * h_s
+		var y_bot: float = pin_y - h_s
+		pin_y = y_bot
+
+		pin_nodes[pin_counter].position = Vector3(-w_s * 0.5, y_mid, 0)
 		pin_counter += 1
 
-		pin_nodes[pin_counter].position = Vector3(W_vis * 0.5, y_mid, 0)
+		pin_nodes[pin_counter].position = Vector3(w_s * 0.5, y_mid, 0)
 		pin_counter += 1
 
 		pin_nodes[pin_counter].position = Vector3(0, y_bot, 0)
 		pin_counter += 1
 
-	# 3. Dynamic Spring Scale
+	# 3. Dynamic Spring Scale (Stage 0)
 	var stretch_factor: float = H_vis / base_spring_vis_height
 	spring_mesh_instance.scale = Vector3(1.0, stretch_factor, 1.0)
 
@@ -452,20 +528,19 @@ func _build_dimension_lasers() -> void:
 	dimension_lines_container.name = "DimensionLasers"
 	add_child(dimension_lines_container)
 
-	# Unit bar meshes
 	var v_box := BoxMesh.new()
-	v_box.size = Vector3(0.016, 1.0, 0.016) # Clean prominent line width
+	v_box.size = Vector3(0.016, 1.0, 0.016)
 
 	var h_box := BoxMesh.new()
 	h_box.size = Vector3(1.0, 0.014, 0.014)
 
-	# Vertical H line (Top anchor to upper spring bottom)
+	# Vertical H line
 	line_h = MeshInstance3D.new()
 	line_h.mesh = v_box
 	line_h.material_override = mat_laser
 	dimension_lines_container.add_child(line_h)
 
-	# Vertical L line (Top anchor to bottom suspended weight)
+	# Vertical L line
 	line_l = MeshInstance3D.new()
 	line_l.mesh = v_box
 	line_l.material_override = mat_laser
@@ -487,7 +562,7 @@ func _build_dimension_lasers() -> void:
 	tick_bot.material_override = mat_laser
 	dimension_lines_container.add_child(tick_bot)
 
-	# Extension Arrowheads (Cones at dimension endpoints)
+	# Extension Arrowheads
 	var cone_mesh := CylinderMesh.new()
 	cone_mesh.top_radius = 0.0
 	cone_mesh.bottom_radius = 0.028
@@ -516,8 +591,14 @@ func _build_dimension_lasers() -> void:
 	arrow_l_bot.material_override = mat_laser
 	dimension_lines_container.add_child(arrow_l_bot)
 
-	# Clean Dimension Typography (Razor-sharp against light studio background)
-	var label_color: Color = Color(0.0, 0.443, 0.89, 1.0) if is_left_rig else Color(0.95, 0.36, 0.0, 1.0)
+	var label_color: Color
+	var theme: String = rig_color_theme.to_lower()
+	if theme == "green" or is_scaled_123:
+		label_color = Color(0.19, 0.82, 0.35, 1.0)
+	elif theme == "orange" or not is_left_rig:
+		label_color = Color(0.95, 0.36, 0.0, 1.0)
+	else:
+		label_color = Color(0.0, 0.443, 0.89, 1.0)
 
 	dim_label_h = Label3D.new()
 	dim_label_h.name = "DimLabelH"
@@ -541,7 +622,6 @@ func _build_dimension_lasers() -> void:
 	dim_label_l.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
 	dimension_lines_container.add_child(dim_label_l)
 
-	# Enabled by default on startup!
 	dimension_lines_container.visible = true
 
 
@@ -549,13 +629,12 @@ func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 	if not dimension_lines_container or not dimension_lines_container.visible:
 		return
 
-	# Side offset: Left for Rig A (-1.0), Right for Rig B (+1.0)
-	var side_sign: float = -1.0 if is_left_rig else 1.0
+	var side_sign: float = laser_side_sign
+	var max_w: float = (w_vis * 3.0) if is_scaled_123 else w_vis
+	var x_h: float = side_sign * (max_w * 0.5 + 0.16)
+	var x_l: float = side_sign * (max_w * 0.5 + 0.34)
 
-	var x_h: float = side_sign * (w_vis * 0.5 + 0.16)
-	var x_l: float = side_sign * (w_vis * 0.5 + 0.34)
-
-	# 1. Vertical H Line (Anchor to spring bottom)
+	# 1. Vertical H Line (Anchor to Stage 0 bottom)
 	line_h.position = Vector3(x_h, -h_vis * 0.5, 0.0)
 	line_h.scale = Vector3(1.0, maxf(h_vis, 0.01), 1.0)
 
@@ -570,30 +649,32 @@ func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 	arrow_l_bot.position = Vector3(x_l, -l_vis + 0.024, 0.0)
 
 	# 3. Horizontal Ticks
-	var x_inner_top: float = side_sign * (w_vis * 0.5 * 0.25)
+	var x_inner_top: float = side_sign * (max_w * 0.5 * 0.25)
 	var x_outer_top: float = x_l + side_sign * 0.05
 	var len_top: float = absf(x_outer_top - x_inner_top)
 	tick_top.position = Vector3((x_inner_top + x_outer_top) * 0.5, 0.0, 0.0)
 	tick_top.scale = Vector3(len_top, 1.0, 1.0)
 
-	var x_inner_mid: float = side_sign * (w_vis * 0.5 * 0.12)
+	var x_inner_mid: float = side_sign * (max_w * 0.5 * 0.12)
 	var x_outer_mid: float = x_h + side_sign * 0.05
 	var len_mid: float = absf(x_outer_mid - x_inner_mid)
 	tick_mid.position = Vector3((x_inner_mid + x_outer_mid) * 0.5, -h_vis, 0.0)
 	tick_mid.scale = Vector3(len_mid, 1.0, 1.0)
 
-	var x_inner_bot: float = side_sign * (w_vis * 0.5 * 0.15)
+	var x_inner_bot: float = side_sign * (max_w * 0.5 * 0.15)
 	var x_outer_bot: float = x_l + side_sign * 0.05
 	var len_bot: float = absf(x_outer_bot - x_inner_bot)
 	tick_bot.position = Vector3((x_inner_bot + x_outer_bot) * 0.5, -l_vis, 0.0)
 	tick_bot.scale = Vector3(len_bot, 1.0, 1.0)
 
 	# 4. Dimension Callout Text
+	var prefix_h: String = "H0" if is_scaled_123 else "H"
 	dim_label_h.position = Vector3(x_h + side_sign * 0.08, -h_vis * 0.5, 0.02)
-	dim_label_h.text = "H = %.1f cm" % (current_H * 100.0)
+	dim_label_h.text = "%s = %.1f cm" % [prefix_h, current_H * 100.0]
 
+	var mult_str: String = " (6×)" if is_scaled_123 else (" (%d×)" % n_stages)
 	dim_label_l.position = Vector3(x_l + side_sign * 0.08, -l_vis * 0.5, 0.02)
-	dim_label_l.text = "L = %.1f cm" % (current_L * 100.0)
+	dim_label_l.text = "L = %.1f cm%s" % [current_L * 100.0, mult_str]
 
 
 func _position_arm(arm_node: Node3D, p_a: Vector3, p_b: Vector3, z_offset: float) -> void:
@@ -607,24 +688,28 @@ func _position_arm(arm_node: Node3D, p_a: Vector3, p_b: Vector3, z_offset: float
 
 
 func _broadcast_telemetry() -> void:
-	var work_in: float = tensile_force_T * maxf(0.0, current_H - physical_resting_H)
-	var work_out: float = effective_load_P * maxf(0.0, current_L - float(n_stages) * physical_resting_H)
+	var effective_n: float = 6.0 if is_scaled_123 else float(n_stages)
+	var base_rest_h: float = get_base_resting_H()
+	var work_in: float = tensile_force_T * maxf(0.0, current_H - base_rest_h)
+	var work_out: float = effective_load_P * maxf(0.0, current_L - effective_n * base_rest_h)
 
 	var data: Dictionary = {
 		"rig_name": rig_name,
 		"n_stages": n_stages,
+		"is_scaled_123": is_scaled_123,
 		"mass": suspended_mass,
 		"k": spring_k,
+		"gravity": gravity,
 		"efficiency_eta": efficiency_eta,
 		"effective_load_P": effective_load_P,
 		"tensile_force_T": tensile_force_T,
-		"delta_H_cm": (current_H - physical_resting_H) * 100.0,
+		"delta_H_cm": (current_H - base_rest_h) * 100.0,
 		"H_cm": current_H * 100.0,
-		"delta_L_cm": (current_L - float(n_stages) * physical_resting_H) * 100.0,
+		"delta_L_cm": (current_L - effective_n * base_rest_h) * 100.0,
 		"L_cm": current_L * 100.0,
 		"W_cm": current_W * 100.0,
 		"theta_deg": rad_to_deg(current_theta),
-		"transmission_lambda": current_L / current_H if current_H > 0.0001 else float(n_stages),
+		"transmission_lambda": current_L / current_H if current_H > 0.0001 else effective_n,
 		"work_in_Joules": work_in,
 		"work_out_Joules": work_out,
 		"work_ratio_pct": efficiency_eta * 100.0
@@ -642,6 +727,24 @@ func set_stiffness(val: float) -> void:
 
 func set_efficiency(val: float) -> void:
 	efficiency_eta = clampf(val, 0.50, 1.00)
+
+
+func set_gravity(val: float) -> void:
+	gravity = clampf(val, 0.0, 25.0)
+
+
+func set_oscillations_enabled(val: bool) -> void:
+	oscillations_enabled = val
+	if not oscillations_enabled:
+		velocity_H = 0.0
+
+
+func set_damping_ratio(val: float) -> void:
+	damping_ratio_zeta = clampf(val, 0.05, 1.50)
+
+
+func set_natural_frequency(val: float) -> void:
+	natural_frequency_omega = clampf(val, 10.0, 35.0)
 
 
 func apply_impulse(velocity_kick: float = 0.08) -> void:

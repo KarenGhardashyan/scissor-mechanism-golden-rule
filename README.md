@@ -31,9 +31,14 @@ An end-to-end scientific and engineering research project investigating the **Go
 ## 📌 Executive Summary
 
 The project establishes a complete **Sim-to-Real** loop across three integrated domains:
-1. **Mechanical Design & Digital Fabrication (CAD/CAM):** Parametric SolidWorks modeling of modular scissor arms ($6\text{ cm}$ and $3\text{ cm}$) and precision 3D printing (Ultimaker Cura, $0.1\text{ mm}$ fine PLA) to minimize pivot friction.
+1. **Mechanical Design & Digital Fabrication (CAD/CAM):** Parametric SolidWorks modeling of modular scissor arms ($6\text{ cm}$ and $3\text{ cm}$) and precision 3D printing (Ultimaker Cura, $0.1\text{ mm}$ fine PLA) to minimize pivot friction. Includes both uniform pantographs ($n=3$, $n=5$) and a progressive variable-pitch pantograph with arm ratios **1:2:3**.
 2. **Physical Load Testing & Empirical Data:** Calibrated static load testing ($m \in [0.0\text{ kg}, 1.15\text{ kg}]$) on 3-stage ($n=3$) and 5-stage ($n=5$) testbenches using both Hookean steel springs and hyperelastic rubber polymers.
-3. **Interactive 3D Digital Twin (Godot 4):** A real-time virtual testbench rendered in an Apple VisionOS *"Light Liquid Glass"* aesthetic, replicating physical kinematics, spring tension, and live $L(m)$ vector plots.
+3. **Interactive 3D Digital Twin (Godot 4):** A real-time virtual testbench rendered in an Apple VisionOS *"Light Liquid Glass"* aesthetic, showcasing:
+   - **Rig A (Blue):** $n=3$ rhombus pantograph ($\lambda = 3.000\times$).
+   - **Rig C (Emerald Green):** 1:2:3 variable-pitch pantograph ($\lambda = 6.000\times$).
+   - **Rig B (Orange):** $n=5$ rhombus pantograph ($\lambda = 5.000\times$).
+   - **Planetary Gravity ($g$):** Real-time gravitational acceleration slider ($0.0 - 25.0\text{ m/s}^2$) with presets for Zero-G, Moon, Mars, Earth, and Jupiter.
+   - **Harmonic Oscillations & Gliding:** Configurable 2nd-order spring-mass oscillator (damping ratio $\zeta$, frequency $\omega$, dynamic impulse trigger) with jitter-free smooth gliding.
 
 ---
 
@@ -44,22 +49,34 @@ In an ideal static mechanical linkage, mechanical work done by input spring tens
 
 $$\delta A_{\text{in}} = \delta A_{\text{out}} \iff T \cdot \delta H = P \cdot \delta L$$
 
-For a pantograph comprising $n$ identical rhombuses:
-$$L(m) = n \cdot H(m) \implies \lambda \equiv \frac{\delta L}{\delta H} = n$$
+For a uniform pantograph comprising $n$ identical rhombuses:
+$$L(m) = n \cdot H(m) \implies \lambda \equiv \frac{\delta L}{\delta H} = n \implies T = \frac{n \cdot P_{\text{eff}}}{\eta}$$
 
-$$\therefore T = n \cdot P = n \cdot (m \cdot g)$$
+### 2. Variable-Pitch Scissor Kinematics (Rig C, Ratio 1:2:3)
+For a 3-stage scissor mechanism whose successive rhombus arm lengths scale in ratio $1:2:3$ ($l_0, 2l_0, 3l_0$):
+- Stage 0 height: $h_0 = H_0$
+- Stage 1 height: $h_1 = 2 H_0$
+- Stage 2 height: $h_2 = 3 H_0$
+- Cumulative span:
+  $$L_C = h_0 + h_1 + h_2 = (1 + 2 + 3) \cdot H_0 = 6 \cdot H_0$$
+- Transmission ratio:
+  $$\lambda_C \equiv \frac{\delta L_C}{\delta H_0} = \mathbf{6.000\times}$$
+- Tensile equilibrium across the upper control spring:
+  $$T_C = \frac{6 \cdot P_{\text{eff}}}{\eta}$$
 
-### 2. Linkage Self-Weight Compensation (3D-Printed PLA)
-Because physical PLA arms have non-zero mass ($m_{\text{link}} \approx 0.05\text{ kg}$ per rhombus), the distributed gravitational load acts at the linkage center of mass, which moves by $S_{\text{cm}} = n \frac{H}{2}$:
+### 3. Planetary Gravity & Linkage Self-Weight Compensation
+Because physical PLA arms have non-zero mass ($m_{\text{link}} \approx 0.05\text{ kg}$ per rhombus), the effective load at gravitational acceleration $g$ is:
 
-$$T(m) = n \left(m \cdot g + \frac{P_w}{2}\right)$$
+$$P_{\text{eff}} = m \cdot g + m_{\text{struct}} \cdot g$$
 
-### 3. Hooke's Law & Linear Regression Slope
+Where $m_{\text{struct}} = \frac{n}{2} m_{\text{link}}$ for uniform rigs and $3 m_{\text{link}}$ for the 1:2:3 configuration.
+
+### 4. Hooke's Law & Linear Regression Slope
 Under spring stiffness $k$:
-$$\Delta H(m) = \frac{T(m)}{k} = m \cdot g \cdot \frac{n}{k} + \frac{n \cdot P_w}{2k}$$
+$$\Delta H(m) = \frac{T(m)}{k} = m \cdot g \cdot \frac{\lambda}{k} + \frac{\lambda \cdot P_w}{2k}$$
 
-Plotting $\Delta H(m)$ vs. $m$ yields a linear slope $\tan \alpha = \frac{n \cdot g}{k}$, allowing direct experimental extraction of spring stiffness:
-$$k = \frac{n \cdot g}{\tan \alpha}$$
+Plotting $\Delta H(m)$ vs. $m$ yields a linear slope $\tan \alpha = \frac{\lambda \cdot g}{k}$, allowing direct experimental extraction of spring stiffness:
+$$k = \frac{\lambda \cdot g}{\tan \alpha}$$
 
 ---
 
