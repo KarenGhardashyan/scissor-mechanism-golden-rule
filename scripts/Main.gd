@@ -142,6 +142,7 @@ var joint_val_fy: Label
 var joint_val_fx: Label
 var joint_val_res: Label
 var joint_val_fric: Label
+var joint_val_tau: Label
 var joint_val_theta: Label
 
 
@@ -364,15 +365,15 @@ func _setup_rigs() -> void:
 		camera = OrbitCamera.new()
 		camera.name = "OrbitCamera"
 		camera.target_point = Vector3(0.0, 1.80, 0.0)
-		camera.default_distance = 6.0
-		camera.fov = 58.0
+		camera.default_distance = 6.85
+		camera.fov = 54.0
 		camera.target_pitch = deg_to_rad(-5.0)
 		camera.pitch = deg_to_rad(-5.0)
 		add_child(camera)
 	else:
 		camera.target_point = Vector3(0.0, 1.80, 0.0)
-		camera.default_distance = 6.0
-		camera.fov = 58.0
+		camera.default_distance = 6.85
+		camera.fov = 54.0
 		camera.target_pitch = deg_to_rad(-5.0)
 		camera.pitch = deg_to_rad(-5.0)
 
@@ -965,6 +966,10 @@ func _build_liquid_glass_ui() -> void:
 	jgrid.add_child(_create_body_label("Coulomb Friction fk:"))
 	joint_val_fric = _create_value_cell("0.0 N", Color(0.95, 0.65, 0.05))
 	jgrid.add_child(joint_val_fric)
+
+	jgrid.add_child(_create_body_label("Friction Torque τ:"))
+	joint_val_tau = _create_value_cell("0.000 N·m", Color(1.0, 0.75, 0.20))
+	jgrid.add_child(joint_val_tau)
 
 	jgrid.add_child(_create_body_label("Scissor Half-Angle θ:"))
 	joint_val_theta = _create_value_cell("0.0°")
@@ -1637,14 +1642,25 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var g: float = rig.gravity
 	var n: int = rig.n_stages
 	var link_m: float = rig.link_mass_per_stage
-	var theta: float = rig.current_theta # radians
-	var tan_theta: float = tan(clampf(theta, deg_to_rad(3.5), deg_to_rad(85.0)))
+	var theta: float = rig.current_theta # radians relative to horizontal
+	# Epsilon clamping guard against division-by-zero singularities (theta >= 3° to 87°)
+	var theta_clamped: float = clampf(theta, deg_to_rad(3.0), deg_to_rad(87.0))
+	var tan_theta: float = tan(theta_clamped)
 	var mu: float = 0.20 # Coulomb pin friction coefficient
+	var r_pin: float = 0.026 # Pin contact radius in meters
+
+	# Motion direction from Symplectic Euler integrator:
+	# vel_H > 0: extending downward; vel_H < 0: contracting upward
+	var vel_h: float = rig.velocity_H
+	var motion_dir: float = signf(vel_h)
+	if absf(vel_h) < 0.001:
+		motion_dir = 1.0 # Static equilibrium incipient extension under gravity
 
 	var F_y: float = 0.0
 	var F_x: float = 0.0
 	var R: float = 0.0
 	var F_fric: float = 0.0
+	var tau_fric: float = 0.0
 
 	var dir_fy := Vector3.ZERO
 	var dir_fx := Vector3.ZERO
@@ -1658,7 +1674,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		# Top Gantry Anchor
 		var p_tot: float = m * g + float(n) * link_m * g
 		F_y = p_tot
-		dir_fy = Vector3(0, 1, 0) # Points up (holding the load)
+		dir_fy = Vector3(0, 1, 0) # Points up (balancing total suspended weight)
 
 		F_x = rig.tensile_force_T / (2.0 * tan_theta)
 		dir_fx = Vector3(1, 0, 0) # Top slider thrust
@@ -1667,8 +1683,9 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		R = raw_res.length()
 		dir_res = raw_res.normalized()
 		F_fric = mu * R
-		# Friction points along tangent: perpendicular to R
-		dir_fric = Vector3(-dir_res.y, dir_res.x, 0).normalized()
+		tau_fric = mu * R * r_pin
+		# Friction counter-force opposing slider extension/contraction
+		dir_fric = Vector3(-motion_dir, 0, 0)
 
 		title = "%s · Top Gantry Pivot [Pin #0]" % rig.rig_name
 		desc = "Ceiling support reaction balancing total suspended mass + mechanism weight."
@@ -1682,16 +1699,18 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		if type == 0:
 			# Left Lateral Hinge
 			F_y = -p_stage * 0.5
-			dir_fy = Vector3(0, -1, 0) # Downward load
+			dir_fy = Vector3(0, -1, 0) # Downward load on left branch
 
 			F_x = p_stage / (2.0 * tan_theta)
-			dir_fx = Vector3(-1, 0, 0) # Points left (outward thrust)
+			dir_fx = Vector3(-1, 0, 0) # Outward thrust pointing left
 
 			var raw_res := Vector3(-F_x, F_y, 0.0)
 			R = raw_res.length()
 			dir_res = raw_res.normalized()
 			F_fric = mu * R
-			dir_fric = Vector3(-dir_res.y, dir_res.x, 0).normalized()
+			tau_fric = mu * R * r_pin
+			# When extending (motion_dir > 0), left hinge moves inward (+X). Friction opposes outward (-X).
+			dir_fric = Vector3(-motion_dir, 0, 0)
 
 			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
@@ -1699,16 +1718,18 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		elif type == 1:
 			# Right Lateral Hinge
 			F_y = -p_stage * 0.5
-			dir_fy = Vector3(0, -1, 0) # Downward load
+			dir_fy = Vector3(0, -1, 0) # Downward load on right branch
 
 			F_x = p_stage / (2.0 * tan_theta)
-			dir_fx = Vector3(1, 0, 0) # Points right (outward thrust)
+			dir_fx = Vector3(1, 0, 0) # Outward thrust pointing right
 
 			var raw_res := Vector3(F_x, F_y, 0.0)
 			R = raw_res.length()
 			dir_res = raw_res.normalized()
 			F_fric = mu * R
-			dir_fric = Vector3(dir_res.y, -dir_res.x, 0).normalized()
+			tau_fric = mu * R * r_pin
+			# When extending (motion_dir > 0), right hinge moves inward (-X). Friction opposes outward (+X).
+			dir_fric = Vector3(motion_dir, 0, 0)
 
 			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
@@ -1716,7 +1737,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		else:
 			# Central Hinge
 			if s == n - 1:
-				# Bottommost pin supporting mass
+				# Bottommost pin supporting mass directly
 				F_y = -m * g
 				dir_fy = Vector3(0, -1, 0)
 				F_x = 0.0
@@ -1724,21 +1745,25 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				R = m * g
 				dir_res = Vector3(0, -1, 0)
 				F_fric = mu * R
-				dir_fric = Vector3(1, 0, 0) # Horizontal tangent on lower pin
+				tau_fric = mu * R * r_pin
+				# Opposes vertical downward extension by pointing upward (+Y)
+				dir_fric = Vector3(0, motion_dir, 0)
 
 				title = "%s · Bottom Payload Suspension Pin [Pin #%d]" % [rig.rig_name, pin_idx]
 				desc = "Lowest pivot transmitting payload gravity directly into the bottom scissor stage."
 			else:
-				# Intermediate central hinge
+				# Intermediate central coupling hinge
 				F_y = -p_below
 				dir_fy = Vector3(0, -1, 0)
 				F_x = p_below / (2.0 * tan_theta)
 				dir_fx = Vector3(1, 0, 0) # Scissor cross-shear
-				var raw_res := Vector3(F_x * 0.45, F_y, 0.0)
+				var raw_res := Vector3(F_x * 0.5, F_y, 0.0)
 				R = raw_res.length()
 				dir_res = raw_res.normalized()
 				F_fric = mu * R
-				dir_fric = Vector3(-dir_res.y, dir_res.x, 0).normalized()
+				tau_fric = mu * R * r_pin
+				# Opposes vertical downward expansion motion
+				dir_fric = Vector3(0, motion_dir, 0)
 
 				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 				desc = "Intermediate coupling pivot transferring vertical load between consecutive scissor stages."
@@ -1762,11 +1787,12 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"lbl_fy": "Fy = %+.2f N" % F_y,
 		"lbl_fx": "Fx = %+.2f N" % F_x,
 		"lbl_res": "R = %.2f N" % R,
-		"lbl_fric": "F_fric = %.2f N (μ=0.20)" % F_fric,
+		"lbl_fric": "F_fric = %.2f N (μ=%.2f)" % [F_fric, mu],
 		"F_y": F_y,
 		"F_x": F_x,
 		"R": R,
 		"F_fric": F_fric,
+		"tau_fric": tau_fric,
 		"theta_deg": rad_to_deg(theta),
 		"title": title,
 		"desc": desc
@@ -1799,6 +1825,8 @@ func _update_force_visualizer() -> void:
 		joint_val_fx.text = "%+.2f N  (Lateral Scissor Thrust)" % data.F_x
 		joint_val_res.text = "%.2f N  (Joint Resultant Contact R)" % data.R
 		joint_val_fric.text = "%.2f N  (Coulomb Hinge Friction f_k)" % data.F_fric
+		if joint_val_tau != null:
+			joint_val_tau.text = "%.3f N·m  (Pin Resistance Torque τ)" % data.tau_fric
 		joint_val_theta.text = "%.1f°  (Scissor Half-Angle θ)" % data.theta_deg
 
 
@@ -2071,6 +2099,8 @@ func _check_responsive_layout() -> void:
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	if vp_size.x <= 0 or vp_size.y <= 0:
 		return
+	if camera != null and camera.has_method("update_aspect_ratio_framing"):
+		camera.update_aspect_ratio_framing(vp_size)
 	var is_mobile := (vp_size.x < 1050.0) or (vp_size.x / maxf(vp_size.y, 1.0) < 1.18)
 	if is_mobile != is_mobile_layout:
 		_apply_responsive_layout(is_mobile, vp_size)

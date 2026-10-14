@@ -7,7 +7,7 @@ extends Control
 ## - Rig C: L_C(m) = 6 · H0(m) (λ = 6.0×, Emerald Green 1:2:3 Variable Scissor)
 ## - Rig B: L_B(m) = 5 · H(m)  (λ = 5.0×, Ultra Orange)
 ## Features dual-theme rendering (Dark Obsidian Lab / Light Studio), glowing strokes,
-## interactive mass scrubbing, projection guide lines, and VisionOS telemetry HUD pills.
+## fluid lerp-smoothed mass scrubbing, zero-allocation WebGL draw buffers, and VisionOS HUD pills.
 
 signal mass_scrubbed(new_mass: float)
 
@@ -35,8 +35,9 @@ var margin_right: float = 24.0
 var margin_top: float = 38.0
 var margin_bottom: float = 32.0
 
-# Interactive mouse drag state
+# Interactive mouse drag & smooth lerp scrub state
 var is_dragging: bool = false
+var display_mass: float = 0.5
 
 # Design Colors (Apple VisionOS Palette)
 const COLOR_RIG_A := Color(0.0, 0.47, 0.95)       # Apple Electric Tech-Blue (#0077F0)
@@ -44,10 +45,80 @@ const COLOR_RIG_C := Color(0.19, 0.84, 0.38)      # Apple Emerald Green (#30D661
 const COLOR_RIG_B := Color(1.0, 0.44, 0.06)       # Apple Ultra Orange (#FF7010)
 const COLOR_OBSIDIAN := Color(0.08, 0.09, 0.12, 0.96)
 
+# Cached Zero-Allocation StyleBoxes for WebGL / WASM GC Prevention
+var _style_card: StyleBoxFlat
+var _style_badge: StyleBoxFlat
+var _style_tooltip: StyleBoxFlat
+
+# Pre-allocated Reusable Vector Arrays for WebGL Performance
+const NUM_SAMPLES: int = 60
+var _pts_a: PackedVector2Array = PackedVector2Array()
+var _pts_c: PackedVector2Array = PackedVector2Array()
+var _pts_b: PackedVector2Array = PackedVector2Array()
+var _poly_a: PackedVector2Array = PackedVector2Array()
+var _poly_c: PackedVector2Array = PackedVector2Array()
+var _poly_b: PackedVector2Array = PackedVector2Array()
+var _marker_tri: PackedVector2Array = PackedVector2Array()
+
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(720, 160)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	display_mass = current_mass
+
+	# Pre-allocate StyleBoxes once to eliminate per-frame GC allocations
+	_style_card = StyleBoxFlat.new()
+	_style_card.border_width_left = 1
+	_style_card.border_width_top = 1
+	_style_card.border_width_right = 1
+	_style_card.border_width_bottom = 1
+	_style_card.corner_radius_top_left = 14
+	_style_card.corner_radius_top_right = 14
+	_style_card.corner_radius_bottom_left = 14
+	_style_card.corner_radius_bottom_right = 14
+	_style_card.shadow_size = 8
+	_style_card.shadow_offset = Vector2(0, 3)
+
+	_style_badge = StyleBoxFlat.new()
+	_style_badge.border_width_left = 1
+	_style_badge.border_width_top = 1
+	_style_badge.border_width_right = 1
+	_style_badge.border_width_bottom = 1
+	_style_badge.corner_radius_top_left = 5
+	_style_badge.corner_radius_top_right = 5
+	_style_badge.corner_radius_bottom_left = 5
+	_style_badge.corner_radius_bottom_right = 5
+
+	_style_tooltip = StyleBoxFlat.new()
+	_style_tooltip.bg_color = COLOR_OBSIDIAN
+	_style_tooltip.border_width_left = 1
+	_style_tooltip.border_width_top = 1
+	_style_tooltip.border_width_right = 1
+	_style_tooltip.border_width_bottom = 1
+	_style_tooltip.corner_radius_top_left = 5
+	_style_tooltip.corner_radius_top_right = 5
+	_style_tooltip.corner_radius_bottom_left = 5
+	_style_tooltip.corner_radius_bottom_right = 5
+	_style_tooltip.shadow_color = Color(0.0, 0.0, 0.0, 0.30)
+	_style_tooltip.shadow_size = 5
+	_style_tooltip.shadow_offset = Vector2(0, 2)
+
+	_pts_a.resize(NUM_SAMPLES + 1)
+	_pts_c.resize(NUM_SAMPLES + 1)
+	_pts_b.resize(NUM_SAMPLES + 1)
+	_poly_a.resize(NUM_SAMPLES + 3)
+	_poly_c.resize(NUM_SAMPLES + 3)
+	_poly_b.resize(NUM_SAMPLES + 3)
+	_marker_tri.resize(3)
+
+
+func _process(delta: float) -> void:
+	if not is_equal_approx(display_mass, current_mass):
+		var blend: float = 1.0 - exp(-24.0 * delta)
+		display_mass = lerpf(display_mass, current_mass, blend)
+		if absf(display_mass - current_mass) < 0.0005:
+			display_mass = current_mass
+		queue_redraw()
 
 
 func toggle_theme() -> void:
@@ -56,8 +127,9 @@ func toggle_theme() -> void:
 
 
 func set_mass(val: float) -> void:
-	if not is_equal_approx(current_mass, val):
-		current_mass = clampf(val, mass_min, mass_max)
+	var clamped_val: float = clampf(val, mass_min, mass_max)
+	if not is_equal_approx(current_mass, clamped_val):
+		current_mass = clamped_val
 		queue_redraw()
 
 
@@ -85,6 +157,7 @@ func set_link_mass(val: float) -> void:
 		queue_redraw()
 
 
+## Theoretical extension for uniform pantographs: L = n * H
 func compute_L_cm(m: float, n: int) -> float:
 	var p_eff: float = m * gravity + (float(n) * link_mass * gravity) * 0.5
 	var eta_safe: float = clampf(efficiency_eta, 0.50, 1.00)
@@ -95,6 +168,7 @@ func compute_L_cm(m: float, n: int) -> float:
 	return float(n) * h * 100.0
 
 
+## Theoretical extension for Rig C (1:2:3 variable-pitch pantograph): L = 6 * H0
 func compute_L_c_cm(m: float) -> float:
 	var base_l: float = physical_link_length * 0.75
 	var base_h_rest: float = physical_resting_H * 0.75
@@ -168,34 +242,23 @@ func _draw() -> void:
 		col_grid_axis = Color(0.18, 0.20, 0.26, 0.50)
 		col_cursor_line = Color(0.18, 0.20, 0.26, 0.75)
 
-	# --- 1. DEDICATED HIGH-CONTRAST INNER PLOT CARD ---
+	# --- 1. HIGH-CONTRAST INNER PLOT CARD (ZERO-ALLOCATION) ---
 	var card_rect := Rect2(margin_left - 46.0, margin_top - 30.0, plot_w + 64.0, plot_h + 56.0)
-	var card_style := StyleBoxFlat.new()
-	card_style.bg_color = col_card_bg
-	card_style.border_color = col_card_border
-	card_style.border_width_left = 1
-	card_style.border_width_top = 1
-	card_style.border_width_right = 1
-	card_style.border_width_bottom = 1
-	card_style.corner_radius_top_left = 14
-	card_style.corner_radius_top_right = 14
-	card_style.corner_radius_bottom_left = 14
-	card_style.corner_radius_bottom_right = 14
-	card_style.shadow_color = Color(0.0, 0.0, 0.0, 0.18) if dark_theme else Color(0.0, 0.0, 0.0, 0.06)
-	card_style.shadow_size = 8
-	card_style.shadow_offset = Vector2(0, 3)
-	draw_style_box(card_style, card_rect)
+	_style_card.bg_color = col_card_bg
+	_style_card.border_color = col_card_border
+	_style_card.shadow_color = Color(0.0, 0.0, 0.0, 0.18) if dark_theme else Color(0.0, 0.0, 0.0, 0.06)
+	draw_style_box(_style_card, card_rect)
 
 	# --- 2. HEADER TITLE & TELEMETRY HUD PILLS ---
 	var title_text := "REALTIME DISPLACEMENT PROFILE: L(m) = λ · H(m)"
 	draw_string(font, Vector2(margin_left - 36.0, margin_top - 12.0), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col_text_title)
 
-	# Current calculated values
-	var cur_la: float = compute_L_cm(current_mass, 3)
-	var cur_lc: float = compute_L_c_cm(current_mass)
-	var cur_lb: float = compute_L_cm(current_mass, 5)
+	# Values evaluated at lerp-smoothed display_mass
+	var cur_la: float = compute_L_cm(display_mass, 3)
+	var cur_lc: float = compute_L_c_cm(display_mass)
+	var cur_lb: float = compute_L_cm(display_mass, 5)
 
-	# Real-time Telemetry Readout Badges in Header
+	# Telemetry Readout Badges in Header
 	var badge_right_edge: float = margin_left + plot_w + 10.0
 	var pill_y: float = margin_top - 22.0
 
@@ -218,7 +281,7 @@ func _draw() -> void:
 	_draw_hud_badge(Vector2(pill_a_x, pill_y), Vector2(pill_a_w, 18.0), txt_a, COLOR_RIG_A, font, 10, dark_theme)
 
 	# Badge Mass
-	var txt_m := "m = %.2f kg" % current_mass
+	var txt_m := "m = %.2f kg" % display_mass
 	var pill_m_w: float = font.get_string_size(txt_m, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x + 20.0
 	var pill_m_x: float = pill_a_x - pill_m_w - 6.0
 	_draw_hud_badge(Vector2(pill_m_x, pill_y), Vector2(pill_m_w, 18.0), txt_m, Color(0.70, 0.72, 0.78), font, 10, dark_theme)
@@ -230,17 +293,15 @@ func _draw() -> void:
 		var frac_y: float = (l_val - l_min) / (l_max - l_min)
 		var y_pos: float = origin.y - frac_y * plot_h
 
-		# Dotted/subtle major grid line
 		draw_line(Vector2(origin.x, y_pos), Vector2(origin.x + plot_w, y_pos), col_grid, 1.0)
 
-		# Tick label with unit
 		var tick_str := "%d cm" % int(l_val)
 		var str_w: float = font.get_string_size(tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
 		draw_string(font, Vector2(origin.x - str_w - 8.0, y_pos + 3.0), tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, col_text_sec)
 
 	draw_string(font, Vector2(origin.x - 38.0, margin_top - 2.0), "L (cm)", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, col_text_title)
 
-	# X-axis Grid Lines (0.0 to 1.5 kg in steps of 0.3 kg)
+	# X-axis Grid Lines
 	var x_ticks := [0.0, 0.3, 0.6, 0.9, 1.2, 1.5]
 	for m_tick in x_ticks:
 		var frac_x: float = (m_tick - mass_min) / (mass_max - mass_min)
@@ -261,78 +322,66 @@ func _draw() -> void:
 	draw_line(Vector2(origin.x, origin.y), Vector2(origin.x, margin_top), col_grid_axis, 1.5)
 
 	# --- 4. THEORETICAL CURVES & AREA GRADIENTS ---
-	var num_samples: int = 60
-	var pts_a := PackedVector2Array()
-	var pts_c := PackedVector2Array()
-	var pts_b := PackedVector2Array()
-
-	for i in range(num_samples + 1):
-		var t: float = float(i) / float(num_samples)
+	for i in range(NUM_SAMPLES + 1):
+		var t: float = float(i) / float(NUM_SAMPLES)
 		var m_samp: float = lerp(mass_min, mass_max, t)
 		var x_p: float = origin.x + t * plot_w
 
 		# Rig A (n=3)
 		var la_val: float = compute_L_cm(m_samp, 3)
 		var la_frac: float = clampf((la_val - l_min) / (l_max - l_min), 0.0, 1.0)
-		pts_a.append(Vector2(x_p, origin.y - la_frac * plot_h))
+		_pts_a[i] = Vector2(x_p, origin.y - la_frac * plot_h)
+		_poly_a[i] = _pts_a[i]
 
 		# Rig C (1:2:3, lambda=6)
 		var lc_val: float = compute_L_c_cm(m_samp)
 		var lc_frac: float = clampf((lc_val - l_min) / (l_max - l_min), 0.0, 1.0)
-		pts_c.append(Vector2(x_p, origin.y - lc_frac * plot_h))
+		_pts_c[i] = Vector2(x_p, origin.y - lc_frac * plot_h)
+		_poly_c[i] = _pts_c[i]
 
 		# Rig B (n=5)
 		var lb_val: float = compute_L_cm(m_samp, 5)
 		var lb_frac: float = clampf((lb_val - l_min) / (l_max - l_min), 0.0, 1.0)
-		pts_b.append(Vector2(x_p, origin.y - lb_frac * plot_h))
+		_pts_b[i] = Vector2(x_p, origin.y - lb_frac * plot_h)
+		_poly_b[i] = _pts_b[i]
 
-	# Subtle Translucent Area Fill Under Curves
-	if pts_a.size() >= 2:
-		var poly_a := PackedVector2Array(pts_a)
-		poly_a.append(Vector2(origin.x + plot_w, origin.y))
-		poly_a.append(Vector2(origin.x, origin.y))
-		draw_colored_polygon(poly_a, Color(COLOR_RIG_A.r, COLOR_RIG_A.g, COLOR_RIG_A.b, 0.06 if dark_theme else 0.04))
+	# Close polygon bottoms without reallocating
+	_poly_a[NUM_SAMPLES + 1] = Vector2(origin.x + plot_w, origin.y)
+	_poly_a[NUM_SAMPLES + 2] = Vector2(origin.x, origin.y)
 
-	if pts_c.size() >= 2:
-		var poly_c := PackedVector2Array(pts_c)
-		poly_c.append(Vector2(origin.x + plot_w, origin.y))
-		poly_c.append(Vector2(origin.x, origin.y))
-		draw_colored_polygon(poly_c, Color(COLOR_RIG_C.r, COLOR_RIG_C.g, COLOR_RIG_C.b, 0.06 if dark_theme else 0.04))
+	_poly_c[NUM_SAMPLES + 1] = Vector2(origin.x + plot_w, origin.y)
+	_poly_c[NUM_SAMPLES + 2] = Vector2(origin.x, origin.y)
 
-	if pts_b.size() >= 2:
-		var poly_b := PackedVector2Array(pts_b)
-		poly_b.append(Vector2(origin.x + plot_w, origin.y))
-		poly_b.append(Vector2(origin.x, origin.y))
-		draw_colored_polygon(poly_b, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.06 if dark_theme else 0.04))
+	_poly_b[NUM_SAMPLES + 1] = Vector2(origin.x + plot_w, origin.y)
+	_poly_b[NUM_SAMPLES + 2] = Vector2(origin.x, origin.y)
 
-	# Draw Curve A (Blue, n=3): Wide luminous glow stroke + prominent crisp core
-	if pts_a.size() >= 2:
-		draw_polyline(pts_a, Color(COLOR_RIG_A.r, COLOR_RIG_A.g, COLOR_RIG_A.b, 0.30), 6.5, true)
-		draw_polyline(pts_a, COLOR_RIG_A, 3.2, true)
+	# Translucent Area Fill Under Curves
+	draw_colored_polygon(_poly_a, Color(COLOR_RIG_A.r, COLOR_RIG_A.g, COLOR_RIG_A.b, 0.06 if dark_theme else 0.04))
+	draw_colored_polygon(_poly_c, Color(COLOR_RIG_C.r, COLOR_RIG_C.g, COLOR_RIG_C.b, 0.06 if dark_theme else 0.04))
+	draw_colored_polygon(_poly_b, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.06 if dark_theme else 0.04))
 
-	# Draw Curve C (Emerald Green, 1:2:3): Wide luminous glow stroke + prominent crisp core
-	if pts_c.size() >= 2:
-		draw_polyline(pts_c, Color(COLOR_RIG_C.r, COLOR_RIG_C.g, COLOR_RIG_C.b, 0.30), 6.5, true)
-		draw_polyline(pts_c, COLOR_RIG_C, 3.2, true)
+	# Curve Strokes (Glow halo + crisp core)
+	draw_polyline(_pts_a, Color(COLOR_RIG_A.r, COLOR_RIG_A.g, COLOR_RIG_A.b, 0.30), 6.5, true)
+	draw_polyline(_pts_a, COLOR_RIG_A, 3.2, true)
 
-	# Draw Curve B (Ultra Orange, n=5): Wide luminous glow stroke + prominent crisp core
-	if pts_b.size() >= 2:
-		draw_polyline(pts_b, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.30), 6.5, true)
-		draw_polyline(pts_b, COLOR_RIG_B, 3.2, true)
+	draw_polyline(_pts_c, Color(COLOR_RIG_C.r, COLOR_RIG_C.g, COLOR_RIG_C.b, 0.30), 6.5, true)
+	draw_polyline(_pts_c, COLOR_RIG_C, 3.2, true)
+
+	draw_polyline(_pts_b, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.30), 6.5, true)
+	draw_polyline(_pts_b, COLOR_RIG_B, 3.2, true)
 
 	# --- 5. DYNAMIC REALTIME MARKERS & PROJECTIONS ---
-	var cur_m_frac: float = clampf((current_mass - mass_min) / (mass_max - mass_min), 0.0, 1.0)
+	var cur_m_frac: float = clampf((display_mass - mass_min) / (mass_max - mass_min), 0.0, 1.0)
 	var cursor_x: float = origin.x + cur_m_frac * plot_w
 
 	# Vertical Scanning Guide Line
 	draw_line(Vector2(cursor_x, origin.y), Vector2(cursor_x, margin_top), col_cursor_line, 1.4)
+
 	# Cursor top triangle marker
-	var marker_top := PackedVector2Array([
-		Vector2(cursor_x, margin_top - 4.0),
-		Vector2(cursor_x - 4.5, margin_top - 10.0),
-		Vector2(cursor_x + 4.5, margin_top - 10.0)
-	])
-	draw_colored_polygon(marker_top, col_cursor_line)
+	_marker_tri[0] = Vector2(cursor_x, margin_top - 4.0)
+	_marker_tri[1] = Vector2(cursor_x - 4.5, margin_top - 10.0)
+	_marker_tri[2] = Vector2(cursor_x + 4.5, margin_top - 10.0)
+	draw_colored_polygon(_marker_tri, col_cursor_line)
 
 	var dot_a_pos := Vector2(cursor_x, origin.y - ((cur_la - l_min) / (l_max - l_min)) * plot_h)
 	var dot_c_pos := Vector2(cursor_x, origin.y - ((cur_lc - l_min) / (l_max - l_min)) * plot_h)
@@ -343,17 +392,15 @@ func _draw() -> void:
 	_draw_horizontal_projection(origin.x, cursor_x, dot_c_pos.y, COLOR_RIG_C)
 	_draw_horizontal_projection(origin.x, cursor_x, dot_b_pos.y, COLOR_RIG_B)
 
-	# Rig A Blue Dot: Glow halo + solid core + white center pin
+	# Dots (Glow halo + solid core + white center pin)
 	draw_arc(dot_a_pos, 9.0, 0.0, TAU, 24, Color(COLOR_RIG_A.r, COLOR_RIG_A.g, COLOR_RIG_A.b, 0.40), 2.8, true)
 	draw_circle(dot_a_pos, 5.0, COLOR_RIG_A)
 	draw_circle(dot_a_pos, 2.0, Color(1.0, 1.0, 1.0))
 
-	# Rig C Green Dot: Glow halo + solid core + white center pin
 	draw_arc(dot_c_pos, 9.0, 0.0, TAU, 24, Color(COLOR_RIG_C.r, COLOR_RIG_C.g, COLOR_RIG_C.b, 0.40), 2.8, true)
 	draw_circle(dot_c_pos, 5.0, COLOR_RIG_C)
 	draw_circle(dot_c_pos, 2.0, Color(1.0, 1.0, 1.0))
 
-	# Rig B Orange Dot: Glow halo + solid core + white center pin
 	draw_arc(dot_b_pos, 9.0, 0.0, TAU, 24, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.40), 2.8, true)
 	draw_circle(dot_b_pos, 5.0, COLOR_RIG_B)
 	draw_circle(dot_b_pos, 2.0, Color(1.0, 1.0, 1.0))
@@ -401,19 +448,9 @@ func _draw_horizontal_projection(start_x: float, end_x: float, y_pos: float, col
 
 
 func _draw_hud_badge(pos: Vector2, sz: Vector2, text: String, accent_color: Color, font: Font, font_size: int, is_dark: bool) -> void:
-	var pill_style := StyleBoxFlat.new()
-	pill_style.bg_color = Color(0.12, 0.14, 0.18, 0.90) if is_dark else Color(0.92, 0.93, 0.96, 0.95)
-	pill_style.border_color = accent_color
-	pill_style.border_width_left = 1
-	pill_style.border_width_top = 1
-	pill_style.border_width_right = 1
-	pill_style.border_width_bottom = 1
-	pill_style.corner_radius_top_left = 5
-	pill_style.corner_radius_top_right = 5
-	pill_style.corner_radius_bottom_left = 5
-	pill_style.corner_radius_bottom_right = 5
-
-	draw_style_box(pill_style, Rect2(pos, sz))
+	_style_badge.bg_color = Color(0.12, 0.14, 0.18, 0.90) if is_dark else Color(0.92, 0.93, 0.96, 0.95)
+	_style_badge.border_color = accent_color
+	draw_style_box(_style_badge, Rect2(pos, sz))
 	draw_circle(Vector2(pos.x + 8.0, pos.y + sz.y * 0.5), 3.0, accent_color)
 
 	var text_y: float = pos.y + (sz.y - font.get_height(font_size)) * 0.5 + font.get_ascent(font_size)
@@ -423,22 +460,8 @@ func _draw_hud_badge(pos: Vector2, sz: Vector2, text: String, accent_color: Colo
 
 
 func _draw_tooltip_pill(pos: Vector2, sz: Vector2, text: String, border_color: Color, font: Font, font_size: int) -> void:
-	var pill_style := StyleBoxFlat.new()
-	pill_style.bg_color = COLOR_OBSIDIAN
-	pill_style.border_color = border_color
-	pill_style.border_width_left = 1
-	pill_style.border_width_top = 1
-	pill_style.border_width_right = 1
-	pill_style.border_width_bottom = 1
-	pill_style.corner_radius_top_left = 5
-	pill_style.corner_radius_top_right = 5
-	pill_style.corner_radius_bottom_left = 5
-	pill_style.corner_radius_bottom_right = 5
-	pill_style.shadow_color = Color(0.0, 0.0, 0.0, 0.30)
-	pill_style.shadow_size = 5
-	pill_style.shadow_offset = Vector2(0, 2)
-
-	draw_style_box(pill_style, Rect2(pos, sz))
+	_style_tooltip.border_color = border_color
+	draw_style_box(_style_tooltip, Rect2(pos, sz))
 	draw_circle(Vector2(pos.x + 8.0, pos.y + sz.y * 0.5), 3.0, border_color)
 
 	var text_y: float = pos.y + (sz.y - font.get_height(font_size)) * 0.5 + font.get_ascent(font_size)

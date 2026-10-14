@@ -8,11 +8,11 @@
 script = ExtResource("1_main")
 
 [node name="OrbitCamera" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.99863, 0.052336, 0, -0.052336, 0.99863, 0, 1.80, 5.8)
-fov = 58.0
+transform = Transform3D(1, 0, 0, 0, 0.99863, 0.052336, 0, -0.052336, 0.99863, 0, 1.75, 6.85)
+fov = 54.0
 script = ExtResource("2_cam")
-target_point = Vector3(0, 1.80, 0)
-default_distance = 5.8
+target_point = Vector3(0, 1.75, 0)
+default_distance = 6.85
 
 [node name="RigA" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.65, 3.5, 0)

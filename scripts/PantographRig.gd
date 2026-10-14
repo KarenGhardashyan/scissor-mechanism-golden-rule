@@ -4,6 +4,7 @@ extends Node3D
 ## Apple Industrial Hardware Aesthetic: Scissor Pantograph Prototype
 ## Tactile, chunky 3D hardware linkages with satin resin / space-grey anodized finishes.
 ## Minimalist VisionOS design language. Supports uniform and 1:2:3 variable-pitch pantographs.
+## Includes 400Hz Symplectic Euler numerical integration with energy conservation and zero drift.
 
 signal telemetry_updated(data: Dictionary)
 signal pin_clicked(rig: PantographRig, pin_index: int, pin_pos: Vector3)
@@ -16,7 +17,7 @@ signal pin_clicked(rig: PantographRig, pin_index: int, pin_pos: Vector3)
 @export var dark_theme: bool = false           # Theme toggle (Light Studio vs Dark Obsidian Cyberpunk)
 @export var physical_link_length: float = 0.06 # Base arm length: 6.0 cm
 @export var physical_resting_H: float = 0.075  # Base unloaded rhombus height: 7.5 cm
-@export var spring_k: float = 1000.0           # Spring stiffness in N/m [500 - 1500]
+@export var spring_k: float = 1000.0           # Spring stiffness in N/m [100 - 5000]
 @export var suspended_mass: float = 0.5        # Mass in kg [0.0 - 1.5]
 @export var link_mass_per_stage: float = 0.05  # Self-weight PLA per rhombus: 0.05 kg
 @export var efficiency_eta: float = 1.0        # Mechanical efficiency η [0.50 - 1.00]
@@ -27,8 +28,8 @@ signal pin_clicked(rig: PantographRig, pin_index: int, pin_pos: Vector3)
 
 # Dynamic State & Vibration Controls
 @export var oscillations_enabled: bool = true  # Toggle harmonic oscillation / smooth glide
-@export var damping_ratio_zeta: float = 0.25   # Damping ratio [0.00 - 0.60]
-@export var natural_frequency_omega: float = 20.0 # Nominal frequency [10.0 - 35.0 rad/s]
+@export var damping_ratio_zeta: float = 0.25   # Damping ratio [0.00 - 1.50]
+@export var natural_frequency_omega: float = 20.0 # Nominal frequency [4.0 - 75.0 rad/s]
 
 var current_H: float = 0.075
 var velocity_H: float = 0.0
@@ -249,36 +250,24 @@ func _init_materials() -> void:
 			mat_mass_metal.roughness = 0.18
 			mat_laser.albedo_color = Color(0.0, 0.443, 0.89, 0.85)
 
-	# Precision Turned Architectural Brass / Gold Joint Pins
-	mat_joint_brass = StandardMaterial3D.new()
-	mat_joint_brass.albedo_color = Color(1.0, 0.84, 0.38) if dark_theme else Color(0.96, 0.78, 0.32)
-	mat_joint_brass.metallic = 0.96
-	mat_joint_brass.roughness = 0.12
-
-	# Stainless Steel Structural Bracket / Hook
+	# Shared hardware materials
 	mat_pin_steel = StandardMaterial3D.new()
-	mat_pin_steel.albedo_color = Color(0.92, 0.93, 0.95)
+	mat_pin_steel.albedo_color = Color(0.32, 0.34, 0.38)
 	mat_pin_steel.metallic = 0.98
-	mat_pin_steel.roughness = 0.12
+	mat_pin_steel.roughness = 0.15
 
-	# Chunky Glossy Chrome Upper Spring (Mirror Finish)
+	mat_joint_brass = StandardMaterial3D.new()
+	mat_joint_brass.albedo_color = Color(0.92, 0.76, 0.38)
+	mat_joint_brass.metallic = 0.90
+	mat_joint_brass.roughness = 0.22
+
 	mat_spring_chrome = StandardMaterial3D.new()
-	mat_spring_chrome.albedo_color = Color(0.98, 0.98, 1.0)
-	mat_spring_chrome.metallic = 1.0
-	mat_spring_chrome.roughness = 0.06
+	mat_spring_chrome.albedo_color = Color(0.95, 0.96, 0.98)
+	mat_spring_chrome.metallic = 0.98
+	mat_spring_chrome.roughness = 0.12
 
 
 func _build_rig_hierarchy() -> void:
-	# 1. Top Gantry Attachment Clamp (Machined Billet Bracket)
-	var bracket := MeshInstance3D.new()
-	var b_box := BoxMesh.new()
-	b_box.size = Vector3(0.32, 0.09, 0.16)
-	bracket.mesh = b_box
-	bracket.position = Vector3(0, 0.045, 0)
-	bracket.material_override = mat_pin_steel
-	add_child(bracket)
-
-	# 2. Containers
 	links_container = Node3D.new()
 	links_container.name = "LinksContainer"
 	add_child(links_container)
@@ -287,11 +276,11 @@ func _build_rig_hierarchy() -> void:
 	pins_container.name = "PinsContainer"
 	add_child(pins_container)
 
-	# 3. Create Chunky Tactile Link Arms
+	# Build Scissor Link Bars (4 arms per rhombus stage)
 	arm_nodes.clear()
 	var base_link_len: float = get_base_link_length()
-	var arm_width: float = 0.092
-	var arm_thick: float = 0.036
+	var arm_width: float = 0.024
+	var arm_thick: float = 0.012
 
 	for stage in range(n_stages):
 		var m_stage: float = [1.0, 2.0, 3.0][stage] if is_scaled_123 else 1.0
@@ -334,7 +323,7 @@ func _build_rig_hierarchy() -> void:
 			links_container.add_child(arm_node)
 			arm_nodes.append(arm_node)
 
-	# 4. Architectural Brass / Gold Pivot Pins
+	# Build Architectural Pivot Pins
 	pin_nodes.clear()
 	var total_pins: int = 1 + n_stages * 3
 	for p in range(total_pins):
@@ -389,7 +378,7 @@ func _build_rig_hierarchy() -> void:
 		pins_container.add_child(pin_root)
 		pin_nodes.append(pin_root)
 
-	# 5. Chunky Chrome Helical Spring (Located across Stage 0)
+	# Helical Extension Spring (Stage 0)
 	base_spring_vis_height = get_base_resting_H() * visual_scale
 	spring_mesh_instance = MeshInstance3D.new()
 	spring_mesh_instance.name = "UpperLinearSpring"
@@ -404,7 +393,7 @@ func _build_rig_hierarchy() -> void:
 	)
 	add_child(spring_mesh_instance)
 
-	# 6. Bottom Suspended Mass Assembly
+	# Suspended Mass Assembly
 	mass_assembly = Node3D.new()
 	mass_assembly.name = "SuspendedMassAssembly"
 	add_child(mass_assembly)
@@ -427,7 +416,7 @@ func _build_rig_hierarchy() -> void:
 	mass_cylinder.mesh = cyl_mesh
 	mass_assembly.add_child(mass_cylinder)
 
-	# 7. Clean Laser Engraved Mass Indicator on Weight
+	# High-Contrast Mass Indicator on Weight
 	mass_label = Label3D.new()
 	mass_label.name = "MassLabel"
 	mass_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -435,11 +424,11 @@ func _build_rig_hierarchy() -> void:
 	mass_label.font_size = 20
 	mass_label.shaded = false
 	mass_label.modulate = Color(0.12, 0.13, 0.16)
-	mass_label.outline_size = 4
-	mass_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.95)
+	mass_label.outline_size = 6
+	mass_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
 	mass_assembly.add_child(mass_label)
 
-	# 8. Overhead Rig Header
+	# Overhead Rig Header Label
 	rig_title_label = Label3D.new()
 	rig_title_label.name = "RigTitleLabel"
 	rig_title_label.position = Vector3(0, 0.38, 0.12)
@@ -459,11 +448,11 @@ func _build_rig_hierarchy() -> void:
 		rig_title_label.text = "RIG A  (n=3)"
 		rig_title_label.modulate = Color(0.0, 0.443, 0.89)
 
-	rig_title_label.outline_size = 5
-	rig_title_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.95)
+	rig_title_label.outline_size = 8
+	rig_title_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
 	add_child(rig_title_label)
 
-	# 9. Build Extension Dimension Lasers & Ticks
+	# Dimension Lasers & Ticks
 	_build_dimension_lasers()
 
 
@@ -479,10 +468,15 @@ func _update_physics_targets() -> void:
 	var effective_n: float = 6.0 if is_scaled_123 else float(n_stages)
 	var struct_weight_factor: float = 3.0 if is_scaled_123 else (float(n_stages) * 0.5)
 
+	# Newton-Euler static equilibrium: Effective downward load P_eff
 	effective_load_P = suspended_mass * gravity + struct_weight_factor * link_mass_per_stage * gravity
 	var eta_safe: float = clampf(efficiency_eta, 0.50, 1.00)
+	
+	# Principle of Virtual Work: deltaA_in * eta = deltaA_out => T * deltaH * eta = P_eff * deltaL
+	# Since deltaL = lambda * deltaH: T = (lambda * P_eff) / eta
 	tensile_force_T = (effective_n * effective_load_P) / eta_safe
 
+	# Hooke's Law: deltaH = T / k
 	spring_delta_H = tensile_force_T / spring_k
 	var base_link_len: float = get_base_link_length()
 	var base_rest_h: float = get_base_resting_H()
@@ -498,24 +492,23 @@ func _update_kinematics(delta: float) -> void:
 	var dt: float = clampf(delta, 0.0005, 0.033)
 
 	if not oscillations_enabled:
-		# Butter-smooth critically damped glide with ZERO overshoot or jitter
+		# Critically damped smooth glide
 		var smooth_speed: float = 14.0
 		current_H = lerpf(current_H, target_H, clampf(dt * smooth_speed, 0.0, 1.0))
 		velocity_H = 0.0
 	else:
-		# Physically derived natural frequency from stiffness k and suspended load:
-		# omega_n = sqrt(k_eff / m_eff)
+		# Physical natural frequency from compliance: omega_n = sqrt(k_eff / m_eff)
 		var effective_n: float = 6.0 if is_scaled_123 else float(n_stages)
 		var struct_weight_factor: float = 3.0 if is_scaled_123 else (float(n_stages) * 0.5)
-		var total_m: float = maxf(suspended_mass + struct_weight_factor * link_mass_per_stage, 0.08)
-		# Reflected mass at the upper spring: m_refl = m_total / (n^2)
+		var total_m: float = maxf(suspended_mass + struct_weight_factor * link_mass_per_stage, 0.05)
 		var m_eff_spring: float = total_m / maxf(effective_n * effective_n * 0.15, 1.0)
 		var omega_phys: float = sqrt(spring_k / m_eff_spring)
-		var omega: float = clampf(omega_phys, 8.0, 32.0)
+		var omega: float = clampf(omega_phys, 4.0, 75.0)
 		var damping: float = 2.0 * omega * damping_ratio_zeta
 
-		# Stable sub-stepped symplectic integration
-		var sub_steps: int = 4
+		# Sub-stepped Symplectic Euler loop for strict energy conservation under high k and zero damping
+		var target_sub_dt: float = 0.0025 # 400 Hz physics tick
+		var sub_steps: int = clampi(int(ceil(dt / target_sub_dt)), 4, 16)
 		var sub_dt: float = dt / float(sub_steps)
 
 		for step in range(sub_steps):
@@ -528,9 +521,10 @@ func _update_kinematics(delta: float) -> void:
 	current_H = clampf(current_H, 0.030, base_link_len * 2.0 * 0.96)
 
 	var half_h: float = current_H * 0.5
-	var ratio: float = clampf(half_h / base_link_len, 0.0, 0.999)
-	current_theta = acos(ratio)
-	current_W = 2.0 * base_link_len * sin(current_theta)
+	var ratio: float = clampf(half_h / base_link_len, 0.01, 0.999)
+	# current_theta is the scissor link angle relative to the horizontal plane
+	current_theta = asin(ratio)
+	current_W = 2.0 * base_link_len * cos(current_theta)
 
 	if is_scaled_123:
 		current_L = 6.0 * current_H
@@ -700,35 +694,28 @@ func _build_dimension_lasers() -> void:
 	else:
 		label_color = Color(0.15, 0.65, 1.0, 1.0) # Vivid Electric Cyan-Blue
 
-	# Bold System Font
-	var bold_font := SystemFont.new()
-	bold_font.font_weight = 800
-	bold_font.font_names = PackedStringArray(["SF Pro Display", "Helvetica Neue", "Arial", "Segoe UI", "Sans-Serif"])
-
 	dim_label_h = Label3D.new()
 	dim_label_h.name = "DimLabelH"
 	dim_label_h.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	dim_label_h.font = bold_font
 	dim_label_h.pixel_size = 0.0035
 	dim_label_h.font_size = 26
 	dim_label_h.shaded = false
 	dim_label_h.modulate = label_color
-	dim_label_h.outline_size = 12
-	dim_label_h.outline_modulate = Color(0.0, 0.0, 0.0, 1.0) # Solid black outline around text
-	dim_label_h.render_priority = 2
+	dim_label_h.outline_size = 10
+	dim_label_h.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
+	dim_label_h.render_priority = 4
 	dimension_lines_container.add_child(dim_label_h)
 
 	dim_label_l = Label3D.new()
 	dim_label_l.name = "DimLabelL"
 	dim_label_l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	dim_label_l.font = bold_font
 	dim_label_l.pixel_size = 0.0035
 	dim_label_l.font_size = 26
 	dim_label_l.shaded = false
 	dim_label_l.modulate = label_color
-	dim_label_l.outline_size = 12
-	dim_label_l.outline_modulate = Color(0.0, 0.0, 0.0, 1.0) # Solid black outline around text
-	dim_label_l.render_priority = 2
+	dim_label_l.outline_size = 10
+	dim_label_l.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
+	dim_label_l.render_priority = 4
 	dimension_lines_container.add_child(dim_label_l)
 
 	dimension_lines_container.visible = true
@@ -778,7 +765,7 @@ func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 	tick_bot.position = Vector3((x_inner_bot + x_outer_bot) * 0.5, -l_vis, 0.0)
 	tick_bot.scale = Vector3(len_bot, 1.0, 1.0)
 
-	# 4. Dimension Callout Text with Black Outline
+	# 4. Dimension Callout Text with High-Contrast Outline
 	var prefix_h: String = "H0" if is_scaled_123 else "H"
 	dim_label_h.position = Vector3(x_h + side_sign * 0.12, -h_vis * 0.5, 0.02)
 	dim_label_h.text = "%s = %.1f cm" % [prefix_h, current_H * 100.0]
@@ -821,6 +808,7 @@ func _broadcast_telemetry() -> void:
 		"W_cm": current_W * 100.0,
 		"theta_deg": rad_to_deg(current_theta),
 		"transmission_lambda": current_L / current_H if current_H > 0.0001 else effective_n,
+		"velocity_H": velocity_H,
 		"work_in_Joules": work_in,
 		"work_out_Joules": work_out,
 		"work_ratio_pct": efficiency_eta * 100.0
@@ -833,7 +821,7 @@ func set_mass(val: float) -> void:
 
 
 func set_stiffness(val: float) -> void:
-	spring_k = clampf(val, 500.0, 1500.0)
+	spring_k = clampf(val, 100.0, 5000.0)
 
 
 func set_efficiency(val: float) -> void:
@@ -851,11 +839,11 @@ func set_oscillations_enabled(val: bool) -> void:
 
 
 func set_damping_ratio(val: float) -> void:
-	damping_ratio_zeta = clampf(val, 0.05, 1.50)
+	damping_ratio_zeta = clampf(val, 0.00, 1.50)
 
 
 func set_natural_frequency(val: float) -> void:
-	natural_frequency_omega = clampf(val, 10.0, 35.0)
+	natural_frequency_omega = clampf(val, 4.0, 75.0)
 
 
 func apply_impulse(velocity_kick: float = 0.08) -> void:
@@ -925,7 +913,7 @@ func set_dark_theme(is_dark: bool) -> void:
 	if arrow_l_bot:
 		arrow_l_bot.material_override = mat_laser
 
-	# Update dimension label colors and outlines
+	# Update dimension label colors and high-contrast outlines
 	var theme: String = rig_color_theme.to_lower()
 	var label_color: Color
 	if theme == "green" or is_scaled_123:
@@ -937,16 +925,17 @@ func set_dark_theme(is_dark: bool) -> void:
 
 	if dim_label_h:
 		dim_label_h.modulate = label_color
-		dim_label_h.outline_modulate = Color(0.0, 0.0, 0.0, 1.0) if not dark_theme else Color(0.02, 0.04, 0.08, 1.0)
+		dim_label_h.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
 	if dim_label_l:
 		dim_label_l.modulate = label_color
-		dim_label_l.outline_modulate = Color(0.0, 0.0, 0.0, 1.0) if not dark_theme else Color(0.02, 0.04, 0.08, 1.0)
+		dim_label_l.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
+
+	if mass_label:
+		mass_label.modulate = Color(0.114, 0.114, 0.122) if not dark_theme else Color(0.95, 0.96, 0.98)
+		mass_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
 
 	if rig_title_label:
-		if dark_theme:
-			rig_title_label.outline_modulate = Color(0.05, 0.06, 0.10, 1.0)
-		else:
-			rig_title_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.95)
+		rig_title_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
 
 
 func get_pin_global_position(pin_index: int) -> Vector3:
