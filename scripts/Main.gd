@@ -105,6 +105,7 @@ var btn_deselect_pin_ref: Button
 var graph_card_title_ref: Label
 var joint_note_lbl_ref: Label
 var quick_pins_title_lbl_ref: Label
+var planet_grid_ref: GridContainer
 
 # UI Theme Collections for Dynamic Switching
 var theme_panels: Array[PanelContainer] = []
@@ -2654,6 +2655,9 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 				tr.corner_radius_bottom_left = int(4 * S)
 				tr.corner_radius_bottom_right = int(4 * S)
 
+	if planet_grid_ref != null:
+		planet_grid_ref.columns = 2
+
 	for btn in planet_preset_buttons:
 		if btn != null:
 			btn.custom_minimum_size = Vector2(0, 42.0 * S)
@@ -2744,6 +2748,9 @@ func _restore_desktop_ui_scale() -> void:
 				tr.corner_radius_top_right = 3
 				tr.corner_radius_bottom_left = 3
 				tr.corner_radius_bottom_right = 3
+
+	if planet_grid_ref != null:
+		planet_grid_ref.columns = 3
 
 	for btn in planet_preset_buttons:
 		if btn != null:
