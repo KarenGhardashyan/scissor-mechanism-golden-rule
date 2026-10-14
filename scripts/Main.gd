@@ -86,6 +86,26 @@ var lbl_mob_pin_summary: Label
 var btn_mob_pin_inspect: Button
 var btn_mob_pin_close: Button
 
+var sb_margin_ref: MarginContainer
+var sb_main_lbl_ref: Label
+var sb_sub_lbl_ref: Label
+var top_margin_ref: MarginContainer
+var top_hbox_ref: HBoxContainer
+var pin_card_margin_ref: MarginContainer
+
+var planet_preset_buttons: Array[Button] = []
+var quick_pin_buttons: Array[Button] = []
+var telem_table_labels: Array[Label] = []
+var telem_bar_labels: Array[Label] = []
+var left_vbox_titles: Array[Label] = []
+var left_vbox_val_labels: Array[Label] = []
+var joint_view_labels: Array[Label] = []
+var btn_dynamic_jolt: Button
+var btn_deselect_pin_ref: Button
+var graph_card_title_ref: Label
+var joint_note_lbl_ref: Label
+var quick_pins_title_lbl_ref: Label
+
 # UI Theme Collections for Dynamic Switching
 var theme_panels: Array[PanelContainer] = []
 var theme_buttons: Array[Button] = []
@@ -547,6 +567,7 @@ func _build_liquid_glass_ui() -> void:
 	left_margin.add_child(left_vbox)
 
 	var panel_title := _create_title_label("Simulation Parameters", 15)
+	left_vbox_titles.append(panel_title)
 	left_vbox.add_child(panel_title)
 
 	var sep1 := HSeparator.new()
@@ -556,12 +577,14 @@ func _build_liquid_glass_ui() -> void:
 	var mass_hbox := HBoxContainer.new()
 	var mass_title := _create_label_cell("Suspended Mass (m)")
 	mass_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vbox_titles.append(mass_title)
 	mass_hbox.add_child(mass_title)
 
 	mass_val_label = Label.new()
 	mass_val_label.text = "0.50 kg"
 	mass_val_label.add_theme_font_size_override("font_size", 12)
 	mass_val_label.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+	left_vbox_val_labels.append(mass_val_label)
 	mass_hbox.add_child(mass_val_label)
 	left_vbox.add_child(mass_hbox)
 
@@ -578,12 +601,14 @@ func _build_liquid_glass_ui() -> void:
 	var k_hbox := HBoxContainer.new()
 	var k_title := _create_label_cell("Spring Stiffness (k)")
 	k_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vbox_titles.append(k_title)
 	k_hbox.add_child(k_title)
 
 	stiffness_val_label = Label.new()
 	stiffness_val_label.text = "1000 N/m"
 	stiffness_val_label.add_theme_font_size_override("font_size", 12)
 	stiffness_val_label.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+	left_vbox_val_labels.append(stiffness_val_label)
 	k_hbox.add_child(stiffness_val_label)
 	left_vbox.add_child(k_hbox)
 
@@ -600,12 +625,14 @@ func _build_liquid_glass_ui() -> void:
 	var eta_hbox := HBoxContainer.new()
 	var eta_title := _create_label_cell("Efficiency (η)")
 	eta_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vbox_titles.append(eta_title)
 	eta_hbox.add_child(eta_title)
 
 	efficiency_val_label = Label.new()
 	efficiency_val_label.text = "100%"
 	efficiency_val_label.add_theme_font_size_override("font_size", 12)
 	efficiency_val_label.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+	left_vbox_val_labels.append(efficiency_val_label)
 	eta_hbox.add_child(efficiency_val_label)
 	left_vbox.add_child(eta_hbox)
 
@@ -622,12 +649,14 @@ func _build_liquid_glass_ui() -> void:
 	var g_hbox := HBoxContainer.new()
 	var g_title := _create_label_cell("Gravity Acceleration (g)")
 	g_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vbox_titles.append(g_title)
 	g_hbox.add_child(g_title)
 
 	gravity_val_label = Label.new()
 	gravity_val_label.text = "9.81 m/s² (Earth)"
 	gravity_val_label.add_theme_font_size_override("font_size", 12)
 	gravity_val_label.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+	left_vbox_val_labels.append(gravity_val_label)
 	g_hbox.add_child(gravity_val_label)
 	left_vbox.add_child(g_hbox)
 
@@ -646,6 +675,7 @@ func _build_liquid_glass_ui() -> void:
 	planet_grid.add_theme_constant_override("h_separation", 6)
 	planet_grid.add_theme_constant_override("v_separation", 4)
 	planet_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	planet_grid_ref = planet_grid
 	left_vbox.add_child(planet_grid)
 
 	var btn_g_zero := _create_liquid_button("Zero-G (0.0)")
@@ -678,6 +708,9 @@ func _build_liquid_glass_ui() -> void:
 	btn_g_jupiter.pressed.connect(func(): gravity_slider.value = 24.79)
 	planet_grid.add_child(btn_g_jupiter)
 
+	planet_preset_buttons.clear()
+	planet_preset_buttons.append_array([btn_g_zero, btn_g_moon, btn_g_mars, btn_g_earth, btn_g_jupiter])
+
 	# 5. Linkage Self-Weight Checkbox
 	self_weight_check = CheckBox.new()
 	self_weight_check.text = "Compensate Link Weight (0.05 kg/n)"
@@ -705,6 +738,7 @@ func _build_liquid_glass_ui() -> void:
 
 	# 6. DYNAMIC OSCILLATIONS CONTROLS
 	var osc_title := _create_title_label("Harmonic Oscillations", 13)
+	left_vbox_titles.append(osc_title)
 	left_vbox.add_child(osc_title)
 
 	oscillations_check = CheckBox.new()
@@ -727,12 +761,14 @@ func _build_liquid_glass_ui() -> void:
 	var damp_hbox := HBoxContainer.new()
 	var damp_title := _create_label_cell("Damping Ratio (ζ)")
 	damp_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vbox_titles.append(damp_title)
 	damp_hbox.add_child(damp_title)
 
 	damping_val_label = Label.new()
 	damping_val_label.text = "0.25"
 	damping_val_label.add_theme_font_size_override("font_size", 12)
 	damping_val_label.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+	left_vbox_val_labels.append(damping_val_label)
 	damp_hbox.add_child(damping_val_label)
 	left_vbox.add_child(damp_hbox)
 
@@ -765,6 +801,7 @@ func _build_liquid_glass_ui() -> void:
 		rig_c.apply_impulse(0.09)
 		rig_b.apply_impulse(0.09)
 	)
+	btn_dynamic_jolt = btn_jolt
 	left_vbox.add_child(btn_jolt)
 
 	# 3. RIGHT COMPARISON CARD & JOINT INSPECTOR (Tabbed Liquid Glass Card)
@@ -817,6 +854,8 @@ func _build_liquid_glass_ui() -> void:
 	right_vbox.add_child(telemetry_view)
 
 	var telemetry_title := _create_title_label("Hardware Telemetry", 14)
+	telem_table_labels.clear()
+	telem_table_labels.append(telemetry_title)
 	telemetry_view.add_child(telemetry_title)
 
 	var sep4 := HSeparator.new()
@@ -890,6 +929,10 @@ func _build_liquid_glass_ui() -> void:
 	table.add_child(label_c_work)
 	table.add_child(label_b_work)
 
+	for child in table.get_children():
+		if child is Label:
+			telem_table_labels.append(child)
+
 	var sep5 := HSeparator.new()
 	telemetry_view.add_child(sep5)
 
@@ -939,6 +982,9 @@ func _build_liquid_glass_ui() -> void:
 	_style_progress_bar(ratio_bar_b, Color(1.0, 0.42, 0.05))
 	telemetry_view.add_child(ratio_bar_b)
 
+	telem_bar_labels.clear()
+	telem_bar_labels.append_array([bar_title, bar_a_lbl, bar_c_lbl, bar_b_lbl])
+
 	# --- TAB 2: JOINT INSPECTOR VIEW ---
 	joint_view = VBoxContainer.new()
 	joint_view.add_theme_constant_override("separation", 8)
@@ -960,6 +1006,7 @@ func _build_liquid_glass_ui() -> void:
 	var btn_deselect := _create_liquid_button("✕ Deselect")
 	btn_deselect.custom_minimum_size = Vector2(76, 26)
 	btn_deselect.pressed.connect(func(): _deselect_pin())
+	btn_deselect_pin_ref = btn_deselect
 	joint_header_row.add_child(btn_deselect)
 
 	joint_card_desc = Label.new()
@@ -1002,6 +1049,11 @@ func _build_liquid_glass_ui() -> void:
 	joint_val_theta = _create_value_cell("0.0°")
 	jgrid.add_child(joint_val_theta)
 
+	joint_view_labels.clear()
+	for child in jgrid.get_children():
+		if child is Label:
+			joint_view_labels.append(child)
+
 	var sep_j2 := HSeparator.new()
 	joint_view.add_child(sep_j2)
 
@@ -1010,6 +1062,7 @@ func _build_liquid_glass_ui() -> void:
 	joint_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	joint_note.add_theme_font_size_override("font_size", 10)
 	theme_labels_secondary.append(joint_note)
+	joint_note_lbl_ref = joint_note
 	joint_view.add_child(joint_note)
 
 	var sep_j3 := HSeparator.new()
@@ -1019,6 +1072,7 @@ func _build_liquid_glass_ui() -> void:
 	quick_pins_title.text = "Direct Pin Selector (Tap to Inspect):"
 	quick_pins_title.add_theme_font_size_override("font_size", 10)
 	theme_labels_secondary.append(quick_pins_title)
+	quick_pins_title_lbl_ref = quick_pins_title
 	joint_view.add_child(quick_pins_title)
 
 	var quick_pins_grid := GridContainer.new()
@@ -1039,11 +1093,13 @@ func _build_liquid_glass_ui() -> void:
 		{"name": "Rig B: Mass", "get_rig": func(): return rig_b, "idx": 15},
 	]
 
+	quick_pin_buttons.clear()
 	for qp in quick_pin_defs:
 		var btn_qp := _create_liquid_button(qp["name"])
 		btn_qp.custom_minimum_size = Vector2(0, 26)
 		btn_qp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn_qp.add_theme_font_size_override("font_size", 9)
+		quick_pin_buttons.append(btn_qp)
 		var qp_copy: Dictionary = qp
 		btn_qp.pressed.connect(func():
 			var r: PantographRig = qp_copy["get_rig"].call()
@@ -1084,6 +1140,7 @@ func _build_liquid_glass_ui() -> void:
 	graph_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var graph_card_title := _create_header_cell("Theoretical Sim-to-Real Curves: L(m)")
+	graph_card_title_ref = graph_card_title
 	graph_bar.add_child(graph_card_title)
 
 	var bar_spacer := Control.new()
@@ -1258,11 +1315,13 @@ func _build_mobile_ui(root: Control) -> void:
 	top_margin.add_theme_constant_override("margin_right", 8)
 	top_margin.add_theme_constant_override("margin_top", 4)
 	top_margin.add_theme_constant_override("margin_bottom", 4)
+	top_margin_ref = top_margin
 	mobile_top_bar.add_child(top_margin)
 
 	var top_hbox := HBoxContainer.new()
 	top_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	top_hbox.add_theme_constant_override("separation", 6)
+	top_hbox_ref = top_hbox
 	top_margin.add_child(top_hbox)
 
 	btn_mobile_menu = _create_liquid_button("☰ Menu")
@@ -1338,6 +1397,7 @@ func _build_mobile_ui(root: Control) -> void:
 	sb_margin.add_theme_constant_override("margin_bottom", 14)
 	sb_margin.add_theme_constant_override("margin_left", 14)
 	sb_margin.add_theme_constant_override("margin_right", 14)
+	sb_margin_ref = sb_margin
 	mobile_sidebar.add_child(sb_margin)
 
 	var sb_vbox := VBoxContainer.new()
@@ -1354,8 +1414,10 @@ func _build_mobile_ui(root: Control) -> void:
 	var sb_titles := VBoxContainer.new()
 	sb_titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var sb_main_lbl := _create_title_label("Scissor Pantograph Lab", 15)
+	sb_main_lbl_ref = sb_main_lbl
 	sb_titles.add_child(sb_main_lbl)
 	var sb_sub_lbl := _create_subtitle_label("Sim-to-Real Multi-Linkage Physics", 10)
+	sb_sub_lbl_ref = sb_sub_lbl
 	sb_titles.add_child(sb_sub_lbl)
 	sb_header.add_child(sb_titles)
 
@@ -1445,6 +1507,7 @@ func _build_mobile_ui(root: Control) -> void:
 	pin_card_margin.add_theme_constant_override("margin_right", 8)
 	pin_card_margin.add_theme_constant_override("margin_top", 4)
 	pin_card_margin.add_theme_constant_override("margin_bottom", 4)
+	pin_card_margin_ref = pin_card_margin
 	mobile_pin_card.add_child(pin_card_margin)
 
 	var pin_card_hbox := HBoxContainer.new()
@@ -2422,6 +2485,335 @@ func _on_screen_tapped(screen_pos: Vector2) -> void:
 		_deselect_pin()
 
 
+func _scale_button_stylebox(btn: Button, radius: int) -> void:
+	if btn == null:
+		return
+	for state in ["normal", "hover", "pressed", "focus"]:
+		var sb: StyleBoxFlat = btn.get_theme_stylebox(state) as StyleBoxFlat
+		if sb:
+			sb.corner_radius_top_left = radius
+			sb.corner_radius_top_right = radius
+			sb.corner_radius_bottom_left = radius
+			sb.corner_radius_bottom_right = radius
+
+
+func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
+	# 1. Top Bar
+	if mobile_top_bar != null:
+		var top_bar_h: float = 52.0 * S
+		var top_bar_pad_x: float = 10.0 * S
+		var top_bar_pad_y: float = 12.0 * S
+		mobile_top_bar.offset_left = top_bar_pad_x
+		mobile_top_bar.offset_right = -top_bar_pad_x
+		mobile_top_bar.offset_top = top_bar_pad_y
+		mobile_top_bar.offset_bottom = top_bar_pad_y + top_bar_h
+
+		var sb_top: StyleBoxFlat = mobile_top_bar.get_theme_stylebox("panel") as StyleBoxFlat
+		if sb_top:
+			var rad: int = int(top_bar_h * 0.5)
+			sb_top.corner_radius_top_left = rad
+			sb_top.corner_radius_top_right = rad
+			sb_top.corner_radius_bottom_left = rad
+			sb_top.corner_radius_bottom_right = rad
+			sb_top.border_width_left = max(1, int(1.2 * S))
+			sb_top.border_width_top = max(1, int(1.2 * S))
+			sb_top.border_width_right = max(1, int(1.2 * S))
+			sb_top.border_width_bottom = max(1, int(1.2 * S))
+
+		if top_margin_ref != null:
+			top_margin_ref.add_theme_constant_override("margin_left", int(8 * S))
+			top_margin_ref.add_theme_constant_override("margin_right", int(8 * S))
+			top_margin_ref.add_theme_constant_override("margin_top", int(5 * S))
+			top_margin_ref.add_theme_constant_override("margin_bottom", int(5 * S))
+
+		if top_hbox_ref != null:
+			top_hbox_ref.add_theme_constant_override("separation", int(6 * S))
+
+		var btn_h: float = 42.0 * S
+		var btn_rad: int = int(14 * S)
+
+		if btn_mobile_menu != null:
+			btn_mobile_menu.custom_minimum_size = Vector2(82.0 * S, btn_h)
+			btn_mobile_menu.add_theme_font_size_override("font_size", int(14 * S))
+			_scale_button_stylebox(btn_mobile_menu, btn_rad)
+
+		if btn_focus_all != null:
+			btn_focus_all.custom_minimum_size = Vector2(40.0 * S, btn_h)
+			btn_focus_all.add_theme_font_size_override("font_size", int(13 * S))
+			_scale_button_stylebox(btn_focus_all, btn_rad)
+
+		for b in [btn_focus_a, btn_focus_c, btn_focus_b]:
+			if b != null:
+				b.custom_minimum_size = Vector2(36.0 * S, btn_h)
+				b.add_theme_font_size_override("font_size", int(14 * S))
+				_scale_button_stylebox(b, btn_rad)
+
+		if btn_mob_theme != null:
+			btn_mob_theme.custom_minimum_size = Vector2(42.0 * S, btn_h)
+			btn_mob_theme.add_theme_font_size_override("font_size", int(18 * S))
+			_scale_button_stylebox(btn_mob_theme, btn_rad)
+
+		if btn_mob_reset != null:
+			btn_mob_reset.custom_minimum_size = Vector2(42.0 * S, btn_h)
+			btn_mob_reset.add_theme_font_size_override("font_size", int(20 * S))
+			_scale_button_stylebox(btn_mob_reset, btn_rad)
+
+	# 2. Sidebar Drawer (88% width, touch targets)
+	if mobile_sidebar != null:
+		var sb_w: float = vp_size.x * 0.88
+		mobile_sidebar.offset_left = 0.0
+		mobile_sidebar.offset_right = sb_w
+		mobile_sidebar.offset_top = 0.0
+		mobile_sidebar.offset_bottom = vp_size.y
+
+		var sb_box: StyleBoxFlat = mobile_sidebar.get_theme_stylebox("panel") as StyleBoxFlat
+		if sb_box:
+			sb_box.corner_radius_top_right = int(24 * S)
+			sb_box.corner_radius_bottom_right = int(24 * S)
+			sb_box.corner_radius_top_left = 0
+			sb_box.corner_radius_bottom_left = 0
+			sb_box.border_width_right = max(1, int(1.5 * S))
+
+		if sb_margin_ref != null:
+			sb_margin_ref.add_theme_constant_override("margin_left", int(16 * S))
+			sb_margin_ref.add_theme_constant_override("margin_right", int(16 * S))
+			sb_margin_ref.add_theme_constant_override("margin_top", int(18 * S))
+			sb_margin_ref.add_theme_constant_override("margin_bottom", int(18 * S))
+
+		if sb_main_lbl_ref != null:
+			sb_main_lbl_ref.add_theme_font_size_override("font_size", int(18 * S))
+		if sb_sub_lbl_ref != null:
+			sb_sub_lbl_ref.add_theme_font_size_override("font_size", int(11 * S))
+
+		if btn_close_sidebar != null:
+			btn_close_sidebar.custom_minimum_size = Vector2(44.0 * S, 44.0 * S)
+			btn_close_sidebar.add_theme_font_size_override("font_size", int(22 * S))
+			_scale_button_stylebox(btn_close_sidebar, int(14 * S))
+
+		var tab_h: float = 44.0 * S
+		var tab_rad: int = int(12 * S)
+		for tab_btn in [btn_mob_tab_0, btn_mob_tab_1, btn_mob_tab_2, btn_mob_tab_3]:
+			if tab_btn != null:
+				tab_btn.custom_minimum_size = Vector2(0, tab_h)
+				tab_btn.add_theme_font_size_override("font_size", int(13 * S))
+				_scale_button_stylebox(tab_btn, tab_rad)
+
+	# 3. Mobile Pin Chip (Bottom Float)
+	if mobile_pin_card != null:
+		var pill_h: float = 52.0 * S
+		mobile_pin_card.offset_left = 12.0 * S
+		mobile_pin_card.offset_right = -12.0 * S
+		mobile_pin_card.offset_bottom = -16.0 * S
+		mobile_pin_card.offset_top = -16.0 * S - pill_h
+
+		var pill_sb: StyleBoxFlat = mobile_pin_card.get_theme_stylebox("panel") as StyleBoxFlat
+		if pill_sb:
+			var pill_rad: int = int(pill_h * 0.5)
+			pill_sb.corner_radius_top_left = pill_rad
+			pill_sb.corner_radius_top_right = pill_rad
+			pill_sb.corner_radius_bottom_left = pill_rad
+			pill_sb.corner_radius_bottom_right = pill_rad
+
+		if pin_card_margin_ref != null:
+			pin_card_margin_ref.add_theme_constant_override("margin_left", int(14 * S))
+			pin_card_margin_ref.add_theme_constant_override("margin_right", int(12 * S))
+			pin_card_margin_ref.add_theme_constant_override("margin_top", int(5 * S))
+			pin_card_margin_ref.add_theme_constant_override("margin_bottom", int(5 * S))
+
+		if lbl_mob_pin_summary != null:
+			lbl_mob_pin_summary.add_theme_font_size_override("font_size", int(13 * S))
+
+		if btn_mob_pin_inspect != null:
+			btn_mob_pin_inspect.custom_minimum_size = Vector2(88.0 * S, 40.0 * S)
+			btn_mob_pin_inspect.add_theme_font_size_override("font_size", int(13 * S))
+			_scale_button_stylebox(btn_mob_pin_inspect, int(12 * S))
+
+		if btn_mob_pin_close != null:
+			btn_mob_pin_close.custom_minimum_size = Vector2(40.0 * S, 40.0 * S)
+			btn_mob_pin_close.add_theme_font_size_override("font_size", int(20 * S))
+			_scale_button_stylebox(btn_mob_pin_close, int(12 * S))
+
+	# 4. Content inside Tab 0: Controls
+	for lbl in left_vbox_titles:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", int(15 * S))
+
+	for lbl in left_vbox_val_labels:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", int(14 * S))
+
+	for slider in [mass_slider, stiffness_slider, efficiency_slider, gravity_slider, damping_slider]:
+		if slider != null:
+			slider.custom_minimum_size = Vector2(0, 44.0 * S)
+			var tr: StyleBoxFlat = slider.get_theme_stylebox("slider") as StyleBoxFlat
+			if tr:
+				tr.content_margin_top = int(6 * S)
+				tr.content_margin_bottom = int(6 * S)
+				tr.corner_radius_top_left = int(4 * S)
+				tr.corner_radius_top_right = int(4 * S)
+				tr.corner_radius_bottom_left = int(4 * S)
+				tr.corner_radius_bottom_right = int(4 * S)
+
+	for btn in planet_preset_buttons:
+		if btn != null:
+			btn.custom_minimum_size = Vector2(0, 42.0 * S)
+			btn.add_theme_font_size_override("font_size", int(13 * S))
+			_scale_button_stylebox(btn, int(12 * S))
+
+	for chk in theme_checkboxes:
+		if chk != null:
+			chk.add_theme_font_size_override("font_size", int(13 * S))
+
+	if btn_dynamic_jolt != null:
+		btn_dynamic_jolt.custom_minimum_size = Vector2(0, 46.0 * S)
+		btn_dynamic_jolt.add_theme_font_size_override("font_size", int(14 * S))
+		_scale_button_stylebox(btn_dynamic_jolt, int(12 * S))
+
+	# 5. Content inside Tab 1: Telemetry
+	for lbl in telem_table_labels:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", int(14 * S))
+
+	for lbl in telem_bar_labels:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", int(13 * S))
+
+	for pbar in [ratio_bar_a, ratio_bar_c, ratio_bar_b]:
+		if pbar != null:
+			pbar.custom_minimum_size = Vector2(0, 26.0 * S)
+			pbar.add_theme_font_size_override("font_size", int(12 * S))
+
+	# 6. Content inside Tab 2: Joint Inspector
+	if joint_card_title != null:
+		joint_card_title.add_theme_font_size_override("font_size", int(16 * S))
+	if joint_card_desc != null:
+		joint_card_desc.add_theme_font_size_override("font_size", int(13 * S))
+	if btn_deselect_pin_ref != null:
+		btn_deselect_pin_ref.custom_minimum_size = Vector2(90.0 * S, 40.0 * S)
+		btn_deselect_pin_ref.add_theme_font_size_override("font_size", int(13 * S))
+		_scale_button_stylebox(btn_deselect_pin_ref, int(12 * S))
+
+	for lbl in joint_view_labels:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", int(14 * S))
+
+	if joint_note_lbl_ref != null:
+		joint_note_lbl_ref.add_theme_font_size_override("font_size", int(12 * S))
+	if quick_pins_title_lbl_ref != null:
+		quick_pins_title_lbl_ref.add_theme_font_size_override("font_size", int(13 * S))
+
+	for btn in quick_pin_buttons:
+		if btn != null:
+			btn.custom_minimum_size = Vector2(0, 42.0 * S)
+			btn.add_theme_font_size_override("font_size", int(12 * S))
+			_scale_button_stylebox(btn, int(10 * S))
+
+	# 7. Content inside Tab 3: Live Graph
+	if graph_card_title_ref != null:
+		graph_card_title_ref.add_theme_font_size_override("font_size", int(14 * S))
+	if btn_graph_theme != null:
+		btn_graph_theme.custom_minimum_size = Vector2(110.0 * S, 40.0 * S)
+		btn_graph_theme.add_theme_font_size_override("font_size", int(13 * S))
+		_scale_button_stylebox(btn_graph_theme, int(12 * S))
+	if btn_graph_expand != null:
+		btn_graph_expand.visible = false
+
+	if live_graph != null:
+		live_graph.custom_minimum_size = Vector2(0, 360.0 * S)
+		live_graph.set_ui_scale(S)
+
+
+func _restore_desktop_ui_scale() -> void:
+	# Restore Tab 0 (Controls) to desktop defaults:
+	for lbl in left_vbox_titles:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", 14)
+
+	for lbl in left_vbox_val_labels:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", 12)
+
+	for slider in [mass_slider, stiffness_slider, efficiency_slider, gravity_slider, damping_slider]:
+		if slider != null:
+			slider.custom_minimum_size = Vector2(0, 20)
+			var tr: StyleBoxFlat = slider.get_theme_stylebox("slider") as StyleBoxFlat
+			if tr:
+				tr.content_margin_top = 3
+				tr.content_margin_bottom = 3
+				tr.corner_radius_top_left = 3
+				tr.corner_radius_top_right = 3
+				tr.corner_radius_bottom_left = 3
+				tr.corner_radius_bottom_right = 3
+
+	for btn in planet_preset_buttons:
+		if btn != null:
+			btn.custom_minimum_size = Vector2(88, 26)
+			btn.add_theme_font_size_override("font_size", 11)
+			_scale_button_stylebox(btn, 14)
+
+	for chk in theme_checkboxes:
+		if chk != null:
+			chk.add_theme_font_size_override("font_size", 12)
+
+	if btn_dynamic_jolt != null:
+		btn_dynamic_jolt.custom_minimum_size = Vector2(105, 30)
+		btn_dynamic_jolt.add_theme_font_size_override("font_size", 11)
+		_scale_button_stylebox(btn_dynamic_jolt, 14)
+
+	# Restore Tab 1 (Telemetry):
+	for lbl in telem_table_labels:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", 11)
+
+	for lbl in telem_bar_labels:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", 11)
+
+	for pbar in [ratio_bar_a, ratio_bar_c, ratio_bar_b]:
+		if pbar != null:
+			pbar.custom_minimum_size = Vector2(0, 16)
+			pbar.add_theme_font_size_override("font_size", 10)
+
+	# Restore Tab 2 (Joint Inspector):
+	if joint_card_title != null:
+		joint_card_title.add_theme_font_size_override("font_size", 13)
+	if joint_card_desc != null:
+		joint_card_desc.add_theme_font_size_override("font_size", 10)
+	if btn_deselect_pin_ref != null:
+		btn_deselect_pin_ref.custom_minimum_size = Vector2(76, 26)
+		btn_deselect_pin_ref.add_theme_font_size_override("font_size", 11)
+		_scale_button_stylebox(btn_deselect_pin_ref, 14)
+
+	for lbl in joint_view_labels:
+		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", 11)
+
+	if joint_note_lbl_ref != null:
+		joint_note_lbl_ref.add_theme_font_size_override("font_size", 10)
+	if quick_pins_title_lbl_ref != null:
+		quick_pins_title_lbl_ref.add_theme_font_size_override("font_size", 10)
+
+	for btn in quick_pin_buttons:
+		if btn != null:
+			btn.custom_minimum_size = Vector2(0, 26)
+			btn.add_theme_font_size_override("font_size", 9)
+			_scale_button_stylebox(btn, 14)
+
+	# Restore Tab 3 (Graph):
+	if graph_card_title_ref != null:
+		graph_card_title_ref.add_theme_font_size_override("font_size", 11)
+	if btn_graph_theme != null:
+		btn_graph_theme.custom_minimum_size = Vector2(105, 26)
+		btn_graph_theme.add_theme_font_size_override("font_size", 11)
+		_scale_button_stylebox(btn_graph_theme, 14)
+	if btn_graph_expand != null:
+		btn_graph_expand.visible = true
+
+	if live_graph != null:
+		live_graph.custom_minimum_size = Vector2(720, 160)
+		live_graph.set_ui_scale(1.0)
+
+
 func _check_responsive_layout() -> void:
 	if not is_inside_tree() or get_viewport() == null:
 		return
@@ -2470,27 +2862,14 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 			graph_vbox.reparent(mob_scroll_graph, false)
 			graph_vbox.visible = true
 
-		# 3. Configure Mobile Top Bar
+		# 3. Calculate Scale and Apply to Mobile UI
+		var S: float = clampf(vp_size.x / 400.0, 1.0, 4.5)
+		_apply_mobile_ui_scale(S, vp_size)
+
+		# 4. Configure Visibilities
 		if mobile_top_bar != null:
 			mobile_top_bar.visible = not is_focus_mode
-			mobile_top_bar.offset_left = 8.0
-			mobile_top_bar.offset_right = -8.0
-			mobile_top_bar.offset_top = 8.0
-			mobile_top_bar.offset_bottom = 56.0
-
-		# 4. Configure Mobile Sidebar
-		if mobile_sidebar != null:
-			var sb_w: float = minf(vp_size.x * 0.88, 380.0)
-			mobile_sidebar.offset_right = sb_w
-			mobile_sidebar.offset_bottom = vp_size.y
-
-		# 5. Mobile Pin Chip
 		if mobile_pin_card != null:
-			var pill_w: float = minf(vp_size.x - 24.0, 360.0)
-			mobile_pin_card.offset_left = -pill_w * 0.5
-			mobile_pin_card.offset_right = pill_w * 0.5
-			mobile_pin_card.offset_top = -64.0
-			mobile_pin_card.offset_bottom = -16.0
 			mobile_pin_card.visible = (inspected_rig != null and not is_focus_mode and not (mobile_sidebar != null and mobile_sidebar.visible))
 
 	else:
@@ -2518,8 +2897,10 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 		if graph_vbox != null and graph_margin != null and graph_vbox.get_parent() != graph_margin:
 			graph_vbox.reparent(graph_margin, false)
 
-		# 3. Restore Desktop Panels
+		# 3. Restore Desktop UI Scale & Sizes
+		_restore_desktop_ui_scale()
 		_adjust_desktop_sizes(vp_size)
+
 		if header_panel != null:
 			header_panel.visible = not is_focus_mode
 		if left_panel != null:
@@ -2533,23 +2914,8 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 
 
 func _adjust_mobile_sizes(vp_size: Vector2) -> void:
-	if mobile_top_bar != null:
-		mobile_top_bar.offset_left = 8.0
-		mobile_top_bar.offset_right = -8.0
-		mobile_top_bar.offset_top = 8.0
-		mobile_top_bar.offset_bottom = 56.0
-
-	if mobile_sidebar != null:
-		var sb_w: float = minf(vp_size.x * 0.88, 380.0)
-		mobile_sidebar.offset_right = sb_w
-		mobile_sidebar.offset_bottom = vp_size.y
-
-	if mobile_pin_card != null:
-		var pill_w: float = minf(vp_size.x - 24.0, 360.0)
-		mobile_pin_card.offset_left = -pill_w * 0.5
-		mobile_pin_card.offset_right = pill_w * 0.5
-		mobile_pin_card.offset_top = -64.0
-		mobile_pin_card.offset_bottom = -16.0
+	var S: float = clampf(vp_size.x / 400.0, 1.0, 4.5)
+	_apply_mobile_ui_scale(S, vp_size)
 
 
 func _adjust_desktop_sizes(vp_size: Vector2) -> void:

@@ -181,13 +181,26 @@ func compute_L_c_cm(m: float) -> float:
 	return 6.0 * h * 100.0
 
 
+# UI Scale Factor for Mobile Responsive Rendering
+var ui_scale: float = 1.0
+
+
+func set_ui_scale(s: float) -> void:
+	ui_scale = clampf(s, 1.0, 4.5)
+	margin_left = 54.0 * ui_scale
+	margin_right = 24.0 * ui_scale
+	margin_top = 42.0 * ui_scale
+	margin_bottom = 36.0 * ui_scale
+	queue_redraw()
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
 				var local_x: float = mb.position.x
-				if local_x >= margin_left - 16.0 and local_x <= size.x - margin_right + 16.0:
+				if local_x >= margin_left - 24.0 * ui_scale and local_x <= size.x - margin_right + 24.0 * ui_scale:
 					is_dragging = true
 					_scrub_mass_at_x(local_x)
 			else:
@@ -196,6 +209,19 @@ func _gui_input(event: InputEvent) -> void:
 		var mm := event as InputEventMouseMotion
 		if is_dragging:
 			_scrub_mass_at_x(mm.position.x)
+	elif event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		if st.pressed:
+			var local_x: float = st.position.x
+			if local_x >= margin_left - 24.0 * ui_scale and local_x <= size.x - margin_right + 24.0 * ui_scale:
+				is_dragging = true
+				_scrub_mass_at_x(local_x)
+		else:
+			is_dragging = false
+	elif event is InputEventScreenDrag:
+		var sd := event as InputEventScreenDrag
+		if is_dragging:
+			_scrub_mass_at_x(sd.position.x)
 
 
 func _scrub_mass_at_x(x: float) -> void:
@@ -243,15 +269,19 @@ func _draw() -> void:
 		col_cursor_line = Color(0.18, 0.20, 0.26, 0.75)
 
 	# --- 1. HIGH-CONTRAST INNER PLOT CARD (ZERO-ALLOCATION) ---
-	var card_rect := Rect2(margin_left - 46.0, margin_top - 30.0, plot_w + 64.0, plot_h + 56.0)
+	var card_rect := Rect2(margin_left - 46.0 * ui_scale, margin_top - 30.0 * ui_scale, plot_w + 64.0 * ui_scale, plot_h + 56.0 * ui_scale)
 	_style_card.bg_color = col_card_bg
 	_style_card.border_color = col_card_border
 	_style_card.shadow_color = Color(0.0, 0.0, 0.0, 0.18) if dark_theme else Color(0.0, 0.0, 0.0, 0.06)
 	draw_style_box(_style_card, card_rect)
 
+	var sz_title: int = int(11 * ui_scale)
+	var sz_hud: int = int(10 * ui_scale)
+	var sz_ticks: int = int(9 * ui_scale)
+
 	# --- 2. HEADER TITLE & TELEMETRY HUD PILLS ---
 	var title_text := "REALTIME DISPLACEMENT PROFILE: L(m) = λ · H(m)"
-	draw_string(font, Vector2(margin_left - 36.0, margin_top - 12.0), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col_text_title)
+	draw_string(font, Vector2(margin_left - 36.0 * ui_scale, margin_top - 12.0 * ui_scale), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_title, col_text_title)
 
 	# Values evaluated at lerp-smoothed display_mass
 	var cur_la: float = compute_L_cm(display_mass, 3)
@@ -259,32 +289,33 @@ func _draw() -> void:
 	var cur_lb: float = compute_L_cm(display_mass, 5)
 
 	# Telemetry Readout Badges in Header
-	var badge_right_edge: float = margin_left + plot_w + 10.0
-	var pill_y: float = margin_top - 22.0
+	var badge_right_edge: float = margin_left + plot_w + 10.0 * ui_scale
+	var pill_h: float = 20.0 * ui_scale
+	var pill_y: float = margin_top - pill_h - 4.0 * ui_scale
 
 	# Badge B (Orange)
 	var txt_b := "Rig B: %.1f cm (5×)" % cur_lb
-	var pill_b_w: float = font.get_string_size(txt_b, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x + 22.0
+	var pill_b_w: float = font.get_string_size(txt_b, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 22.0 * ui_scale
 	var pill_b_x: float = badge_right_edge - pill_b_w
-	_draw_hud_badge(Vector2(pill_b_x, pill_y), Vector2(pill_b_w, 18.0), txt_b, COLOR_RIG_B, font, 10, dark_theme)
+	_draw_hud_badge(Vector2(pill_b_x, pill_y), Vector2(pill_b_w, pill_h), txt_b, COLOR_RIG_B, font, sz_hud, dark_theme)
 
 	# Badge C (Green)
 	var txt_c := "Rig C: %.1f cm (6×)" % cur_lc
-	var pill_c_w: float = font.get_string_size(txt_c, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x + 22.0
-	var pill_c_x: float = pill_b_x - pill_c_w - 6.0
-	_draw_hud_badge(Vector2(pill_c_x, pill_y), Vector2(pill_c_w, 18.0), txt_c, COLOR_RIG_C, font, 10, dark_theme)
+	var pill_c_w: float = font.get_string_size(txt_c, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 22.0 * ui_scale
+	var pill_c_x: float = pill_b_x - pill_c_w - 6.0 * ui_scale
+	_draw_hud_badge(Vector2(pill_c_x, pill_y), Vector2(pill_c_w, pill_h), txt_c, COLOR_RIG_C, font, sz_hud, dark_theme)
 
 	# Badge A (Blue)
 	var txt_a := "Rig A: %.1f cm (3×)" % cur_la
-	var pill_a_w: float = font.get_string_size(txt_a, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x + 22.0
-	var pill_a_x: float = pill_c_x - pill_a_w - 6.0
-	_draw_hud_badge(Vector2(pill_a_x, pill_y), Vector2(pill_a_w, 18.0), txt_a, COLOR_RIG_A, font, 10, dark_theme)
+	var pill_a_w: float = font.get_string_size(txt_a, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 22.0 * ui_scale
+	var pill_a_x: float = pill_c_x - pill_a_w - 6.0 * ui_scale
+	_draw_hud_badge(Vector2(pill_a_x, pill_y), Vector2(pill_a_w, pill_h), txt_a, COLOR_RIG_A, font, sz_hud, dark_theme)
 
 	# Badge Mass
 	var txt_m := "m = %.2f kg" % display_mass
-	var pill_m_w: float = font.get_string_size(txt_m, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x + 20.0
-	var pill_m_x: float = pill_a_x - pill_m_w - 6.0
-	_draw_hud_badge(Vector2(pill_m_x, pill_y), Vector2(pill_m_w, 18.0), txt_m, Color(0.70, 0.72, 0.78), font, 10, dark_theme)
+	var pill_m_w: float = font.get_string_size(txt_m, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 20.0 * ui_scale
+	var pill_m_x: float = pill_a_x - pill_m_w - 6.0 * ui_scale
+	_draw_hud_badge(Vector2(pill_m_x, pill_y), Vector2(pill_m_w, pill_h), txt_m, Color(0.70, 0.72, 0.78), font, sz_hud, dark_theme)
 
 	# --- 3. GRID & AXES ---
 	var y_steps: int = 5
@@ -293,13 +324,13 @@ func _draw() -> void:
 		var frac_y: float = (l_val - l_min) / (l_max - l_min)
 		var y_pos: float = origin.y - frac_y * plot_h
 
-		draw_line(Vector2(origin.x, y_pos), Vector2(origin.x + plot_w, y_pos), col_grid, 1.0)
+		draw_line(Vector2(origin.x, y_pos), Vector2(origin.x + plot_w, y_pos), col_grid, 1.0 * ui_scale)
 
 		var tick_str := "%d cm" % int(l_val)
-		var str_w: float = font.get_string_size(tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
-		draw_string(font, Vector2(origin.x - str_w - 8.0, y_pos + 3.0), tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, col_text_sec)
+		var str_w: float = font.get_string_size(tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks).x
+		draw_string(font, Vector2(origin.x - str_w - 8.0 * ui_scale, y_pos + 4.0 * ui_scale), tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks, col_text_sec)
 
-	draw_string(font, Vector2(origin.x - 38.0, margin_top - 2.0), "L (cm)", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, col_text_title)
+	draw_string(font, Vector2(origin.x - 38.0 * ui_scale, margin_top - 4.0 * ui_scale), "L (cm)", HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks, col_text_title)
 
 	# X-axis Grid Lines
 	var x_ticks := [0.0, 0.3, 0.6, 0.9, 1.2, 1.5]
@@ -307,19 +338,19 @@ func _draw() -> void:
 		var frac_x: float = (m_tick - mass_min) / (mass_max - mass_min)
 		var x_pos: float = origin.x + frac_x * plot_w
 
-		draw_line(Vector2(x_pos, origin.y), Vector2(x_pos, margin_top), col_grid, 1.0)
+		draw_line(Vector2(x_pos, origin.y), Vector2(x_pos, margin_top), col_grid, 1.0 * ui_scale)
 
 		var tick_str := "%.1f kg" % m_tick
-		var str_w: float = font.get_string_size(tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
-		draw_string(font, Vector2(x_pos - str_w * 0.5, origin.y + 14.0), tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, col_text_sec)
+		var str_w: float = font.get_string_size(tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks).x
+		draw_string(font, Vector2(x_pos - str_w * 0.5, origin.y + 16.0 * ui_scale), tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks, col_text_sec)
 
 	var x_title := "Suspended Mass m (kg)  ·  [Click & drag horizontally to scrub mass]"
-	var x_title_w: float = font.get_string_size(x_title, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x
-	draw_string(font, Vector2(origin.x + (plot_w - x_title_w) * 0.5, origin.y + 24.0), x_title, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, col_text_sec)
+	var x_title_w: float = font.get_string_size(x_title, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks).x
+	draw_string(font, Vector2(origin.x + (plot_w - x_title_w) * 0.5, origin.y + 30.0 * ui_scale), x_title, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks, col_text_sec)
 
 	# Main Axes Lines
-	draw_line(Vector2(origin.x, origin.y), Vector2(origin.x + plot_w, origin.y), col_grid_axis, 1.5)
-	draw_line(Vector2(origin.x, origin.y), Vector2(origin.x, margin_top), col_grid_axis, 1.5)
+	draw_line(Vector2(origin.x, origin.y), Vector2(origin.x + plot_w, origin.y), col_grid_axis, 1.5 * ui_scale)
+	draw_line(Vector2(origin.x, origin.y), Vector2(origin.x, margin_top), col_grid_axis, 1.5 * ui_scale)
 
 	# --- 4. THEORETICAL CURVES & AREA GRADIENTS ---
 	for i in range(NUM_SAMPLES + 1):
@@ -361,26 +392,26 @@ func _draw() -> void:
 	draw_colored_polygon(_poly_b, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.06 if dark_theme else 0.04))
 
 	# Curve Strokes (Glow halo + crisp core)
-	draw_polyline(_pts_a, Color(COLOR_RIG_A.r, COLOR_RIG_A.g, COLOR_RIG_A.b, 0.30), 6.5, true)
-	draw_polyline(_pts_a, COLOR_RIG_A, 3.2, true)
+	draw_polyline(_pts_a, Color(COLOR_RIG_A.r, COLOR_RIG_A.g, COLOR_RIG_A.b, 0.30), 6.5 * ui_scale, true)
+	draw_polyline(_pts_a, COLOR_RIG_A, 3.2 * ui_scale, true)
 
-	draw_polyline(_pts_c, Color(COLOR_RIG_C.r, COLOR_RIG_C.g, COLOR_RIG_C.b, 0.30), 6.5, true)
-	draw_polyline(_pts_c, COLOR_RIG_C, 3.2, true)
+	draw_polyline(_pts_c, Color(COLOR_RIG_C.r, COLOR_RIG_C.g, COLOR_RIG_C.b, 0.30), 6.5 * ui_scale, true)
+	draw_polyline(_pts_c, COLOR_RIG_C, 3.2 * ui_scale, true)
 
-	draw_polyline(_pts_b, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.30), 6.5, true)
-	draw_polyline(_pts_b, COLOR_RIG_B, 3.2, true)
+	draw_polyline(_pts_b, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.30), 6.5 * ui_scale, true)
+	draw_polyline(_pts_b, COLOR_RIG_B, 3.2 * ui_scale, true)
 
 	# --- 5. DYNAMIC REALTIME MARKERS & PROJECTIONS ---
 	var cur_m_frac: float = clampf((display_mass - mass_min) / (mass_max - mass_min), 0.0, 1.0)
 	var cursor_x: float = origin.x + cur_m_frac * plot_w
 
 	# Vertical Scanning Guide Line
-	draw_line(Vector2(cursor_x, origin.y), Vector2(cursor_x, margin_top), col_cursor_line, 1.4)
+	draw_line(Vector2(cursor_x, origin.y), Vector2(cursor_x, margin_top), col_cursor_line, 1.4 * ui_scale)
 
 	# Cursor top triangle marker
-	_marker_tri[0] = Vector2(cursor_x, margin_top - 4.0)
-	_marker_tri[1] = Vector2(cursor_x - 4.5, margin_top - 10.0)
-	_marker_tri[2] = Vector2(cursor_x + 4.5, margin_top - 10.0)
+	_marker_tri[0] = Vector2(cursor_x, margin_top - 4.0 * ui_scale)
+	_marker_tri[1] = Vector2(cursor_x - 4.5 * ui_scale, margin_top - 10.0 * ui_scale)
+	_marker_tri[2] = Vector2(cursor_x + 4.5 * ui_scale, margin_top - 10.0 * ui_scale)
 	draw_colored_polygon(_marker_tri, col_cursor_line)
 
 	var dot_a_pos := Vector2(cursor_x, origin.y - ((cur_la - l_min) / (l_max - l_min)) * plot_h)
@@ -393,47 +424,47 @@ func _draw() -> void:
 	_draw_horizontal_projection(origin.x, cursor_x, dot_b_pos.y, COLOR_RIG_B)
 
 	# Dots (Glow halo + solid core + white center pin)
-	draw_arc(dot_a_pos, 9.0, 0.0, TAU, 24, Color(COLOR_RIG_A.r, COLOR_RIG_A.g, COLOR_RIG_A.b, 0.40), 2.8, true)
-	draw_circle(dot_a_pos, 5.0, COLOR_RIG_A)
-	draw_circle(dot_a_pos, 2.0, Color(1.0, 1.0, 1.0))
+	draw_arc(dot_a_pos, 9.0 * ui_scale, 0.0, TAU, 24, Color(COLOR_RIG_A.r, COLOR_RIG_A.g, COLOR_RIG_A.b, 0.40), 2.8 * ui_scale, true)
+	draw_circle(dot_a_pos, 5.0 * ui_scale, COLOR_RIG_A)
+	draw_circle(dot_a_pos, 2.0 * ui_scale, Color(1.0, 1.0, 1.0))
 
-	draw_arc(dot_c_pos, 9.0, 0.0, TAU, 24, Color(COLOR_RIG_C.r, COLOR_RIG_C.g, COLOR_RIG_C.b, 0.40), 2.8, true)
-	draw_circle(dot_c_pos, 5.0, COLOR_RIG_C)
-	draw_circle(dot_c_pos, 2.0, Color(1.0, 1.0, 1.0))
+	draw_arc(dot_c_pos, 9.0 * ui_scale, 0.0, TAU, 24, Color(COLOR_RIG_C.r, COLOR_RIG_C.g, COLOR_RIG_C.b, 0.40), 2.8 * ui_scale, true)
+	draw_circle(dot_c_pos, 5.0 * ui_scale, COLOR_RIG_C)
+	draw_circle(dot_c_pos, 2.0 * ui_scale, Color(1.0, 1.0, 1.0))
 
-	draw_arc(dot_b_pos, 9.0, 0.0, TAU, 24, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.40), 2.8, true)
-	draw_circle(dot_b_pos, 5.0, COLOR_RIG_B)
-	draw_circle(dot_b_pos, 2.0, Color(1.0, 1.0, 1.0))
+	draw_arc(dot_b_pos, 9.0 * ui_scale, 0.0, TAU, 24, Color(COLOR_RIG_B.r, COLOR_RIG_B.g, COLOR_RIG_B.b, 0.40), 2.8 * ui_scale, true)
+	draw_circle(dot_b_pos, 5.0 * ui_scale, COLOR_RIG_B)
+	draw_circle(dot_b_pos, 2.0 * ui_scale, Color(1.0, 1.0, 1.0))
 
 	# --- 6. FLOATING CURSOR TOOLTIPS ---
 	var tip_a_text := "Rig A: L = %.1f cm" % cur_la
 	var tip_c_text := "Rig C: L = %.1f cm" % cur_lc
 	var tip_b_text := "Rig B: L = %.1f cm" % cur_lb
 
-	var font_sz: int = 10
+	var font_sz: int = int(10 * ui_scale)
 	var sz_a := font.get_string_size(tip_a_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_sz)
 	var sz_c := font.get_string_size(tip_c_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_sz)
 	var sz_b := font.get_string_size(tip_b_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_sz)
 
-	var max_w: float = maxf(maxf(sz_a.x, sz_c.x), sz_b.x) + 24.0
-	var pill_h: float = 20.0
+	var max_w: float = maxf(maxf(sz_a.x, sz_c.x), sz_b.x) + 24.0 * ui_scale
+	var pill_tip_h: float = 20.0 * ui_scale
 
-	var is_right_side: bool = cursor_x > (origin.x + plot_w - 150.0)
-	var offset_x: float = -(max_w + 14.0) if is_right_side else 14.0
+	var is_right_side: bool = cursor_x > (origin.x + plot_w - 150.0 * ui_scale)
+	var offset_x: float = -(max_w + 14.0 * ui_scale) if is_right_side else 14.0 * ui_scale
 
-	var pill_pos_a := Vector2(cursor_x + offset_x, dot_a_pos.y - pill_h * 0.5)
-	var pill_pos_c := Vector2(cursor_x + offset_x, dot_c_pos.y - pill_h * 0.5)
-	var pill_pos_b := Vector2(cursor_x + offset_x, dot_b_pos.y - pill_h * 0.5)
+	var pill_pos_a := Vector2(cursor_x + offset_x, dot_a_pos.y - pill_tip_h * 0.5)
+	var pill_pos_c := Vector2(cursor_x + offset_x, dot_c_pos.y - pill_tip_h * 0.5)
+	var pill_pos_b := Vector2(cursor_x + offset_x, dot_b_pos.y - pill_tip_h * 0.5)
 
 	# Avoid vertical overlap between tooltips
-	if absf(pill_pos_c.y - pill_pos_b.y) < pill_h + 3.0:
-		pill_pos_b.y = pill_pos_c.y - pill_h - 4.0
-	if absf(pill_pos_a.y - pill_pos_c.y) < pill_h + 3.0:
-		pill_pos_a.y = pill_pos_c.y + pill_h + 4.0
+	if absf(pill_pos_c.y - pill_pos_b.y) < pill_tip_h + 3.0 * ui_scale:
+		pill_pos_b.y = pill_pos_c.y - pill_tip_h - 4.0 * ui_scale
+	if absf(pill_pos_a.y - pill_pos_c.y) < pill_tip_h + 3.0 * ui_scale:
+		pill_pos_a.y = pill_pos_c.y + pill_tip_h + 4.0 * ui_scale
 
-	_draw_tooltip_pill(pill_pos_a, Vector2(max_w, pill_h), tip_a_text, COLOR_RIG_A, font, font_sz)
-	_draw_tooltip_pill(pill_pos_c, Vector2(max_w, pill_h), tip_c_text, COLOR_RIG_C, font, font_sz)
-	_draw_tooltip_pill(pill_pos_b, Vector2(max_w, pill_h), tip_b_text, COLOR_RIG_B, font, font_sz)
+	_draw_tooltip_pill(pill_pos_a, Vector2(max_w, pill_tip_h), tip_a_text, COLOR_RIG_A, font, font_sz)
+	_draw_tooltip_pill(pill_pos_c, Vector2(max_w, pill_tip_h), tip_c_text, COLOR_RIG_C, font, font_sz)
+	_draw_tooltip_pill(pill_pos_b, Vector2(max_w, pill_tip_h), tip_b_text, COLOR_RIG_B, font, font_sz)
 
 
 func _draw_horizontal_projection(start_x: float, end_x: float, y_pos: float, color: Color) -> void:
