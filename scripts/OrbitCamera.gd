@@ -2,12 +2,14 @@ class_name OrbitCamera
 extends Camera3D
 
 ## Smooth Orbit & Pan Camera Controller for Godot 4 3D Viewports
-## Centered around the experimental scissor test benches with smooth damping and responsive auto-framing.
+## Mobile Multi-Touch & Desktop Mouse Navigation with Responsive Auto-Framing
+
+signal screen_tapped(screen_pos: Vector2)
 
 @export var target_point: Vector3 = Vector3(0.0, 1.75, 0.0)
 @export var default_distance: float = 6.85
-@export var min_distance: float = 2.5
-@export var max_distance: float = 12.0
+@export var min_distance: float = 2.0
+@export var max_distance: float = 14.0
 @export var orbit_speed: float = 0.005
 @export var zoom_speed: float = 0.4
 @export var pan_speed: float = 0.004
@@ -28,6 +30,14 @@ var is_orbiting: bool = false
 var is_panning: bool = false
 var is_mobile_mode: bool = false
 
+# Mobile Multi-Touch State
+var touch_points: Dictionary = {}
+var touch_start_pos: Vector2 = Vector2.ZERO
+var touch_start_time: int = 0
+var initial_pinch_dist: float = 0.0
+var initial_target_distance: float = 6.85
+var touch_dragged: bool = false
+
 
 func _ready() -> void:
 	fov = 54.0
@@ -41,7 +51,58 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
+	# 1. Mobile Screen Touch Events
+	if event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		if st.pressed:
+			touch_points[st.index] = st.position
+			if touch_points.size() == 1:
+				touch_start_pos = st.position
+				touch_start_time = Time.get_ticks_msec()
+				touch_dragged = false
+			elif touch_points.size() == 2:
+				var keys = touch_points.keys()
+				initial_pinch_dist = touch_points[keys[0]].distance_to(touch_points[keys[1]])
+				initial_target_distance = target_distance
+		else:
+			if st.index == 0 and touch_points.size() == 1 and not touch_dragged:
+				var duration: int = Time.get_ticks_msec() - touch_start_time
+				var dist: float = st.position.distance_to(touch_start_pos)
+				if duration < 350 and dist < 14.0:
+					screen_tapped.emit(st.position)
+			touch_points.erase(st.index)
+			if touch_points.is_empty():
+				touch_dragged = false
+
+	# 2. Mobile Screen Drag Events
+	elif event is InputEventScreenDrag:
+		var sd := event as InputEventScreenDrag
+		touch_points[sd.index] = sd.position
+		if sd.relative.length_squared() > 4.0:
+			touch_dragged = true
+
+		if touch_points.size() == 1:
+			# Single-finger smooth orbit
+			var sens: float = orbit_speed * 0.95
+			target_yaw -= sd.relative.x * sens
+			target_pitch = clampf(target_pitch - sd.relative.y * sens, deg_to_rad(-40.0), deg_to_rad(60.0))
+		elif touch_points.size() >= 2:
+			# Two-finger pinch-to-zoom
+			var keys = touch_points.keys()
+			var current_pinch: float = touch_points[keys[0]].distance_to(touch_points[keys[1]])
+			if initial_pinch_dist > 8.0 and current_pinch > 8.0:
+				var zoom_ratio: float = initial_pinch_dist / current_pinch
+				target_distance = clampf(initial_target_distance * zoom_ratio, min_distance, max_distance)
+
+			# Two-finger pan
+			var pan_delta: Vector2 = sd.relative * 0.5
+			var right_vec := global_transform.basis.x
+			var up_vec := global_transform.basis.y
+			current_target -= right_vec * (pan_delta.x * pan_speed * 1.5)
+			current_target += up_vec * (pan_delta.y * pan_speed * 1.5)
+
+	# 3. Desktop Mouse Button Events
+	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_RIGHT or mb.button_index == MOUSE_BUTTON_LEFT:
 			is_orbiting = mb.pressed
@@ -52,6 +113,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
 			target_distance = clampf(target_distance + zoom_speed, min_distance, max_distance)
 
+	# 4. Desktop Mouse Motion Events
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		if is_orbiting:
@@ -98,15 +160,44 @@ func reset_camera() -> void:
 	current_target = default_target
 
 
+## Smoothly focus on a specific mechanism or reset to all rigs
+func focus_rig(rig_id: String) -> void:
+	match rig_id.to_upper():
+		"A":
+			current_target = Vector3(-1.65, 2.05, 0.0)
+			target_distance = 4.2 if is_mobile_mode else 3.6
+			target_yaw = deg_to_rad(4.0)
+			target_pitch = deg_to_rad(-4.0)
+		"C":
+			current_target = Vector3(0.0, 1.95, 0.0)
+			target_distance = 4.2 if is_mobile_mode else 3.6
+			target_yaw = 0.0
+			target_pitch = deg_to_rad(-4.0)
+		"B":
+			current_target = Vector3(1.65, 1.85, 0.0)
+			target_distance = 4.4 if is_mobile_mode else 3.8
+			target_yaw = deg_to_rad(-4.0)
+			target_pitch = deg_to_rad(-4.0)
+		_: # "ALL"
+			current_target = default_target
+			target_distance = default_distance
+			target_yaw = 0.0
+			target_pitch = deg_to_rad(-5.0)
+
+
 func set_mobile_mode(is_mobile: bool) -> void:
 	is_mobile_mode = is_mobile
 	if is_mobile:
-		default_distance = 7.8
-		target_distance = 7.8
-		default_target = Vector3(0.0, 1.55, 0.0)
+		keep_aspect = Camera3D.KEEP_WIDTH
+		fov = 52.0
+		default_distance = 7.10
+		target_distance = 7.10
+		default_target = Vector3(0.0, 2.05, 0.0)
 		target_point = default_target
 		current_target = default_target
 	else:
+		keep_aspect = Camera3D.KEEP_HEIGHT
+		fov = 54.0
 		default_distance = 6.85
 		target_distance = 6.85
 		default_target = Vector3(0.0, 1.75, 0.0)
@@ -121,11 +212,11 @@ func update_aspect_ratio_framing(vp_size: Vector2) -> void:
 	var aspect: float = vp_size.x / maxf(vp_size.y, 1.0)
 	if aspect < 1.18:
 		# Very narrow aspect ratio
-		default_distance = 7.8
-		default_target = Vector3(0.0, 1.55, 0.0)
+		default_distance = 7.6
+		default_target = Vector3(0.0, 1.65, 0.0)
 	elif aspect < 1.45:
 		# 4:3 or square laptop/tablet display
-		default_distance = 7.4
+		default_distance = 7.3
 		default_target = Vector3(0.0, 1.75, 0.0)
 	elif aspect < 1.70:
 		# 16:10 standard laptop display (e.g. 1440x900, 1680x1050, 1920x1200)

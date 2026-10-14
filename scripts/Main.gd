@@ -24,12 +24,18 @@ var mat_floor: StandardMaterial3D
 var mat_gantry: StandardMaterial3D
 var mat_gantry_accent: StandardMaterial3D
 
-# Liquid Glass UI Panels & Buttons
+# Liquid Glass UI Panels & Containers
 var ui_layer: CanvasLayer
 var header_panel: PanelContainer
 var left_panel: PanelContainer
+var left_margin: MarginContainer
+var left_vbox: VBoxContainer
 var right_panel: PanelContainer
+var right_margin: MarginContainer
+var right_vbox: VBoxContainer
 var bottom_panel: PanelContainer
+var graph_margin: MarginContainer
+var graph_vbox: VBoxContainer
 var is_graph_maximized: bool = false
 
 var main_title: Label
@@ -51,14 +57,34 @@ var btn_tab_joint: Button
 var telemetry_view: VBoxContainer
 var joint_view: VBoxContainer
 
-# Mobile Responsive Layout & Dock
+# Mobile Native Top Bar & Slide-Out Sidebar Architecture
 var is_mobile_layout: bool = false
-var mobile_dock: PanelContainer
-var active_mobile_drawer: Control = null
-var btn_mob_controls: Button
-var btn_mob_telemetry: Button
-var btn_mob_graph: Button
-var btn_mob_joint: Button
+var mobile_top_bar: PanelContainer
+var btn_mobile_menu: Button
+var btn_focus_all: Button
+var btn_focus_a: Button
+var btn_focus_c: Button
+var btn_focus_b: Button
+var btn_mob_theme: Button
+var btn_mob_reset: Button
+
+var backdrop_scrim: ColorRect
+var mobile_sidebar: PanelContainer
+var btn_close_sidebar: Button
+var btn_mob_tab_0: Button
+var btn_mob_tab_1: Button
+var btn_mob_tab_2: Button
+var btn_mob_tab_3: Button
+var mob_scroll_controls: ScrollContainer
+var mob_scroll_telem: ScrollContainer
+var mob_scroll_joint: ScrollContainer
+var mob_scroll_graph: ScrollContainer
+var current_mobile_tab: int = 0
+
+var mobile_pin_card: PanelContainer
+var lbl_mob_pin_summary: Label
+var btn_mob_pin_inspect: Button
+var btn_mob_pin_close: Button
 
 # UI Theme Collections for Dynamic Switching
 var theme_panels: Array[PanelContainer] = []
@@ -386,6 +412,7 @@ func _setup_rigs() -> void:
 	rig_a.pin_clicked.connect(_on_pin_clicked)
 	rig_c.pin_clicked.connect(_on_pin_clicked)
 	rig_b.pin_clicked.connect(_on_pin_clicked)
+	camera.screen_tapped.connect(_on_screen_tapped)
 
 
 func _build_liquid_glass_ui() -> void:
@@ -507,7 +534,7 @@ func _build_liquid_glass_ui() -> void:
 	left_panel = _create_liquid_glass_panel(Vector2(24, 96), Vector2(336, 750), 22)
 	root.add_child(left_panel)
 
-	var left_margin := MarginContainer.new()
+	left_margin = MarginContainer.new()
 	left_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	left_margin.add_theme_constant_override("margin_top", 20)
 	left_margin.add_theme_constant_override("margin_bottom", 20)
@@ -515,7 +542,7 @@ func _build_liquid_glass_ui() -> void:
 	left_margin.add_theme_constant_override("margin_right", 18)
 	left_panel.add_child(left_margin)
 
-	var left_vbox := VBoxContainer.new()
+	left_vbox = VBoxContainer.new()
 	left_vbox.add_theme_constant_override("separation", 10)
 	left_margin.add_child(left_vbox)
 
@@ -750,7 +777,7 @@ func _build_liquid_glass_ui() -> void:
 	right_panel.offset_bottom = 846.0
 	root.add_child(right_panel)
 
-	var right_margin := MarginContainer.new()
+	right_margin = MarginContainer.new()
 	right_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	right_margin.add_theme_constant_override("margin_top", 18)
 	right_margin.add_theme_constant_override("margin_bottom", 18)
@@ -758,7 +785,7 @@ func _build_liquid_glass_ui() -> void:
 	right_margin.add_theme_constant_override("margin_right", 16)
 	right_panel.add_child(right_margin)
 
-	var right_vbox := VBoxContainer.new()
+	right_vbox = VBoxContainer.new()
 	right_vbox.add_theme_constant_override("separation", 10)
 	right_margin.add_child(right_vbox)
 
@@ -985,6 +1012,47 @@ func _build_liquid_glass_ui() -> void:
 	theme_labels_secondary.append(joint_note)
 	joint_view.add_child(joint_note)
 
+	var sep_j3 := HSeparator.new()
+	joint_view.add_child(sep_j3)
+
+	var quick_pins_title := Label.new()
+	quick_pins_title.text = "Direct Pin Selector (Tap to Inspect):"
+	quick_pins_title.add_theme_font_size_override("font_size", 10)
+	theme_labels_secondary.append(quick_pins_title)
+	joint_view.add_child(quick_pins_title)
+
+	var quick_pins_grid := GridContainer.new()
+	quick_pins_grid.columns = 3
+	quick_pins_grid.add_theme_constant_override("h_separation", 6)
+	quick_pins_grid.add_theme_constant_override("v_separation", 6)
+	joint_view.add_child(quick_pins_grid)
+
+	var quick_pin_defs := [
+		{"name": "Rig A: Top", "get_rig": func(): return rig_a, "idx": 0},
+		{"name": "Rig A: Mid", "get_rig": func(): return rig_a, "idx": 4},
+		{"name": "Rig A: Mass", "get_rig": func(): return rig_a, "idx": 9},
+		{"name": "Rig C: Top", "get_rig": func(): return rig_c, "idx": 0},
+		{"name": "Rig C: Stg 2", "get_rig": func(): return rig_c, "idx": 6},
+		{"name": "Rig C: Mass", "get_rig": func(): return rig_c, "idx": 9},
+		{"name": "Rig B: Top", "get_rig": func(): return rig_b, "idx": 0},
+		{"name": "Rig B: Mid", "get_rig": func(): return rig_b, "idx": 8},
+		{"name": "Rig B: Mass", "get_rig": func(): return rig_b, "idx": 15},
+	]
+
+	for qp in quick_pin_defs:
+		var btn_qp := _create_liquid_button(qp["name"])
+		btn_qp.custom_minimum_size = Vector2(0, 26)
+		btn_qp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn_qp.add_theme_font_size_override("font_size", 9)
+		var qp_copy: Dictionary = qp
+		btn_qp.pressed.connect(func():
+			var r: PantographRig = qp_copy["get_rig"].call()
+			if r != null and is_instance_valid(r):
+				var p_idx: int = qp_copy["idx"]
+				_on_pin_clicked(r, p_idx, r.get_pin_global_position(p_idx))
+		)
+		quick_pins_grid.add_child(btn_qp)
+
 	_show_right_tab(0)
 
 	# 4. BOTTOM FLOATING REALTIME 2D PLOT (Enhanced VisionOS Glass Card)
@@ -999,7 +1067,7 @@ func _build_liquid_glass_ui() -> void:
 	bottom_panel.offset_bottom = -16.0
 	root.add_child(bottom_panel)
 
-	var graph_margin := MarginContainer.new()
+	graph_margin = MarginContainer.new()
 	graph_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	graph_margin.add_theme_constant_override("margin_top", 10)
 	graph_margin.add_theme_constant_override("margin_bottom", 12)
@@ -1007,7 +1075,7 @@ func _build_liquid_glass_ui() -> void:
 	graph_margin.add_theme_constant_override("margin_right", 16)
 	bottom_panel.add_child(graph_margin)
 
-	var graph_vbox := VBoxContainer.new()
+	graph_vbox = VBoxContainer.new()
 	graph_vbox.add_theme_constant_override("separation", 6)
 	graph_margin.add_child(graph_vbox)
 
@@ -1058,58 +1126,8 @@ func _build_liquid_glass_ui() -> void:
 	)
 	graph_vbox.add_child(live_graph)
 
-	# 5. MOBILE NAVIGATION DOCK (Thumb-Friendly VisionOS Capsule at Bottom)
-	mobile_dock = _create_liquid_glass_panel(Vector2(0, 0), Vector2(360, 52), 26, 0.88)
-	mobile_dock.name = "MobileDock"
-	mobile_dock.anchor_left = 0.5
-	mobile_dock.anchor_right = 0.5
-	mobile_dock.anchor_top = 1.0
-	mobile_dock.anchor_bottom = 1.0
-	mobile_dock.offset_left = -180.0
-	mobile_dock.offset_right = 180.0
-	mobile_dock.offset_top = -62.0
-	mobile_dock.offset_bottom = -10.0
-	mobile_dock.visible = false
-	root.add_child(mobile_dock)
-
-	var dock_margin := MarginContainer.new()
-	dock_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dock_margin.add_theme_constant_override("margin_left", 8)
-	dock_margin.add_theme_constant_override("margin_right", 8)
-	dock_margin.add_theme_constant_override("margin_top", 4)
-	dock_margin.add_theme_constant_override("margin_bottom", 4)
-	mobile_dock.add_child(dock_margin)
-
-	var dock_hbox := HBoxContainer.new()
-	dock_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	dock_hbox.add_theme_constant_override("separation", 6)
-	dock_margin.add_child(dock_hbox)
-
-	btn_mob_controls = _create_liquid_button("⚙️ Controls")
-	btn_mob_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_mob_controls.pressed.connect(func(): _toggle_mobile_drawer(left_panel))
-	dock_hbox.add_child(btn_mob_controls)
-
-	btn_mob_telemetry = _create_liquid_button("📊 Telemetry")
-	btn_mob_telemetry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_mob_telemetry.pressed.connect(func():
-		_show_right_tab(0)
-		_toggle_mobile_drawer(right_panel)
-	)
-	dock_hbox.add_child(btn_mob_telemetry)
-
-	btn_mob_graph = _create_liquid_button("📈 Curves")
-	btn_mob_graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_mob_graph.pressed.connect(func(): _toggle_mobile_drawer(bottom_panel))
-	dock_hbox.add_child(btn_mob_graph)
-
-	btn_mob_joint = _create_liquid_button("🔬 Joint")
-	btn_mob_joint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_mob_joint.pressed.connect(func():
-		_show_right_tab(1)
-		_toggle_mobile_drawer(right_panel)
-	)
-	dock_hbox.add_child(btn_mob_joint)
+	# 5. MOBILE TOP BAR & SLIDE-OUT SIDEBAR
+	_build_mobile_ui(root)
 
 	# 6. FLOATING FORMULAS & THEORY MODAL WINDOW
 	_build_formulas_modal(root)
@@ -1207,6 +1225,253 @@ func _build_formulas_modal(root: Control) -> void:
 	t += "[color=#595C66]Tip: In the web browser, click Formulas & Theory to view the full interactive LaTeX / KaTeX textbook equations![/color]\n"
 
 	content_rtl.text = t
+
+
+func _build_mobile_ui(root: Control) -> void:
+	# 1. Fullscreen Backdrop Scrim (Dims 3D scene when Sidebar is open)
+	backdrop_scrim = ColorRect.new()
+	backdrop_scrim.name = "MobileBackdropScrim"
+	backdrop_scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop_scrim.color = Color(0.0, 0.0, 0.0, 0.45)
+	backdrop_scrim.visible = false
+	backdrop_scrim.gui_input.connect(func(ev: InputEvent):
+		if (ev is InputEventMouseButton and ev.pressed) or (ev is InputEventScreenTouch and ev.pressed):
+			_toggle_mobile_sidebar(false)
+	)
+	root.add_child(backdrop_scrim)
+
+	# 2. Sleek Floating Mobile Top Bar (VisionOS Capsule)
+	mobile_top_bar = _create_liquid_glass_panel(Vector2.ZERO, Vector2(360, 48), 24, 0.88)
+	mobile_top_bar.name = "MobileTopBar"
+	mobile_top_bar.anchor_left = 0.0
+	mobile_top_bar.anchor_right = 1.0
+	mobile_top_bar.offset_left = 8.0
+	mobile_top_bar.offset_right = -8.0
+	mobile_top_bar.offset_top = 8.0
+	mobile_top_bar.offset_bottom = 56.0
+	mobile_top_bar.visible = false
+	root.add_child(mobile_top_bar)
+
+	var top_margin := MarginContainer.new()
+	top_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	top_margin.add_theme_constant_override("margin_left", 8)
+	top_margin.add_theme_constant_override("margin_right", 8)
+	top_margin.add_theme_constant_override("margin_top", 4)
+	top_margin.add_theme_constant_override("margin_bottom", 4)
+	mobile_top_bar.add_child(top_margin)
+
+	var top_hbox := HBoxContainer.new()
+	top_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	top_hbox.add_theme_constant_override("separation", 6)
+	top_margin.add_child(top_hbox)
+
+	btn_mobile_menu = _create_liquid_button("☰ Menu")
+	btn_mobile_menu.custom_minimum_size = Vector2(74, 34)
+	btn_mobile_menu.add_theme_font_size_override("font_size", 12)
+	btn_mobile_menu.pressed.connect(func():
+		_toggle_mobile_sidebar(not mobile_sidebar.visible)
+	)
+	top_hbox.add_child(btn_mobile_menu)
+
+	# Camera Quick Rig Focus Pills
+	btn_focus_all = _create_liquid_button("All")
+	btn_focus_all.custom_minimum_size = Vector2(36, 32)
+	btn_focus_all.add_theme_font_size_override("font_size", 11)
+	btn_focus_all.pressed.connect(func(): camera.focus_rig("ALL"))
+	top_hbox.add_child(btn_focus_all)
+
+	btn_focus_a = _create_liquid_button("A")
+	btn_focus_a.custom_minimum_size = Vector2(32, 32)
+	btn_focus_a.add_theme_font_size_override("font_size", 11)
+	btn_focus_a.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+	btn_focus_a.pressed.connect(func(): camera.focus_rig("A"))
+	top_hbox.add_child(btn_focus_a)
+
+	btn_focus_c = _create_liquid_button("C")
+	btn_focus_c.custom_minimum_size = Vector2(32, 32)
+	btn_focus_c.add_theme_font_size_override("font_size", 11)
+	btn_focus_c.add_theme_color_override("font_color", Color(0.19, 0.82, 0.35))
+	btn_focus_c.pressed.connect(func(): camera.focus_rig("C"))
+	top_hbox.add_child(btn_focus_c)
+
+	btn_focus_b = _create_liquid_button("B")
+	btn_focus_b.custom_minimum_size = Vector2(32, 32)
+	btn_focus_b.add_theme_font_size_override("font_size", 11)
+	btn_focus_b.add_theme_color_override("font_color", Color(1.0, 0.42, 0.05))
+	btn_focus_b.pressed.connect(func(): camera.focus_rig("B"))
+	top_hbox.add_child(btn_focus_b)
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_hbox.add_child(spacer)
+
+	btn_mob_theme = _create_liquid_button("🌙" if not is_dark_theme else "☀️")
+	btn_mob_theme.custom_minimum_size = Vector2(34, 32)
+	btn_mob_theme.pressed.connect(func():
+		_apply_theme(not is_dark_theme)
+		btn_mob_theme.text = "☀️" if is_dark_theme else "🌙"
+	)
+	top_hbox.add_child(btn_mob_theme)
+
+	btn_mob_reset = _create_liquid_button("↺")
+	btn_mob_reset.custom_minimum_size = Vector2(34, 32)
+	btn_mob_reset.pressed.connect(func(): camera.reset_camera())
+	top_hbox.add_child(btn_mob_reset)
+
+	# 3. Mobile Slide-Out Sidebar Drawer
+	mobile_sidebar = _create_liquid_glass_panel(Vector2.ZERO, Vector2(350, 700), 22, 0.94)
+	mobile_sidebar.name = "MobileSidebar"
+	mobile_sidebar.anchor_left = 0.0
+	mobile_sidebar.anchor_right = 0.0
+	mobile_sidebar.anchor_top = 0.0
+	mobile_sidebar.anchor_bottom = 1.0
+	mobile_sidebar.offset_left = 0.0
+	mobile_sidebar.offset_right = 350.0
+	mobile_sidebar.offset_top = 0.0
+	mobile_sidebar.offset_bottom = 0.0
+	mobile_sidebar.visible = false
+	root.add_child(mobile_sidebar)
+
+	var sb_margin := MarginContainer.new()
+	sb_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sb_margin.add_theme_constant_override("margin_top", 14)
+	sb_margin.add_theme_constant_override("margin_bottom", 14)
+	sb_margin.add_theme_constant_override("margin_left", 14)
+	sb_margin.add_theme_constant_override("margin_right", 14)
+	mobile_sidebar.add_child(sb_margin)
+
+	var sb_vbox := VBoxContainer.new()
+	sb_vbox.add_theme_constant_override("separation", 10)
+	sb_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sb_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sb_margin.add_child(sb_vbox)
+
+	# Sidebar Header
+	var sb_header := HBoxContainer.new()
+	sb_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sb_vbox.add_child(sb_header)
+
+	var sb_titles := VBoxContainer.new()
+	sb_titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb_main_lbl := _create_title_label("Scissor Pantograph Lab", 15)
+	sb_titles.add_child(sb_main_lbl)
+	var sb_sub_lbl := _create_subtitle_label("Sim-to-Real Multi-Linkage Physics", 10)
+	sb_titles.add_child(sb_sub_lbl)
+	sb_header.add_child(sb_titles)
+
+	btn_close_sidebar = _create_liquid_button("✕")
+	btn_close_sidebar.custom_minimum_size = Vector2(36, 32)
+	btn_close_sidebar.pressed.connect(func(): _toggle_mobile_sidebar(false))
+	sb_header.add_child(btn_close_sidebar)
+
+	var sep_sb := HSeparator.new()
+	sb_vbox.add_child(sep_sb)
+
+	# Segmented Navigation Tabs
+	var sb_tabs := HBoxContainer.new()
+	sb_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sb_tabs.add_theme_constant_override("separation", 6)
+	sb_vbox.add_child(sb_tabs)
+
+	btn_mob_tab_0 = _create_liquid_button("⚙️ Controls")
+	btn_mob_tab_0.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_tab_0.custom_minimum_size.y = 32
+	btn_mob_tab_0.pressed.connect(func(): _show_mobile_tab(0))
+	sb_tabs.add_child(btn_mob_tab_0)
+
+	btn_mob_tab_1 = _create_liquid_button("📊 Data")
+	btn_mob_tab_1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_tab_1.custom_minimum_size.y = 32
+	btn_mob_tab_1.pressed.connect(func(): _show_mobile_tab(1))
+	sb_tabs.add_child(btn_mob_tab_1)
+
+	btn_mob_tab_2 = _create_liquid_button("🔬 Joint")
+	btn_mob_tab_2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_tab_2.custom_minimum_size.y = 32
+	btn_mob_tab_2.pressed.connect(func(): _show_mobile_tab(2))
+	sb_tabs.add_child(btn_mob_tab_2)
+
+	btn_mob_tab_3 = _create_liquid_button("📈 Curves")
+	btn_mob_tab_3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_tab_3.custom_minimum_size.y = 32
+	btn_mob_tab_3.pressed.connect(func(): _show_mobile_tab(3))
+	sb_tabs.add_child(btn_mob_tab_3)
+
+	# Content Scroll Containers
+	mob_scroll_controls = ScrollContainer.new()
+	mob_scroll_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mob_scroll_controls.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mob_scroll_controls.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sb_vbox.add_child(mob_scroll_controls)
+
+	mob_scroll_telem = ScrollContainer.new()
+	mob_scroll_telem.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mob_scroll_telem.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mob_scroll_telem.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	mob_scroll_telem.visible = false
+	sb_vbox.add_child(mob_scroll_telem)
+
+	mob_scroll_joint = ScrollContainer.new()
+	mob_scroll_joint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mob_scroll_joint.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mob_scroll_joint.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	mob_scroll_joint.visible = false
+	sb_vbox.add_child(mob_scroll_joint)
+
+	mob_scroll_graph = ScrollContainer.new()
+	mob_scroll_graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mob_scroll_graph.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mob_scroll_graph.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	mob_scroll_graph.visible = false
+	sb_vbox.add_child(mob_scroll_graph)
+
+	# 4. Floating Bottom Pin Chip (Appears only when a pin is selected in 3D)
+	mobile_pin_card = _create_liquid_glass_panel(Vector2.ZERO, Vector2(340, 48), 24, 0.90)
+	mobile_pin_card.name = "MobilePinCard"
+	mobile_pin_card.anchor_left = 0.5
+	mobile_pin_card.anchor_right = 0.5
+	mobile_pin_card.anchor_top = 1.0
+	mobile_pin_card.anchor_bottom = 1.0
+	mobile_pin_card.offset_left = -170.0
+	mobile_pin_card.offset_right = 170.0
+	mobile_pin_card.offset_top = -62.0
+	mobile_pin_card.offset_bottom = -14.0
+	mobile_pin_card.visible = false
+	root.add_child(mobile_pin_card)
+
+	var pin_card_margin := MarginContainer.new()
+	pin_card_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pin_card_margin.add_theme_constant_override("margin_left", 12)
+	pin_card_margin.add_theme_constant_override("margin_right", 8)
+	pin_card_margin.add_theme_constant_override("margin_top", 4)
+	pin_card_margin.add_theme_constant_override("margin_bottom", 4)
+	mobile_pin_card.add_child(pin_card_margin)
+
+	var pin_card_hbox := HBoxContainer.new()
+	pin_card_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	pin_card_hbox.add_theme_constant_override("separation", 8)
+	pin_card_margin.add_child(pin_card_hbox)
+
+	lbl_mob_pin_summary = Label.new()
+	lbl_mob_pin_summary.text = "Pin Selected"
+	lbl_mob_pin_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_mob_pin_summary.add_theme_font_size_override("font_size", 11)
+	lbl_mob_pin_summary.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+	pin_card_hbox.add_child(lbl_mob_pin_summary)
+
+	btn_mob_pin_inspect = _create_liquid_button("Details ❯")
+	btn_mob_pin_inspect.custom_minimum_size = Vector2(74, 28)
+	btn_mob_pin_inspect.add_theme_font_size_override("font_size", 11)
+	btn_mob_pin_inspect.pressed.connect(func():
+		_toggle_mobile_sidebar(true)
+		_show_mobile_tab(2)
+	)
+	pin_card_hbox.add_child(btn_mob_pin_inspect)
+
+	btn_mob_pin_close = _create_liquid_button("✕")
+	btn_mob_pin_close.custom_minimum_size = Vector2(28, 28)
+	btn_mob_pin_close.pressed.connect(func(): _deselect_pin())
+	pin_card_hbox.add_child(btn_mob_pin_close)
 
 
 
@@ -1587,13 +1852,13 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 	var lbl := Label3D.new()
 	lbl.name = "Label"
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.pixel_size = 0.0036
-	lbl.font_size = 24
+	lbl.pixel_size = 0.0030
+	lbl.font_size = 20
 	lbl.shaded = false
 	lbl.no_depth_test = true
 	lbl.render_priority = 15
 	lbl.modulate = col
-	lbl.outline_size = 6
+	lbl.outline_size = 8
 	lbl.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
 	root.add_child(lbl)
 
@@ -1837,12 +2102,16 @@ func _on_pin_clicked(rig: PantographRig, pin_idx: int, _pos: Vector3) -> void:
 		inspected_rig = rig
 		inspected_pin_idx = pin_idx
 		force_visualizer_root.visible = true
-		_show_right_tab(1)
 		if is_mobile_layout:
-			if right_panel != null and not is_focus_mode:
-				_toggle_mobile_drawer(right_panel)
-				right_panel.visible = true
-				active_mobile_drawer = right_panel
+			if mobile_sidebar != null and mobile_sidebar.visible:
+				_show_mobile_tab(2)
+			elif mobile_pin_card != null and not is_focus_mode:
+				mobile_pin_card.visible = true
+				var data: Dictionary = _calculate_joint_forces(rig, pin_idx)
+				if lbl_mob_pin_summary != null:
+					lbl_mob_pin_summary.text = "%s [Pin #%d] · R=%.1fN, Fx=%.1fN" % [rig.rig_name, pin_idx, data.R, data.F_x]
+		else:
+			_show_right_tab(1)
 		_update_force_visualizer()
 
 
@@ -1851,32 +2120,39 @@ func _deselect_pin() -> void:
 	inspected_pin_idx = -1
 	if force_visualizer_root != null:
 		force_visualizer_root.visible = false
-	_show_right_tab(0)
+	if mobile_pin_card != null:
+		mobile_pin_card.visible = false
+	if not is_mobile_layout:
+		_show_right_tab(0)
 
 
 # --- Theme & Focus Mode Switching Logic ---
 func _set_focus_mode(focus: bool) -> void:
 	is_focus_mode = focus
-	if header_panel != null:
-		header_panel.visible = not focus
-	if left_panel != null:
-		left_panel.visible = (not focus) if not is_mobile_layout else false
-	if right_panel != null:
-		right_panel.visible = (not focus) if not is_mobile_layout else false
-	if bottom_panel != null:
-		bottom_panel.visible = (not focus) if not is_mobile_layout else false
-	if mobile_dock != null:
-		mobile_dock.visible = (not focus) if is_mobile_layout else false
+	if is_mobile_layout:
+		if mobile_top_bar != null:
+			mobile_top_bar.visible = not focus
+		if mobile_sidebar != null:
+			mobile_sidebar.visible = false
+		if backdrop_scrim != null:
+			backdrop_scrim.visible = false
+		if mobile_pin_card != null:
+			mobile_pin_card.visible = (not focus) if inspected_rig != null else false
+	else:
+		if header_panel != null:
+			header_panel.visible = not focus
+		if left_panel != null:
+			left_panel.visible = not focus
+		if right_panel != null:
+			right_panel.visible = not focus
+		if bottom_panel != null:
+			bottom_panel.visible = not focus
 	if formulas_modal != null:
 		formulas_modal.visible = false
 	if btn_restore_ui != null:
 		btn_restore_ui.visible = focus
 	if btn_focus_toggle != null:
-		btn_focus_toggle.text = "Exit Focus" if focus else ("👁️ Focus Mode" if not is_mobile_layout else "👁")
-	if btn_restore_ui != null:
-		btn_restore_ui.visible = focus
-	if btn_focus_toggle != null:
-		btn_focus_toggle.text = "Exit Focus" if focus else ("👁️ Focus Mode" if not is_mobile_layout else "👁")
+		btn_focus_toggle.text = "Exit Focus" if focus else "👁️ Focus Mode"
 
 
 func _apply_theme(is_dark: bool) -> void:
@@ -2021,6 +2297,8 @@ func _apply_theme(is_dark: bool) -> void:
 	# 12. Update Button Labels
 	if btn_theme_toggle != null:
 		btn_theme_toggle.text = "☀️ Light Theme" if is_dark else "🌙 Dark Theme"
+	if btn_mob_theme != null:
+		btn_mob_theme.text = "☀️" if is_dark else "🌙"
 
 
 func _apply_visualizer_theme(is_dark: bool) -> void:
@@ -2074,23 +2352,74 @@ func _show_right_tab(tab_idx: int) -> void:
 			btn_tab_telemetry.add_theme_color_override("font_color", default_col)
 
 
-func _toggle_mobile_drawer(drawer: Control) -> void:
-	if drawer == null:
+func _toggle_mobile_sidebar(open: bool) -> void:
+	if mobile_sidebar == null:
 		return
-	var is_currently_open: bool = drawer.visible
-	# Close all drawers first
-	if left_panel != null:
-		left_panel.visible = false
-	if right_panel != null:
-		right_panel.visible = false
-	if bottom_panel != null:
-		bottom_panel.visible = false
+	mobile_sidebar.visible = open
+	if backdrop_scrim != null:
+		backdrop_scrim.visible = open
+	if mobile_pin_card != null:
+		if open:
+			mobile_pin_card.visible = false
+		elif inspected_rig != null and not is_focus_mode:
+			mobile_pin_card.visible = true
+	if open:
+		_show_mobile_tab(current_mobile_tab)
 
-	if is_currently_open:
-		active_mobile_drawer = null
-	else:
-		drawer.visible = true
-		active_mobile_drawer = drawer
+
+func _show_mobile_tab(tab_idx: int) -> void:
+	current_mobile_tab = tab_idx
+	if mob_scroll_controls:
+		mob_scroll_controls.visible = (tab_idx == 0)
+	if mob_scroll_telem:
+		mob_scroll_telem.visible = (tab_idx == 1)
+	if mob_scroll_joint:
+		mob_scroll_joint.visible = (tab_idx == 2)
+	if mob_scroll_graph:
+		mob_scroll_graph.visible = (tab_idx == 3)
+
+	var active_color := Color(0.0, 0.443, 0.89)
+	var default_color: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+
+	var tab_btns := [btn_mob_tab_0, btn_mob_tab_1, btn_mob_tab_2, btn_mob_tab_3]
+	for i in range(tab_btns.size()):
+		var b: Button = tab_btns[i]
+		if b != null:
+			b.add_theme_color_override("font_color", active_color if i == tab_idx else default_color)
+
+
+func _on_screen_tapped(screen_pos: Vector2) -> void:
+	if not is_inside_tree() or camera == null:
+		return
+	if is_mobile_layout and mobile_sidebar != null and mobile_sidebar.visible:
+		return
+
+	var ray_origin := camera.project_ray_origin(screen_pos)
+	var ray_dir := camera.project_ray_normal(screen_pos)
+
+	var best_rig: PantographRig = null
+	var best_pin: int = -1
+	var best_dist: float = 0.32
+
+	for rig in [rig_a, rig_c, rig_b]:
+		if rig == null or not is_instance_valid(rig):
+			continue
+		for i in range(rig.get_pin_count()):
+			var p: Vector3 = rig.get_pin_global_position(i)
+			var v := p - ray_origin
+			var proj := v.dot(ray_dir)
+			if proj > 0.0:
+				var closest_pt: Vector3 = ray_origin + ray_dir * proj
+				var dist: float = closest_pt.distance_to(p)
+				if dist < best_dist:
+					best_dist = dist
+					best_rig = rig
+					best_pin = i
+
+	if best_rig != null and best_pin != -1:
+		_on_pin_clicked(best_rig, best_pin, best_rig.get_pin_global_position(best_pin))
+	elif inspected_rig != null:
+		_deselect_pin()
 
 
 func _check_responsive_layout() -> void:
@@ -2117,92 +2446,82 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 		camera.set_mobile_mode(is_mobile)
 
 	if is_mobile:
-		# Header in mobile mode
+		# 1. Hide Desktop Panels
 		if header_panel != null:
-			header_panel.anchor_left = 0.0
-			header_panel.anchor_right = 1.0
-			header_panel.offset_left = 8.0
-			header_panel.offset_right = -8.0
-			header_panel.offset_top = 8.0
-			header_panel.offset_bottom = 54.0
-		if sub_title != null:
-			sub_title.visible = false
-		if main_title != null:
-			main_title.text = "Scissor Pantograph Lab"
-			main_title.add_theme_font_size_override("font_size", 12)
-		if btn_formulas != null:
-			btn_formulas.text = "Theory"
-			btn_formulas.custom_minimum_size = Vector2(62, 28)
-		if btn_reset_cam != null:
-			btn_reset_cam.text = "↺"
-			btn_reset_cam.custom_minimum_size = Vector2(36, 28)
-		if btn_slowmo != null:
-			btn_slowmo.text = "⏸"
-			btn_slowmo.custom_minimum_size = Vector2(36, 28)
-		if btn_lasers != null:
-			btn_lasers.text = "📐"
-			btn_lasers.custom_minimum_size = Vector2(36, 28)
-		if btn_theme_toggle != null:
-			btn_theme_toggle.text = "🌙" if not is_dark_theme else "☀️"
-			btn_theme_toggle.custom_minimum_size = Vector2(36, 28)
-		if btn_focus_toggle != null:
-			btn_focus_toggle.text = "👁"
-			btn_focus_toggle.custom_minimum_size = Vector2(36, 28)
-
-		# Mobile Dock
-		if mobile_dock != null:
-			mobile_dock.visible = not is_focus_mode
-
-		# Drawers layout
-		_adjust_mobile_sizes(vp_size)
-
-		# Initially hide drawers so 3D scene is visible
+			header_panel.visible = false
 		if left_panel != null:
 			left_panel.visible = false
 		if right_panel != null:
 			right_panel.visible = false
 		if bottom_panel != null:
 			bottom_panel.visible = false
+
+		# 2. Reparent Content VBoxes into Mobile ScrollContainers
+		if left_vbox != null and mob_scroll_controls != null and left_vbox.get_parent() != mob_scroll_controls:
+			left_vbox.reparent(mob_scroll_controls, false)
+			left_vbox.visible = true
+		if telemetry_view != null and mob_scroll_telem != null and telemetry_view.get_parent() != mob_scroll_telem:
+			telemetry_view.reparent(mob_scroll_telem, false)
+			telemetry_view.visible = true
+		if joint_view != null and mob_scroll_joint != null and joint_view.get_parent() != mob_scroll_joint:
+			joint_view.reparent(mob_scroll_joint, false)
+			joint_view.visible = true
+		if graph_vbox != null and mob_scroll_graph != null and graph_vbox.get_parent() != mob_scroll_graph:
+			graph_vbox.reparent(mob_scroll_graph, false)
+			graph_vbox.visible = true
+
+		# 3. Configure Mobile Top Bar
+		if mobile_top_bar != null:
+			mobile_top_bar.visible = not is_focus_mode
+			mobile_top_bar.offset_left = 8.0
+			mobile_top_bar.offset_right = -8.0
+			mobile_top_bar.offset_top = 8.0
+			mobile_top_bar.offset_bottom = 56.0
+
+		# 4. Configure Mobile Sidebar
+		if mobile_sidebar != null:
+			var sb_w: float = minf(vp_size.x * 0.88, 380.0)
+			mobile_sidebar.offset_right = sb_w
+			mobile_sidebar.offset_bottom = vp_size.y
+
+		# 5. Mobile Pin Chip
+		if mobile_pin_card != null:
+			var pill_w: float = minf(vp_size.x - 24.0, 360.0)
+			mobile_pin_card.offset_left = -pill_w * 0.5
+			mobile_pin_card.offset_right = pill_w * 0.5
+			mobile_pin_card.offset_top = -64.0
+			mobile_pin_card.offset_bottom = -16.0
+			mobile_pin_card.visible = (inspected_rig != null and not is_focus_mode and not (mobile_sidebar != null and mobile_sidebar.visible))
+
 	else:
-		# Header in desktop mode
-		if header_panel != null:
-			header_panel.anchor_left = 0.5
-			header_panel.anchor_right = 0.5
-			header_panel.offset_left = -590.0
-			header_panel.offset_right = 590.0
-			header_panel.offset_top = 16.0
-			header_panel.offset_bottom = 84.0
-		if sub_title != null:
-			sub_title.visible = true
-		if main_title != null:
-			main_title.text = "Scissor Pantograph Verification  ·  Golden Rule of Mechanics"
-			main_title.add_theme_font_size_override("font_size", 14)
-		if btn_formulas != null:
-			btn_formulas.text = "Formulas & Theory"
-			btn_formulas.custom_minimum_size = Vector2(138, 32)
-		if btn_reset_cam != null:
-			btn_reset_cam.text = "Reset View"
-			btn_reset_cam.custom_minimum_size = Vector2(92, 30)
-		if btn_slowmo != null:
-			btn_slowmo.text = "Normal Speed" if is_slow_motion else "Slow Motion"
-			btn_slowmo.custom_minimum_size = Vector2(92, 30)
-		if btn_lasers != null:
-			btn_lasers.text = "Hide Lasers" if lasers_enabled else "Show Lasers"
-			btn_lasers.custom_minimum_size = Vector2(92, 30)
-		if btn_theme_toggle != null:
-			btn_theme_toggle.text = "☀️ Light Theme" if is_dark_theme else "🌙 Dark Theme"
-			btn_theme_toggle.custom_minimum_size = Vector2(112, 30)
-		if btn_focus_toggle != null:
-			btn_focus_toggle.text = "Exit Focus" if is_focus_mode else "👁️ Focus Mode"
-			btn_focus_toggle.custom_minimum_size = Vector2(98, 30)
+		# Desktop Mode:
+		# 1. Hide Mobile Controls
+		if mobile_top_bar != null:
+			mobile_top_bar.visible = false
+		if mobile_sidebar != null:
+			mobile_sidebar.visible = false
+		if backdrop_scrim != null:
+			backdrop_scrim.visible = false
+		if mobile_pin_card != null:
+			mobile_pin_card.visible = false
 
-		# Mobile Dock hidden
-		if mobile_dock != null:
-			mobile_dock.visible = false
+		# 2. Reparent Content VBoxes back to Desktop Panels
+		if left_vbox != null and left_margin != null and left_vbox.get_parent() != left_margin:
+			left_vbox.reparent(left_margin, false)
+		if telemetry_view != null and right_vbox != null and telemetry_view.get_parent() != right_vbox:
+			telemetry_view.reparent(right_vbox, false)
+		if joint_view != null and right_vbox != null and joint_view.get_parent() != right_vbox:
+			joint_view.reparent(right_vbox, false)
+		if right_vbox != null:
+			right_vbox.move_child(telemetry_view, 2)
+			right_vbox.move_child(joint_view, 3)
+		if graph_vbox != null and graph_margin != null and graph_vbox.get_parent() != graph_margin:
+			graph_vbox.reparent(graph_margin, false)
 
-		# Side panels restored
+		# 3. Restore Desktop Panels
 		_adjust_desktop_sizes(vp_size)
-
+		if header_panel != null:
+			header_panel.visible = not is_focus_mode
 		if left_panel != null:
 			left_panel.visible = not is_focus_mode
 		if right_panel != null:
@@ -2210,45 +2529,27 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 		if bottom_panel != null:
 			bottom_panel.visible = not is_focus_mode
 
+		_show_right_tab(0 if inspected_rig == null else 1)
+
 
 func _adjust_mobile_sizes(vp_size: Vector2) -> void:
-	var h: float = clampf(vp_size.y * 0.46, 260.0, 480.0)
-	var bottom_offset: float = -68.0
+	if mobile_top_bar != null:
+		mobile_top_bar.offset_left = 8.0
+		mobile_top_bar.offset_right = -8.0
+		mobile_top_bar.offset_top = 8.0
+		mobile_top_bar.offset_bottom = 56.0
 
-	if left_panel != null:
-		left_panel.anchor_left = 0.0
-		left_panel.anchor_right = 1.0
-		left_panel.anchor_top = 1.0
-		left_panel.anchor_bottom = 1.0
-		left_panel.offset_left = 8.0
-		left_panel.offset_right = -8.0
-		left_panel.offset_bottom = bottom_offset
-		left_panel.offset_top = bottom_offset - h
+	if mobile_sidebar != null:
+		var sb_w: float = minf(vp_size.x * 0.88, 380.0)
+		mobile_sidebar.offset_right = sb_w
+		mobile_sidebar.offset_bottom = vp_size.y
 
-	if right_panel != null:
-		right_panel.anchor_left = 0.0
-		right_panel.anchor_right = 1.0
-		right_panel.anchor_top = 1.0
-		right_panel.anchor_bottom = 1.0
-		right_panel.offset_left = 8.0
-		right_panel.offset_right = -8.0
-		right_panel.offset_bottom = bottom_offset
-		right_panel.offset_top = bottom_offset - h
-
-	if bottom_panel != null:
-		bottom_panel.anchor_left = 0.0
-		bottom_panel.anchor_right = 1.0
-		bottom_panel.anchor_top = 1.0
-		bottom_panel.anchor_bottom = 1.0
-		bottom_panel.offset_left = 8.0
-		bottom_panel.offset_right = -8.0
-		bottom_panel.offset_bottom = bottom_offset
-		bottom_panel.offset_top = bottom_offset - clampf(vp_size.y * 0.40, 240.0, 380.0)
-
-	if mobile_dock != null:
-		var dock_w: float = minf(vp_size.x - 16.0, 380.0)
-		mobile_dock.offset_left = -dock_w * 0.5
-		mobile_dock.offset_right = dock_w * 0.5
+	if mobile_pin_card != null:
+		var pill_w: float = minf(vp_size.x - 24.0, 360.0)
+		mobile_pin_card.offset_left = -pill_w * 0.5
+		mobile_pin_card.offset_right = pill_w * 0.5
+		mobile_pin_card.offset_top = -64.0
+		mobile_pin_card.offset_bottom = -16.0
 
 
 func _adjust_desktop_sizes(vp_size: Vector2) -> void:

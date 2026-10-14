@@ -360,8 +360,8 @@ func _build_rig_hierarchy() -> void:
 		pin_body.name = "PinBody_%d" % p
 		var col_shape := CollisionShape3D.new()
 		var col_cyl := CylinderShape3D.new()
-		col_cyl.radius = 0.075 # Generous hitbox for easy clicking
-		col_cyl.height = 0.14
+		col_cyl.radius = 0.11 # Large touch-friendly hitbox for mobile screens
+		col_cyl.height = 0.20
 		col_shape.shape = col_cyl
 		col_shape.rotation.x = deg_to_rad(90)
 		pin_body.add_child(col_shape)
@@ -370,6 +370,11 @@ func _build_rig_hierarchy() -> void:
 			if event is InputEventMouseButton:
 				var mb := event as InputEventMouseButton
 				if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+					get_viewport().set_input_as_handled()
+					pin_clicked.emit(self, pin_idx, pin_nodes[pin_idx].global_position)
+			elif event is InputEventScreenTouch:
+				var st := event as InputEventScreenTouch
+				if st.pressed:
 					get_viewport().set_input_as_handled()
 					pin_clicked.emit(self, pin_idx, pin_nodes[pin_idx].global_position)
 		)
