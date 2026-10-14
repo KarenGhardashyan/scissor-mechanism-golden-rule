@@ -95,3 +95,18 @@ func reset_camera() -> void:
 	target_pitch = deg_to_rad(-5.0)
 	target_distance = default_distance
 	current_target = default_target
+
+
+func set_mobile_mode(is_mobile: bool) -> void:
+	if is_mobile:
+		default_distance = 7.6
+		target_distance = 7.6
+		default_target = Vector3(0.0, 1.55, 0.0)
+		target_point = default_target
+		current_target = default_target
+	else:
+		default_distance = 5.9
+		target_distance = 5.9
+		default_target = Vector3(0.0, 1.75, 0.0)
+		target_point = default_target
+		current_target = default_target

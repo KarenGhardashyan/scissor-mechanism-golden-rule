@@ -9,8 +9,67 @@ extends Node3D
 @onready var rig_c: PantographRig = $RigC
 @onready var rig_b: PantographRig = $RigB
 
-# Liquid Glass UI Elements
+# Dual Theme & Focus Mode State
+var is_dark_theme: bool = false
+var is_focus_mode: bool = false
+
+# 3D Environment & Showroom Lighting References
+var world_env: WorldEnvironment
+var env_res: Environment
+var sky_proc_mat: ProceduralSkyMaterial
+var dir_light: DirectionalLight3D
+var fill_light: DirectionalLight3D
+var rim_light: DirectionalLight3D
+var mat_floor: StandardMaterial3D
+var mat_gantry: StandardMaterial3D
+var mat_gantry_accent: StandardMaterial3D
+
+# Liquid Glass UI Panels & Buttons
 var ui_layer: CanvasLayer
+var header_panel: PanelContainer
+var left_panel: PanelContainer
+var right_panel: PanelContainer
+var bottom_panel: PanelContainer
+var is_graph_maximized: bool = false
+
+var main_title: Label
+var sub_title: Label
+var btn_formulas: Button
+var btn_reset_cam: Button
+var btn_slowmo: Button
+var btn_lasers: Button
+var btn_theme_toggle: Button
+var btn_focus_toggle: Button
+var btn_restore_ui: Button
+var btn_graph_expand: Button
+var btn_graph_theme: Button
+var formulas_modal: PanelContainer
+
+# Right Panel Tabs (Integrated Joint Inspector)
+var btn_tab_telemetry: Button
+var btn_tab_joint: Button
+var telemetry_view: VBoxContainer
+var joint_view: VBoxContainer
+
+# Mobile Responsive Layout & Dock
+var is_mobile_layout: bool = false
+var mobile_dock: PanelContainer
+var active_mobile_drawer: Control = null
+var btn_mob_controls: Button
+var btn_mob_telemetry: Button
+var btn_mob_graph: Button
+var btn_mob_joint: Button
+
+# UI Theme Collections for Dynamic Switching
+var theme_panels: Array[PanelContainer] = []
+var theme_buttons: Array[Button] = []
+var theme_labels_primary: Array[Label] = []
+var theme_labels_secondary: Array[Label] = []
+var theme_sliders: Array[HSlider] = []
+var theme_checkboxes: Array[CheckBox] = []
+var theme_progress_bars: Array[Dictionary] = []
+
+# Sliders & Controls
 var mass_slider: HSlider
 var mass_val_label: Label
 var stiffness_slider: HSlider
@@ -24,11 +83,6 @@ var oscillations_check: CheckBox
 var damping_slider: HSlider
 var damping_val_label: Label
 var live_graph: LiveGraph
-var bottom_panel: PanelContainer
-var is_graph_maximized: bool = false
-var btn_graph_expand: Button
-var btn_graph_theme: Button
-var formulas_modal: PanelContainer
 
 # Comparison Pill Labels
 var label_a_delta_h: Label
@@ -67,13 +121,40 @@ var is_slow_motion: bool = false
 var lasers_enabled: bool = true
 var ui_timer: float = 0.0
 
+# 3D Joint Force Vector Visualizer
+var force_visualizer_root: Node3D
+var pin_highlight_ring: MeshInstance3D
+var mat_ring: StandardMaterial3D
+
+var arrow_fy_data: Dictionary = {}
+var arrow_fx_data: Dictionary = {}
+var arrow_res_data: Dictionary = {}
+var arrow_fric_data: Dictionary = {}
+
+var inspected_rig: PantographRig = null
+var inspected_pin_idx: int = -1
+
+# 2D Joint Telemetry Glass Card
+var joint_card: PanelContainer
+var joint_card_title: Label
+var joint_card_desc: Label
+var joint_val_fy: Label
+var joint_val_fx: Label
+var joint_val_res: Label
+var joint_val_fric: Label
+var joint_val_theta: Label
+
 
 func _ready() -> void:
 	_setup_pure_light_studio()
 	_setup_showroom_bay()
 	_setup_rigs()
+	_build_force_visualizer()
 	_build_liquid_glass_ui()
 	_apply_preset(0.5, 1000.0, 1.0, 9.81)
+	_apply_theme(false)
+	get_viewport().size_changed.connect(_check_responsive_layout)
+	call_deferred("_check_responsive_layout")
 
 
 func _process(delta: float) -> void:
@@ -81,49 +162,54 @@ func _process(delta: float) -> void:
 	if ui_timer >= 0.033:
 		ui_timer = 0.0
 		_update_ui_telemetry()
+	if inspected_rig != null and is_instance_valid(inspected_rig):
+		_update_force_visualizer()
 
 
 func _setup_pure_light_studio() -> void:
-	var env_node := get_node_or_null("WorldEnvironment") as WorldEnvironment
-	if env_node == null:
-		env_node = WorldEnvironment.new()
-		env_node.name = "WorldEnvironment"
-		add_child(env_node)
+	world_env = get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world_env == null:
+		world_env = WorldEnvironment.new()
+		world_env.name = "WorldEnvironment"
+		add_child(world_env)
 
-	var env := Environment.new()
+	env_res = Environment.new()
 
 	# 1. Apple Keynote Showroom Sky Gradient
-	env.background_mode = Environment.BG_SKY
+	env_res.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.965, 0.968, 0.976)
-	sky_mat.sky_horizon_color = Color(0.885, 0.895, 0.92)
-	sky_mat.ground_bottom_color = Color(0.84, 0.85, 0.88)
-	sky_mat.ground_horizon_color = Color(0.885, 0.895, 0.92)
-	sky_mat.sun_angle_max = 25.0
-	sky.sky_material = sky_mat
-	env.sky = sky
+	sky_proc_mat = ProceduralSkyMaterial.new()
+	sky_proc_mat.sky_top_color = Color(0.965, 0.968, 0.976)
+	sky_proc_mat.sky_horizon_color = Color(0.885, 0.895, 0.92)
+	sky_proc_mat.ground_bottom_color = Color(0.84, 0.85, 0.88)
+	sky_proc_mat.ground_horizon_color = Color(0.885, 0.895, 0.92)
+	sky_proc_mat.sun_angle_max = 25.0
+	sky.sky_material = sky_proc_mat
+	env_res.sky = sky
 
 	# 2. Balanced Studio Ambient Light
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.88, 0.89, 0.92)
-	env.ambient_light_energy = 0.65
+	env_res.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env_res.ambient_light_color = Color(0.88, 0.89, 0.92)
+	env_res.ambient_light_energy = 0.65
 
 	# 3. Tonemapping & SSAO Photorealism
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.04
-	env.ssao_enabled = true
-	env.ssao_radius = 1.6
-	env.ssao_intensity = 1.3
-	env.ssao_power = 1.4
-	env.ssr_enabled = true
-	env.ssr_max_steps = 32
-	env.glow_enabled = false
+	env_res.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env_res.tonemap_exposure = 1.04
+	env_res.ssao_enabled = true
+	env_res.ssao_radius = 1.6
+	env_res.ssao_intensity = 1.3
+	env_res.ssao_power = 1.4
+	env_res.ssr_enabled = true
+	env_res.ssr_max_steps = 32
+	env_res.glow_enabled = false
+	env_res.glow_bloom = 0.18
+	env_res.glow_intensity = 0.60
+	env_res.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 
-	env_node.environment = env
+	world_env.environment = env_res
 
 	# 4. Warm-Neutral Key Directional Light
-	var dir_light := get_node_or_null("DirectionalLight3D") as DirectionalLight3D
+	dir_light = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if dir_light == null:
 		dir_light = DirectionalLight3D.new()
 		dir_light.name = "DirectionalLight3D"
@@ -137,7 +223,7 @@ func _setup_pure_light_studio() -> void:
 	dir_light.shadow_opacity = 0.65
 
 	# 5. Soft Studio Fill Light
-	var fill_light := DirectionalLight3D.new()
+	fill_light = DirectionalLight3D.new()
 	fill_light.light_color = Color(0.92, 0.94, 0.98)
 	fill_light.light_energy = 0.45
 	fill_light.rotation = Vector3(deg_to_rad(-12.0), deg_to_rad(-35.0), 0.0)
@@ -145,7 +231,7 @@ func _setup_pure_light_studio() -> void:
 	add_child(fill_light)
 
 	# 6. Rim Backlight
-	var rim_light := DirectionalLight3D.new()
+	rim_light = DirectionalLight3D.new()
 	rim_light.light_color = Color(0.98, 0.98, 1.0)
 	rim_light.light_energy = 0.40
 	rim_light.rotation = Vector3(deg_to_rad(25.0), deg_to_rad(155.0), 0.0)
@@ -164,7 +250,7 @@ func _setup_showroom_bay() -> void:
 	floor_mesh.size = Vector2(80.0, 80.0)
 	floor_inst.mesh = floor_mesh
 	floor_inst.position = Vector3(0, 0.0, 0)
-	var mat_floor := StandardMaterial3D.new()
+	mat_floor = StandardMaterial3D.new()
 	mat_floor.albedo_color = Color(0.905, 0.91, 0.925)
 	mat_floor.metallic = 0.02
 	mat_floor.roughness = 0.45
@@ -172,12 +258,12 @@ func _setup_showroom_bay() -> void:
 	bay.add_child(floor_inst)
 
 	# 2. Architectural Gantry Frame
-	var mat_gantry := StandardMaterial3D.new()
+	mat_gantry = StandardMaterial3D.new()
 	mat_gantry.albedo_color = Color(0.24, 0.25, 0.28)
 	mat_gantry.metallic = 0.85
 	mat_gantry.roughness = 0.28
 
-	var mat_gantry_accent := StandardMaterial3D.new()
+	mat_gantry_accent = StandardMaterial3D.new()
 	mat_gantry_accent.albedo_color = Color(0.78, 0.80, 0.85)
 	mat_gantry_accent.metallic = 0.95
 	mat_gantry_accent.roughness = 0.18
@@ -295,6 +381,11 @@ func _setup_rigs() -> void:
 	rig_c.telemetry_updated.connect(_on_rig_c_telemetry)
 	rig_b.telemetry_updated.connect(_on_rig_b_telemetry)
 
+	# Connect interactive pin click signals
+	rig_a.pin_clicked.connect(_on_pin_clicked)
+	rig_c.pin_clicked.connect(_on_pin_clicked)
+	rig_b.pin_clicked.connect(_on_pin_clicked)
+
 
 func _build_liquid_glass_ui() -> void:
 	ui_layer = CanvasLayer.new()
@@ -307,19 +398,19 @@ func _build_liquid_glass_ui() -> void:
 	ui_layer.add_child(root)
 
 	# 1. FLOATING HEADER PILL (Centered with balanced padding and space distribution)
-	var header_panel := _create_liquid_glass_panel(Vector2(0, 16), Vector2(980, 68), 24)
+	header_panel = _create_liquid_glass_panel(Vector2(0, 16), Vector2(1180, 68), 24)
 	header_panel.anchor_left = 0.5
 	header_panel.anchor_right = 0.5
-	header_panel.offset_left = -490.0
-	header_panel.offset_right = 490.0
+	header_panel.offset_left = -590.0
+	header_panel.offset_right = 590.0
 	header_panel.offset_top = 16.0
 	header_panel.offset_bottom = 84.0
 	root.add_child(header_panel)
 
 	var header_margin := MarginContainer.new()
 	header_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	header_margin.add_theme_constant_override("margin_left", 32)
-	header_margin.add_theme_constant_override("margin_right", 24)
+	header_margin.add_theme_constant_override("margin_left", 28)
+	header_margin.add_theme_constant_override("margin_right", 20)
 	header_margin.add_theme_constant_override("margin_top", 10)
 	header_margin.add_theme_constant_override("margin_bottom", 10)
 	header_panel.add_child(header_margin)
@@ -327,7 +418,7 @@ func _build_liquid_glass_ui() -> void:
 	var header_box := HBoxContainer.new()
 	header_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	header_box.add_theme_constant_override("separation", 16)
+	header_box.add_theme_constant_override("separation", 12)
 	header_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	header_margin.add_child(header_box)
 
@@ -336,22 +427,16 @@ func _build_liquid_glass_ui() -> void:
 	title_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	title_vbox.add_theme_constant_override("separation", 3)
 
-	var main_title := Label.new()
-	main_title.text = "Scissor Pantograph Verification  ·  Golden Rule of Mechanics"
-	main_title.add_theme_font_size_override("font_size", 14)
-	main_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
+	main_title = _create_title_label("Scissor Pantograph Verification  ·  Golden Rule of Mechanics", 14)
 	title_vbox.add_child(main_title)
 
-	var sub_title := Label.new()
-	sub_title.text = "Sim-to-Real Multi-Linkage Physics Workbench  ·  Karen Ghardashyan"
-	sub_title.add_theme_font_size_override("font_size", 11)
-	sub_title.add_theme_color_override("font_color", Color(0.40, 0.42, 0.48))
+	sub_title = _create_subtitle_label("Sim-to-Real Multi-Linkage Physics Workbench  ·  Karen Ghardashyan", 11)
 	title_vbox.add_child(sub_title)
 
 	header_box.add_child(title_vbox)
 
 	# Header Action Pills
-	var btn_formulas := _create_liquid_button("Formulas & Theory")
+	btn_formulas = _create_liquid_button("Formulas & Theory")
 	btn_formulas.custom_minimum_size = Vector2(138, 32)
 	var blue_accent := Color(0.0, 0.443, 0.89)
 	btn_formulas.add_theme_color_override("font_color", blue_accent)
@@ -365,12 +450,12 @@ func _build_liquid_glass_ui() -> void:
 	)
 	header_box.add_child(btn_formulas)
 
-	var btn_reset_cam := _create_liquid_button("Reset View")
+	btn_reset_cam = _create_liquid_button("Reset View")
 	btn_reset_cam.custom_minimum_size = Vector2(92, 30)
 	btn_reset_cam.pressed.connect(func(): camera.reset_camera())
 	header_box.add_child(btn_reset_cam)
 
-	var btn_slowmo := _create_liquid_button("Slow Motion")
+	btn_slowmo = _create_liquid_button("Slow Motion")
 	btn_slowmo.custom_minimum_size = Vector2(92, 30)
 	btn_slowmo.toggle_mode = true
 	btn_slowmo.toggled.connect(func(toggled_on: bool):
@@ -380,7 +465,7 @@ func _build_liquid_glass_ui() -> void:
 	)
 	header_box.add_child(btn_slowmo)
 
-	var btn_lasers := _create_liquid_button("Hide Lasers")
+	btn_lasers = _create_liquid_button("Hide Lasers")
 	btn_lasers.custom_minimum_size = Vector2(92, 30)
 	btn_lasers.toggle_mode = true
 	btn_lasers.button_pressed = true
@@ -393,8 +478,32 @@ func _build_liquid_glass_ui() -> void:
 	)
 	header_box.add_child(btn_lasers)
 
+	btn_theme_toggle = _create_liquid_button("🌙 Dark Theme")
+	btn_theme_toggle.custom_minimum_size = Vector2(112, 30)
+	btn_theme_toggle.pressed.connect(func():
+		_apply_theme(not is_dark_theme)
+	)
+	header_box.add_child(btn_theme_toggle)
+
+	btn_focus_toggle = _create_liquid_button("👁️ Focus Mode")
+	btn_focus_toggle.custom_minimum_size = Vector2(98, 30)
+	btn_focus_toggle.pressed.connect(func():
+		_set_focus_mode(not is_focus_mode)
+	)
+	header_box.add_child(btn_focus_toggle)
+
+	# Floating button to restore UI when in Focus Mode
+	btn_restore_ui = _create_liquid_button("⛶ Show UI")
+	btn_restore_ui.position = Vector2(24, 20)
+	btn_restore_ui.custom_minimum_size = Vector2(108, 34)
+	btn_restore_ui.visible = false
+	btn_restore_ui.pressed.connect(func():
+		_set_focus_mode(false)
+	)
+	root.add_child(btn_restore_ui)
+
 	# 2. LEFT MINIMALIST CONTROL CARD
-	var left_panel := _create_liquid_glass_panel(Vector2(24, 96), Vector2(336, 750), 22)
+	left_panel = _create_liquid_glass_panel(Vector2(24, 96), Vector2(336, 750), 22)
 	root.add_child(left_panel)
 
 	var left_margin := MarginContainer.new()
@@ -409,10 +518,7 @@ func _build_liquid_glass_ui() -> void:
 	left_vbox.add_theme_constant_override("separation", 10)
 	left_margin.add_child(left_vbox)
 
-	var panel_title := Label.new()
-	panel_title.text = "Simulation Parameters"
-	panel_title.add_theme_font_size_override("font_size", 15)
-	panel_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
+	var panel_title := _create_title_label("Simulation Parameters", 15)
 	left_vbox.add_child(panel_title)
 
 	var sep1 := HSeparator.new()
@@ -420,11 +526,8 @@ func _build_liquid_glass_ui() -> void:
 
 	# 1. Suspended Mass Slider
 	var mass_hbox := HBoxContainer.new()
-	var mass_title := Label.new()
-	mass_title.text = "Suspended Mass (m)"
+	var mass_title := _create_label_cell("Suspended Mass (m)")
 	mass_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mass_title.add_theme_font_size_override("font_size", 12)
-	mass_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
 	mass_hbox.add_child(mass_title)
 
 	mass_val_label = Label.new()
@@ -445,11 +548,8 @@ func _build_liquid_glass_ui() -> void:
 
 	# 2. Spring Constant Slider
 	var k_hbox := HBoxContainer.new()
-	var k_title := Label.new()
-	k_title.text = "Spring Stiffness (k)"
+	var k_title := _create_label_cell("Spring Stiffness (k)")
 	k_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	k_title.add_theme_font_size_override("font_size", 12)
-	k_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
 	k_hbox.add_child(k_title)
 
 	stiffness_val_label = Label.new()
@@ -470,11 +570,8 @@ func _build_liquid_glass_ui() -> void:
 
 	# 3. Transmission Efficiency Slider
 	var eta_hbox := HBoxContainer.new()
-	var eta_title := Label.new()
-	eta_title.text = "Efficiency (η)"
+	var eta_title := _create_label_cell("Efficiency (η)")
 	eta_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	eta_title.add_theme_font_size_override("font_size", 12)
-	eta_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
 	eta_hbox.add_child(eta_title)
 
 	efficiency_val_label = Label.new()
@@ -495,11 +592,8 @@ func _build_liquid_glass_ui() -> void:
 
 	# 4. Gravity Variable (g) Slider & Presets
 	var g_hbox := HBoxContainer.new()
-	var g_title := Label.new()
-	g_title.text = "Gravity Acceleration (g)"
+	var g_title := _create_label_cell("Gravity Acceleration (g)")
 	g_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	g_title.add_theme_font_size_override("font_size", 12)
-	g_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
 	g_hbox.add_child(g_title)
 
 	gravity_val_label = Label.new()
@@ -575,16 +669,14 @@ func _build_liquid_glass_ui() -> void:
 		if live_graph != null:
 			live_graph.set_link_mass(w)
 	)
+	theme_checkboxes.append(self_weight_check)
 	left_vbox.add_child(self_weight_check)
 
 	var sep2 := HSeparator.new()
 	left_vbox.add_child(sep2)
 
 	# 6. DYNAMIC OSCILLATIONS CONTROLS
-	var osc_title := Label.new()
-	osc_title.text = "Harmonic Oscillations"
-	osc_title.add_theme_font_size_override("font_size", 13)
-	osc_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
+	var osc_title := _create_title_label("Harmonic Oscillations", 13)
 	left_vbox.add_child(osc_title)
 
 	oscillations_check = CheckBox.new()
@@ -601,14 +693,12 @@ func _build_liquid_glass_ui() -> void:
 		rig_c.set_oscillations_enabled(pressed)
 		rig_b.set_oscillations_enabled(pressed)
 	)
+	theme_checkboxes.append(oscillations_check)
 	left_vbox.add_child(oscillations_check)
 
 	var damp_hbox := HBoxContainer.new()
-	var damp_title := Label.new()
-	damp_title.text = "Damping Ratio (ζ)"
+	var damp_title := _create_label_cell("Damping Ratio (ζ)")
 	damp_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	damp_title.add_theme_font_size_override("font_size", 12)
-	damp_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
 	damp_hbox.add_child(damp_title)
 
 	damping_val_label = Label.new()
@@ -649,14 +739,20 @@ func _build_liquid_glass_ui() -> void:
 	)
 	left_vbox.add_child(btn_jolt)
 
-	# 3. RIGHT COMPARISON CARD (4 Columns: METRIC | RIG A | RIG C | RIG B)
-	var right_panel := _create_liquid_glass_panel(Vector2(1240, 96), Vector2(336, 750), 22)
+	# 3. RIGHT COMPARISON CARD & JOINT INSPECTOR (Tabbed Liquid Glass Card)
+	right_panel = _create_liquid_glass_panel(Vector2(0, 96), Vector2(350, 750), 22)
+	right_panel.anchor_left = 1.0
+	right_panel.anchor_right = 1.0
+	right_panel.offset_left = -374.0
+	right_panel.offset_right = -24.0
+	right_panel.offset_top = 96.0
+	right_panel.offset_bottom = 846.0
 	root.add_child(right_panel)
 
 	var right_margin := MarginContainer.new()
 	right_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	right_margin.add_theme_constant_override("margin_top", 20)
-	right_margin.add_theme_constant_override("margin_bottom", 20)
+	right_margin.add_theme_constant_override("margin_top", 18)
+	right_margin.add_theme_constant_override("margin_bottom", 18)
 	right_margin.add_theme_constant_override("margin_left", 16)
 	right_margin.add_theme_constant_override("margin_right", 16)
 	right_panel.add_child(right_margin)
@@ -665,14 +761,38 @@ func _build_liquid_glass_ui() -> void:
 	right_vbox.add_theme_constant_override("separation", 10)
 	right_margin.add_child(right_vbox)
 
-	var telemetry_title := Label.new()
-	telemetry_title.text = "Hardware Telemetry"
-	telemetry_title.add_theme_font_size_override("font_size", 15)
-	telemetry_title.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
-	right_vbox.add_child(telemetry_title)
+	# Tab Switcher Header (All Rigs Telemetry vs Joint Force Inspector)
+	var tab_bar := HBoxContainer.new()
+	tab_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tab_bar.add_theme_constant_override("separation", 8)
+	right_vbox.add_child(tab_bar)
+
+	btn_tab_telemetry = _create_liquid_button("📊 All Rigs")
+	btn_tab_telemetry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_tab_telemetry.custom_minimum_size = Vector2(0, 30)
+	btn_tab_telemetry.pressed.connect(func(): _show_right_tab(0))
+	tab_bar.add_child(btn_tab_telemetry)
+
+	btn_tab_joint = _create_liquid_button("🔬 Joint Inspector")
+	btn_tab_joint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_tab_joint.custom_minimum_size = Vector2(0, 30)
+	btn_tab_joint.pressed.connect(func(): _show_right_tab(1))
+	tab_bar.add_child(btn_tab_joint)
+
+	var sep_tab := HSeparator.new()
+	right_vbox.add_child(sep_tab)
+
+	# --- TAB 1: TELEMETRY VIEW ---
+	telemetry_view = VBoxContainer.new()
+	telemetry_view.add_theme_constant_override("separation", 10)
+	telemetry_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_vbox.add_child(telemetry_view)
+
+	var telemetry_title := _create_title_label("Hardware Telemetry", 14)
+	telemetry_view.add_child(telemetry_title)
 
 	var sep4 := HSeparator.new()
-	right_vbox.add_child(sep4)
+	telemetry_view.add_child(sep4)
 
 	# Hardware Metrics Table: 4 columns
 	var table := GridContainer.new()
@@ -680,7 +800,7 @@ func _build_liquid_glass_ui() -> void:
 	table.add_theme_constant_override("h_separation", 8)
 	table.add_theme_constant_override("v_separation", 6)
 	table.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_vbox.add_child(table)
+	telemetry_view.add_child(table)
 
 	# Column Headers
 	table.add_child(_create_header_cell("METRIC"))
@@ -743,56 +863,124 @@ func _build_liquid_glass_ui() -> void:
 	table.add_child(label_b_work)
 
 	var sep5 := HSeparator.new()
-	right_vbox.add_child(sep5)
+	telemetry_view.add_child(sep5)
 
 	# Extension Gauges (3 Rigs)
-	var bar_title := Label.new()
-	bar_title.text = "Extension Comparison"
-	bar_title.add_theme_font_size_override("font_size", 12)
-	bar_title.add_theme_color_override("font_color", Color(0.17, 0.17, 0.19))
-	right_vbox.add_child(bar_title)
+	var bar_title := _create_header_cell("Extension Comparison")
+	telemetry_view.add_child(bar_title)
 
 	# Bar A
 	var bar_a_lbl := Label.new()
 	bar_a_lbl.text = "Rig A [Blue] (n=3) Span:"
 	bar_a_lbl.add_theme_font_size_override("font_size", 11)
 	bar_a_lbl.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
-	right_vbox.add_child(bar_a_lbl)
+	telemetry_view.add_child(bar_a_lbl)
 
 	ratio_bar_a = ProgressBar.new()
 	ratio_bar_a.min_value = 0.0
 	ratio_bar_a.max_value = 65.0
 	ratio_bar_a.show_percentage = true
 	_style_progress_bar(ratio_bar_a, Color(0.0, 0.443, 0.89))
-	right_vbox.add_child(ratio_bar_a)
+	telemetry_view.add_child(ratio_bar_a)
 
 	# Bar C
 	var bar_c_lbl := Label.new()
 	bar_c_lbl.text = "Rig C [Green] (1:2:3) Span:"
 	bar_c_lbl.add_theme_font_size_override("font_size", 11)
 	bar_c_lbl.add_theme_color_override("font_color", Color(0.19, 0.82, 0.35))
-	right_vbox.add_child(bar_c_lbl)
+	telemetry_view.add_child(bar_c_lbl)
 
 	ratio_bar_c = ProgressBar.new()
 	ratio_bar_c.min_value = 0.0
 	ratio_bar_c.max_value = 65.0
 	ratio_bar_c.show_percentage = true
 	_style_progress_bar(ratio_bar_c, Color(0.19, 0.82, 0.35))
-	right_vbox.add_child(ratio_bar_c)
+	telemetry_view.add_child(ratio_bar_c)
 
 	# Bar B
 	var bar_b_lbl := Label.new()
 	bar_b_lbl.text = "Rig B [Orange] (n=5) Span:"
 	bar_b_lbl.add_theme_font_size_override("font_size", 11)
 	bar_b_lbl.add_theme_color_override("font_color", Color(1.0, 0.42, 0.05))
-	right_vbox.add_child(bar_b_lbl)
+	telemetry_view.add_child(bar_b_lbl)
 
 	ratio_bar_b = ProgressBar.new()
 	ratio_bar_b.min_value = 0.0
 	ratio_bar_b.max_value = 65.0
 	ratio_bar_b.show_percentage = true
 	_style_progress_bar(ratio_bar_b, Color(1.0, 0.42, 0.05))
-	right_vbox.add_child(ratio_bar_b)
+	telemetry_view.add_child(ratio_bar_b)
+
+	# --- TAB 2: JOINT INSPECTOR VIEW ---
+	joint_view = VBoxContainer.new()
+	joint_view.add_theme_constant_override("separation", 8)
+	joint_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	joint_view.visible = false
+	right_vbox.add_child(joint_view)
+
+	var joint_header_row := HBoxContainer.new()
+	joint_header_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	joint_view.add_child(joint_header_row)
+
+	joint_card_title = Label.new()
+	joint_card_title.text = "Select Any Pivot Pin in 3D"
+	joint_card_title.add_theme_font_size_override("font_size", 13)
+	joint_card_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	theme_labels_primary.append(joint_card_title)
+	joint_header_row.add_child(joint_card_title)
+
+	var btn_deselect := _create_liquid_button("✕ Deselect")
+	btn_deselect.custom_minimum_size = Vector2(76, 26)
+	btn_deselect.pressed.connect(func(): _deselect_pin())
+	joint_header_row.add_child(btn_deselect)
+
+	joint_card_desc = Label.new()
+	joint_card_desc.text = "Click any pivot pin on Rig A, C, or B to analyze 3D force vectors."
+	joint_card_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	joint_card_desc.add_theme_font_size_override("font_size", 10)
+	theme_labels_secondary.append(joint_card_desc)
+	joint_view.add_child(joint_card_desc)
+
+	var sep_j1 := HSeparator.new()
+	joint_view.add_child(sep_j1)
+
+	var jgrid := GridContainer.new()
+	jgrid.columns = 2
+	jgrid.add_theme_constant_override("h_separation", 10)
+	jgrid.add_theme_constant_override("v_separation", 6)
+	joint_view.add_child(jgrid)
+
+	jgrid.add_child(_create_body_label("Fy (Load / Tension):"))
+	joint_val_fy = _create_value_cell("0.0 N", Color(0.0, 0.443, 0.89))
+	jgrid.add_child(joint_val_fy)
+
+	jgrid.add_child(_create_body_label("Fx (Lateral Thrust):"))
+	joint_val_fx = _create_value_cell("0.0 N", Color(0.95, 0.22, 0.22))
+	jgrid.add_child(joint_val_fx)
+
+	jgrid.add_child(_create_body_label("Reaction Resultant R:"))
+	joint_val_res = _create_value_cell("0.0 N", Color(0.12, 0.75, 0.35))
+	jgrid.add_child(joint_val_res)
+
+	jgrid.add_child(_create_body_label("Coulomb Friction fk:"))
+	joint_val_fric = _create_value_cell("0.0 N", Color(0.95, 0.65, 0.05))
+	jgrid.add_child(joint_val_fric)
+
+	jgrid.add_child(_create_body_label("Scissor Half-Angle θ:"))
+	joint_val_theta = _create_value_cell("0.0°")
+	jgrid.add_child(joint_val_theta)
+
+	var sep_j2 := HSeparator.new()
+	joint_view.add_child(sep_j2)
+
+	var joint_note := Label.new()
+	joint_note.text = "Physics Insights:\n• Lateral thrust Fx = P / (2 tan θ) increases sharply at flat scissor angles.\n• Coulomb pin friction fk = μ · R resists extension/contraction.\n• Vector arrows in 3D are rendered with true depth priority and separated directions."
+	joint_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	joint_note.add_theme_font_size_override("font_size", 10)
+	theme_labels_secondary.append(joint_note)
+	joint_view.add_child(joint_note)
+
+	_show_right_tab(0)
 
 	# 4. BOTTOM FLOATING REALTIME 2D PLOT (Enhanced VisionOS Glass Card)
 	bottom_panel = _create_liquid_glass_panel(Vector2(0, 0), Vector2(920, 262), 22, 0.85)
@@ -822,10 +1010,7 @@ func _build_liquid_glass_ui() -> void:
 	var graph_bar := HBoxContainer.new()
 	graph_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	var graph_card_title := Label.new()
-	graph_card_title.text = "Theoretical Sim-to-Real Curves: L(m)"
-	graph_card_title.add_theme_font_size_override("font_size", 12)
-	graph_card_title.add_theme_color_override("font_color", Color(0.17, 0.17, 0.19))
+	var graph_card_title := _create_header_cell("Theoretical Sim-to-Real Curves: L(m)")
 	graph_bar.add_child(graph_card_title)
 
 	var bar_spacer := Control.new()
@@ -868,7 +1053,60 @@ func _build_liquid_glass_ui() -> void:
 	)
 	graph_vbox.add_child(live_graph)
 
-	# 5. FLOATING FORMULAS & THEORY MODAL WINDOW
+	# 5. MOBILE NAVIGATION DOCK (Thumb-Friendly VisionOS Capsule at Bottom)
+	mobile_dock = _create_liquid_glass_panel(Vector2(0, 0), Vector2(360, 52), 26, 0.88)
+	mobile_dock.name = "MobileDock"
+	mobile_dock.anchor_left = 0.5
+	mobile_dock.anchor_right = 0.5
+	mobile_dock.anchor_top = 1.0
+	mobile_dock.anchor_bottom = 1.0
+	mobile_dock.offset_left = -180.0
+	mobile_dock.offset_right = 180.0
+	mobile_dock.offset_top = -62.0
+	mobile_dock.offset_bottom = -10.0
+	mobile_dock.visible = false
+	root.add_child(mobile_dock)
+
+	var dock_margin := MarginContainer.new()
+	dock_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dock_margin.add_theme_constant_override("margin_left", 8)
+	dock_margin.add_theme_constant_override("margin_right", 8)
+	dock_margin.add_theme_constant_override("margin_top", 4)
+	dock_margin.add_theme_constant_override("margin_bottom", 4)
+	mobile_dock.add_child(dock_margin)
+
+	var dock_hbox := HBoxContainer.new()
+	dock_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	dock_hbox.add_theme_constant_override("separation", 6)
+	dock_margin.add_child(dock_hbox)
+
+	btn_mob_controls = _create_liquid_button("⚙️ Controls")
+	btn_mob_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_controls.pressed.connect(func(): _toggle_mobile_drawer(left_panel))
+	dock_hbox.add_child(btn_mob_controls)
+
+	btn_mob_telemetry = _create_liquid_button("📊 Telemetry")
+	btn_mob_telemetry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_telemetry.pressed.connect(func():
+		_show_right_tab(0)
+		_toggle_mobile_drawer(right_panel)
+	)
+	dock_hbox.add_child(btn_mob_telemetry)
+
+	btn_mob_graph = _create_liquid_button("📈 Curves")
+	btn_mob_graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_graph.pressed.connect(func(): _toggle_mobile_drawer(bottom_panel))
+	dock_hbox.add_child(btn_mob_graph)
+
+	btn_mob_joint = _create_liquid_button("🔬 Joint")
+	btn_mob_joint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_joint.pressed.connect(func():
+		_show_right_tab(1)
+		_toggle_mobile_drawer(right_panel)
+	)
+	dock_hbox.add_child(btn_mob_joint)
+
+	# 6. FLOATING FORMULAS & THEORY MODAL WINDOW
 	_build_formulas_modal(root)
 
 
@@ -1081,9 +1319,10 @@ func _create_liquid_glass_panel(pos: Vector2, size: Vector2, radius: int = 22, b
 	panel.custom_minimum_size = size
 	panel.size = size
 
+	var is_dark: bool = is_dark_theme
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(1.0, 1.0, 1.0, bg_alpha)
-	style.border_color = Color(1.0, 1.0, 1.0, 0.8)
+	style.bg_color = Color(0.07, 0.08, 0.12, 0.82) if is_dark else Color(1.0, 1.0, 1.0, bg_alpha)
+	style.border_color = Color(0.35, 0.40, 0.55, 0.40) if is_dark else Color(1.0, 1.0, 1.0, 0.8)
 	style.border_width_left = 1
 	style.border_width_top = 1
 	style.border_width_right = 1
@@ -1093,11 +1332,12 @@ func _create_liquid_glass_panel(pos: Vector2, size: Vector2, radius: int = 22, b
 	style.corner_radius_bottom_left = radius
 	style.corner_radius_bottom_right = radius
 	style.corner_detail = 12
-	style.shadow_color = Color(0.0, 0.0, 0.0, 0.06)
+	style.shadow_color = Color(0.0, 0.0, 0.0, 0.35) if is_dark else Color(0.0, 0.0, 0.0, 0.06)
 	style.shadow_size = 14
 	style.shadow_offset = Vector2(0, 5)
 
 	panel.add_theme_stylebox_override("panel", style)
+	theme_panels.append(panel)
 	return panel
 
 
@@ -1107,16 +1347,17 @@ func _create_liquid_button(text: String) -> Button:
 	btn.custom_minimum_size = Vector2(105, 30)
 	btn.add_theme_font_size_override("font_size", 11)
 
-	var dark_charcoal := Color(0.114, 0.114, 0.122)
-	btn.add_theme_color_override("font_color", dark_charcoal)
-	btn.add_theme_color_override("font_pressed_color", dark_charcoal)
-	btn.add_theme_color_override("font_hover_color", dark_charcoal)
-	btn.add_theme_color_override("font_focus_color", dark_charcoal)
-	btn.add_theme_color_override("font_hover_pressed_color", dark_charcoal)
+	var is_dark: bool = is_dark_theme
+	var text_col: Color = Color(0.92, 0.94, 0.98) if is_dark else Color(0.114, 0.114, 0.122)
+	btn.add_theme_color_override("font_color", text_col)
+	btn.add_theme_color_override("font_pressed_color", text_col)
+	btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0) if is_dark else text_col)
+	btn.add_theme_color_override("font_focus_color", text_col)
+	btn.add_theme_color_override("font_hover_pressed_color", text_col)
 
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(1.0, 1.0, 1.0, 0.65)
-	normal.border_color = Color(1.0, 1.0, 1.0, 0.9)
+	normal.bg_color = Color(0.12, 0.14, 0.20, 0.80) if is_dark else Color(1.0, 1.0, 1.0, 0.65)
+	normal.border_color = Color(0.30, 0.35, 0.48, 0.50) if is_dark else Color(1.0, 1.0, 1.0, 0.9)
 	normal.border_width_left = 1
 	normal.border_width_top = 1
 	normal.border_width_right = 1
@@ -1126,14 +1367,14 @@ func _create_liquid_button(text: String) -> Button:
 	normal.corner_radius_bottom_left = 14
 	normal.corner_radius_bottom_right = 14
 	normal.corner_detail = 10
-	normal.shadow_color = Color(0.0, 0.0, 0.0, 0.04)
+	normal.shadow_color = Color(0.0, 0.0, 0.0, 0.20) if is_dark else Color(0.0, 0.0, 0.0, 0.04)
 	normal.shadow_size = 6
 	normal.shadow_offset = Vector2(0, 2)
 	btn.add_theme_stylebox_override("normal", normal)
 
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(1.0, 1.0, 1.0, 0.9)
-	hover.border_color = Color(0.0, 0.443, 0.89, 0.4)
+	hover.bg_color = Color(0.18, 0.21, 0.30, 0.95) if is_dark else Color(1.0, 1.0, 1.0, 0.9)
+	hover.border_color = Color(1.0, 0.55, 0.15, 0.80) if is_dark else Color(0.0, 0.443, 0.89, 0.4)
 	hover.border_width_left = 1
 	hover.border_width_top = 1
 	hover.border_width_right = 1
@@ -1143,14 +1384,14 @@ func _create_liquid_button(text: String) -> Button:
 	hover.corner_radius_bottom_left = 14
 	hover.corner_radius_bottom_right = 14
 	hover.corner_detail = 10
-	hover.shadow_color = Color(0.0, 0.0, 0.0, 0.08)
+	hover.shadow_color = Color(1.0, 0.55, 0.15, 0.25) if is_dark else Color(0.0, 0.0, 0.0, 0.08)
 	hover.shadow_size = 8
 	hover.shadow_offset = Vector2(0, 3)
 	btn.add_theme_stylebox_override("hover", hover)
 
 	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.0, 0.443, 0.89, 0.15)
-	pressed.border_color = Color(0.0, 0.443, 0.89, 0.80)
+	pressed.bg_color = Color(1.0, 0.55, 0.15, 0.20) if is_dark else Color(0.0, 0.443, 0.89, 0.15)
+	pressed.border_color = Color(1.0, 0.55, 0.15, 1.0) if is_dark else Color(0.0, 0.443, 0.89, 0.80)
 	pressed.border_width_left = 1
 	pressed.border_width_top = 1
 	pressed.border_width_right = 1
@@ -1160,14 +1401,11 @@ func _create_liquid_button(text: String) -> Button:
 	pressed.corner_radius_bottom_left = 14
 	pressed.corner_radius_bottom_right = 14
 	pressed.corner_detail = 10
-	pressed.shadow_color = Color(0.0, 0.443, 0.89, 0.12)
-	pressed.shadow_size = 6
-	pressed.shadow_offset = Vector2(0, 2)
 	btn.add_theme_stylebox_override("pressed", pressed)
 
 	var focus := StyleBoxFlat.new()
 	focus.draw_center = false
-	focus.border_color = Color(0.0, 0.443, 0.89, 0.50)
+	focus.border_color = Color(1.0, 0.55, 0.15, 0.70) if is_dark else Color(0.0, 0.443, 0.89, 0.50)
 	focus.border_width_left = 1
 	focus.border_width_top = 1
 	focus.border_width_right = 1
@@ -1178,12 +1416,13 @@ func _create_liquid_button(text: String) -> Button:
 	focus.corner_radius_bottom_right = 14
 	btn.add_theme_stylebox_override("focus", focus)
 
+	theme_buttons.append(btn)
 	return btn
 
 
 func _style_tech_slider(slider: HSlider) -> void:
 	var track := StyleBoxFlat.new()
-	track.bg_color = Color(0.84, 0.85, 0.88)
+	track.bg_color = Color(0.18, 0.20, 0.28) if is_dark_theme else Color(0.84, 0.85, 0.88)
 	track.corner_radius_top_left = 3
 	track.corner_radius_top_right = 3
 	track.corner_radius_bottom_left = 3
@@ -1198,11 +1437,12 @@ func _style_tech_slider(slider: HSlider) -> void:
 	active.corner_radius_bottom_left = 3
 	slider.add_theme_stylebox_override("grabber_area", active)
 	slider.add_theme_stylebox_override("grabber_area_highlight", active)
+	theme_sliders.append(slider)
 
 
 func _style_progress_bar(bar: ProgressBar, fill_color: Color) -> void:
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.86, 0.87, 0.90)
+	bg.bg_color = Color(0.15, 0.17, 0.24) if is_dark_theme else Color(0.86, 0.87, 0.90)
 	bg.corner_radius_top_left = 5
 	bg.corner_radius_top_right = 5
 	bg.corner_radius_bottom_left = 5
@@ -1215,12 +1455,15 @@ func _style_progress_bar(bar: ProgressBar, fill_color: Color) -> void:
 	fill.corner_radius_bottom_left = 5
 	bar.add_theme_stylebox_override("fill", fill)
 
+	theme_progress_bars.append({"bar": bar, "fill_color": fill_color})
+
 
 func _create_header_cell(text: String) -> Label:
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.add_theme_font_size_override("font_size", 10)
-	lbl.add_theme_color_override("font_color", Color(0.17, 0.17, 0.19))
+	lbl.add_theme_color_override("font_color", Color(0.72, 0.75, 0.84) if is_dark_theme else Color(0.17, 0.17, 0.19))
+	theme_labels_secondary.append(lbl)
 	return lbl
 
 
@@ -1228,7 +1471,35 @@ func _create_label_cell(text: String) -> Label:
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.add_theme_font_size_override("font_size", 11)
-	lbl.add_theme_color_override("font_color", Color(0.114, 0.114, 0.122))
+	lbl.add_theme_color_override("font_color", Color(0.95, 0.96, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122))
+	theme_labels_primary.append(lbl)
+	return lbl
+
+
+func _create_title_label(text: String, font_size: int = 15) -> Label:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_color_override("font_color", Color(0.95, 0.96, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122))
+	theme_labels_primary.append(lbl)
+	return lbl
+
+
+func _create_subtitle_label(text: String, font_size: int = 11) -> Label:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_color_override("font_color", Color(0.65, 0.68, 0.76) if is_dark_theme else Color(0.40, 0.42, 0.48))
+	theme_labels_secondary.append(lbl)
+	return lbl
+
+
+func _create_body_label(text: String, font_size: int = 11) -> Label:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_color_override("font_color", Color(0.85, 0.88, 0.94) if is_dark_theme else Color(0.114, 0.114, 0.122))
+	theme_labels_primary.append(lbl)
 	return lbl
 
 
@@ -1238,3 +1509,747 @@ func _create_value_cell(text: String, color: Color = Color(0.114, 0.114, 0.122))
 	lbl.add_theme_font_size_override("font_size", 11)
 	lbl.add_theme_color_override("font_color", color)
 	return lbl
+
+
+# --- 3D Joint Force Vector Visualizer Engine ---
+func _build_force_visualizer() -> void:
+	force_visualizer_root = Node3D.new()
+	force_visualizer_root.name = "ForceVisualizerRoot"
+	force_visualizer_root.visible = false
+	add_child(force_visualizer_root)
+
+	# 1. Glowing Pin Highlight Ring
+	pin_highlight_ring = MeshInstance3D.new()
+	pin_highlight_ring.name = "PinHighlightRing"
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius = 0.075
+	ring_mesh.outer_radius = 0.092
+	ring_mesh.rings = 28
+	ring_mesh.ring_segments = 14
+	pin_highlight_ring.mesh = ring_mesh
+	pin_highlight_ring.rotation.x = deg_to_rad(90)
+	mat_ring = StandardMaterial3D.new()
+	mat_ring.albedo_color = Color(1.0, 0.65, 0.15)
+	mat_ring.emission_enabled = false
+	mat_ring.roughness = 0.25
+	mat_ring.metallic = 0.70
+	pin_highlight_ring.material_override = mat_ring
+	force_visualizer_root.add_child(pin_highlight_ring)
+
+	# 2. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), F_fric (Pin Friction)
+	arrow_fy_data = _create_arrow_node("ArrowFy", Color(0.0, 0.44, 0.95))
+	arrow_fx_data = _create_arrow_node("ArrowFx", Color(0.95, 0.22, 0.22))
+	arrow_res_data = _create_arrow_node("ArrowResultant", Color(0.12, 0.75, 0.35))
+	arrow_fric_data = _create_arrow_node("ArrowFriction", Color(0.95, 0.65, 0.05))
+
+
+func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
+	var root := Node3D.new()
+	root.name = arrow_name
+	force_visualizer_root.add_child(root)
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = col
+	mat.roughness = 0.25
+	mat.metallic = 0.30
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.no_depth_test = true # Ensures always visible over 3D model!
+	mat.render_priority = 10 # Renders on top of rig meshes!
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+	var stem := MeshInstance3D.new()
+	stem.name = "Stem"
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.016
+	cyl.bottom_radius = 0.016
+	cyl.height = 1.0
+	cyl.radial_segments = 16
+	stem.mesh = cyl
+	stem.material_override = mat
+	root.add_child(stem)
+
+	var tip := MeshInstance3D.new()
+	tip.name = "Tip"
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 0.038
+	cone.height = 0.09
+	cone.radial_segments = 16
+	tip.mesh = cone
+	tip.material_override = mat
+	root.add_child(tip)
+
+	var lbl := Label3D.new()
+	lbl.name = "Label"
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.pixel_size = 0.0036
+	lbl.font_size = 24
+	lbl.shaded = false
+	lbl.no_depth_test = true
+	lbl.render_priority = 15
+	lbl.modulate = col
+	lbl.outline_size = 6
+	lbl.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
+	root.add_child(lbl)
+
+	return {
+		"root": root,
+		"stem": stem,
+		"tip": tip,
+		"label": lbl,
+		"mat": mat,
+		"base_color": col
+	}
+
+
+func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vector3, visual_length: float, label_text: String) -> void:
+	var root: Node3D = arrow_dict["root"]
+	if visual_length < 0.05 or dir_unit.length_squared() < 0.001:
+		root.visible = false
+		return
+	root.visible = true
+
+	var tip_len: float = 0.09
+	var stem_len: float = maxf(visual_length - tip_len, 0.01)
+
+	var dir: Vector3 = dir_unit.normalized()
+	var up_ref := Vector3.UP if absf(dir.y) < 0.95 else Vector3.FORWARD
+	var right := up_ref.cross(dir).normalized()
+	var forward := dir.cross(right).normalized()
+	var basis := Basis(right, dir, forward)
+
+	root.global_transform = Transform3D(basis, origin)
+
+	var stem: MeshInstance3D = arrow_dict["stem"]
+	stem.position = Vector3(0, stem_len * 0.5, 0)
+	stem.scale = Vector3(1.0, stem_len, 1.0)
+
+	var tip: MeshInstance3D = arrow_dict["tip"]
+	tip.position = Vector3(0, stem_len + tip_len * 0.5, 0)
+
+	var lbl: Label3D = arrow_dict["label"]
+	lbl.position = Vector3(0, stem_len + tip_len + 0.07, 0)
+	lbl.text = label_text
+
+
+func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
+	var m: float = rig.suspended_mass
+	var g: float = rig.gravity
+	var n: int = rig.n_stages
+	var link_m: float = rig.link_mass_per_stage
+	var theta: float = rig.current_theta # radians
+	var tan_theta: float = tan(clampf(theta, deg_to_rad(3.5), deg_to_rad(85.0)))
+	var mu: float = 0.20 # Coulomb pin friction coefficient
+
+	var F_y: float = 0.0
+	var F_x: float = 0.0
+	var R: float = 0.0
+	var F_fric: float = 0.0
+
+	var dir_fy := Vector3.ZERO
+	var dir_fx := Vector3.ZERO
+	var dir_res := Vector3.ZERO
+	var dir_fric := Vector3.ZERO
+
+	var title := ""
+	var desc := ""
+
+	if pin_idx == 0:
+		# Top Gantry Anchor
+		var p_tot: float = m * g + float(n) * link_m * g
+		F_y = p_tot
+		dir_fy = Vector3(0, 1, 0) # Points up (holding the load)
+
+		F_x = rig.tensile_force_T / (2.0 * tan_theta)
+		dir_fx = Vector3(1, 0, 0) # Top slider thrust
+
+		var raw_res := Vector3(F_x, F_y, 0.0)
+		R = raw_res.length()
+		dir_res = raw_res.normalized()
+		F_fric = mu * R
+		# Friction points along tangent: perpendicular to R
+		dir_fric = Vector3(-dir_res.y, dir_res.x, 0).normalized()
+
+		title = "%s · Top Gantry Pivot [Pin #0]" % rig.rig_name
+		desc = "Ceiling support reaction balancing total suspended mass + mechanism weight."
+	else:
+		var s: int = (pin_idx - 1) / 3
+		var type: int = (pin_idx - 1) % 3
+		var stages_below: float = float(n - 1 - s)
+		var p_below: float = m * g + stages_below * link_m * g
+		var p_stage: float = p_below + link_m * g * 0.5
+
+		if type == 0:
+			# Left Lateral Hinge
+			F_y = -p_stage * 0.5
+			dir_fy = Vector3(0, -1, 0) # Downward load
+
+			F_x = p_stage / (2.0 * tan_theta)
+			dir_fx = Vector3(-1, 0, 0) # Points left (outward thrust)
+
+			var raw_res := Vector3(-F_x, F_y, 0.0)
+			R = raw_res.length()
+			dir_res = raw_res.normalized()
+			F_fric = mu * R
+			dir_fric = Vector3(-dir_res.y, dir_res.x, 0).normalized()
+
+			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
+			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
+
+		elif type == 1:
+			# Right Lateral Hinge
+			F_y = -p_stage * 0.5
+			dir_fy = Vector3(0, -1, 0) # Downward load
+
+			F_x = p_stage / (2.0 * tan_theta)
+			dir_fx = Vector3(1, 0, 0) # Points right (outward thrust)
+
+			var raw_res := Vector3(F_x, F_y, 0.0)
+			R = raw_res.length()
+			dir_res = raw_res.normalized()
+			F_fric = mu * R
+			dir_fric = Vector3(dir_res.y, -dir_res.x, 0).normalized()
+
+			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
+			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
+
+		else:
+			# Central Hinge
+			if s == n - 1:
+				# Bottommost pin supporting mass
+				F_y = -m * g
+				dir_fy = Vector3(0, -1, 0)
+				F_x = 0.0
+				dir_fx = Vector3.ZERO
+				R = m * g
+				dir_res = Vector3(0, -1, 0)
+				F_fric = mu * R
+				dir_fric = Vector3(1, 0, 0) # Horizontal tangent on lower pin
+
+				title = "%s · Bottom Payload Suspension Pin [Pin #%d]" % [rig.rig_name, pin_idx]
+				desc = "Lowest pivot transmitting payload gravity directly into the bottom scissor stage."
+			else:
+				# Intermediate central hinge
+				F_y = -p_below
+				dir_fy = Vector3(0, -1, 0)
+				F_x = p_below / (2.0 * tan_theta)
+				dir_fx = Vector3(1, 0, 0) # Scissor cross-shear
+				var raw_res := Vector3(F_x * 0.45, F_y, 0.0)
+				R = raw_res.length()
+				dir_res = raw_res.normalized()
+				F_fric = mu * R
+				dir_fric = Vector3(-dir_res.y, dir_res.x, 0).normalized()
+
+				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
+				desc = "Intermediate coupling pivot transferring vertical load between consecutive scissor stages."
+
+	# Visual lengths with guaranteed readability:
+	# Even if force is small (e.g. 0.81 N), vis_len >= 0.38m!
+	var len_fy: float = clampf(0.38 + absf(F_y) * 0.034, 0.38, 1.05) if absf(F_y) > 0.01 else 0.0
+	var len_fx: float = clampf(0.38 + absf(F_x) * 0.034, 0.38, 1.05) if absf(F_x) > 0.01 else 0.0
+	var len_res: float = clampf(0.42 + R * 0.034, 0.42, 1.15) if R > 0.01 else 0.0
+	var len_fric: float = clampf(0.38 + F_fric * 0.055, 0.38, 0.85) if F_fric > 0.01 else 0.0
+
+	return {
+		"dir_fy": dir_fy,
+		"len_fy": len_fy,
+		"dir_fx": dir_fx,
+		"len_fx": len_fx,
+		"dir_res": dir_res,
+		"len_res": len_res,
+		"dir_fric": dir_fric,
+		"len_fric": len_fric,
+		"lbl_fy": "Fy = %+.2f N" % F_y,
+		"lbl_fx": "Fx = %+.2f N" % F_x,
+		"lbl_res": "R = %.2f N" % R,
+		"lbl_fric": "F_fric = %.2f N (μ=0.20)" % F_fric,
+		"F_y": F_y,
+		"F_x": F_x,
+		"R": R,
+		"F_fric": F_fric,
+		"theta_deg": rad_to_deg(theta),
+		"title": title,
+		"desc": desc
+	}
+
+
+func _update_force_visualizer() -> void:
+	if inspected_rig == null or not is_instance_valid(inspected_rig):
+		_deselect_pin()
+		return
+
+	var pin_pos: Vector3 = inspected_rig.get_pin_global_position(inspected_pin_idx)
+	pin_highlight_ring.global_position = pin_pos
+
+	var data: Dictionary = _calculate_joint_forces(inspected_rig, inspected_pin_idx)
+
+	# Fy, Fx, R originate at pin center
+	_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, data.len_fy, data.lbl_fy)
+	_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, data.len_fx, data.lbl_fx)
+	_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, data.len_res, data.lbl_res)
+
+	# F_fric originates on the front washer face of the pin (+0.065m Z) so it NEVER clips or collides with other arrows
+	var fric_origin: Vector3 = pin_pos + Vector3(0, 0, 0.065)
+	_update_arrow_vector(arrow_fric_data, fric_origin, data.dir_fric, data.len_fric, data.lbl_fric)
+
+	if joint_val_fy != null:
+		joint_card_title.text = data.title
+		joint_card_desc.text = data.desc
+		joint_val_fy.text = "%+.2f N  (Vertical Load / Reaction)" % data.F_y
+		joint_val_fx.text = "%+.2f N  (Lateral Scissor Thrust)" % data.F_x
+		joint_val_res.text = "%.2f N  (Joint Resultant Contact R)" % data.R
+		joint_val_fric.text = "%.2f N  (Coulomb Hinge Friction f_k)" % data.F_fric
+		joint_val_theta.text = "%.1f°  (Scissor Half-Angle θ)" % data.theta_deg
+
+
+func _on_pin_clicked(rig: PantographRig, pin_idx: int, _pos: Vector3) -> void:
+	if inspected_rig == rig and inspected_pin_idx == pin_idx:
+		_deselect_pin()
+	else:
+		inspected_rig = rig
+		inspected_pin_idx = pin_idx
+		force_visualizer_root.visible = true
+		_show_right_tab(1)
+		if is_mobile_layout:
+			if right_panel != null and not is_focus_mode:
+				_toggle_mobile_drawer(right_panel)
+				right_panel.visible = true
+				active_mobile_drawer = right_panel
+		_update_force_visualizer()
+
+
+func _deselect_pin() -> void:
+	inspected_rig = null
+	inspected_pin_idx = -1
+	if force_visualizer_root != null:
+		force_visualizer_root.visible = false
+	_show_right_tab(0)
+
+
+# --- Theme & Focus Mode Switching Logic ---
+func _set_focus_mode(focus: bool) -> void:
+	is_focus_mode = focus
+	if header_panel != null:
+		header_panel.visible = not focus
+	if left_panel != null:
+		left_panel.visible = (not focus) if not is_mobile_layout else false
+	if right_panel != null:
+		right_panel.visible = (not focus) if not is_mobile_layout else false
+	if bottom_panel != null:
+		bottom_panel.visible = (not focus) if not is_mobile_layout else false
+	if mobile_dock != null:
+		mobile_dock.visible = (not focus) if is_mobile_layout else false
+	if formulas_modal != null:
+		formulas_modal.visible = false
+	if btn_restore_ui != null:
+		btn_restore_ui.visible = focus
+	if btn_focus_toggle != null:
+		btn_focus_toggle.text = "Exit Focus" if focus else ("👁️ Focus Mode" if not is_mobile_layout else "👁")
+	if btn_restore_ui != null:
+		btn_restore_ui.visible = focus
+	if btn_focus_toggle != null:
+		btn_focus_toggle.text = "Exit Focus" if focus else ("👁️ Focus Mode" if not is_mobile_layout else "👁")
+
+
+func _apply_theme(is_dark: bool) -> void:
+	is_dark_theme = is_dark
+
+	# 1. WorldEnvironment Sky & Ambient Light
+	if sky_proc_mat != null:
+		if is_dark:
+			sky_proc_mat.sky_top_color = Color(0.04, 0.05, 0.08)
+			sky_proc_mat.sky_horizon_color = Color(0.08, 0.10, 0.16)
+			sky_proc_mat.ground_bottom_color = Color(0.02, 0.025, 0.04)
+			sky_proc_mat.ground_horizon_color = Color(0.06, 0.08, 0.12)
+		else:
+			sky_proc_mat.sky_top_color = Color(0.965, 0.968, 0.976)
+			sky_proc_mat.sky_horizon_color = Color(0.885, 0.895, 0.92)
+			sky_proc_mat.ground_bottom_color = Color(0.84, 0.85, 0.88)
+			sky_proc_mat.ground_horizon_color = Color(0.885, 0.895, 0.92)
+
+	if env_res != null:
+		if is_dark:
+			env_res.ambient_light_color = Color(0.18, 0.20, 0.28)
+			env_res.ambient_light_energy = 0.42
+			env_res.glow_enabled = true
+			env_res.glow_bloom = 0.06
+			env_res.glow_intensity = 0.28
+			env_res.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+		else:
+			env_res.ambient_light_color = Color(0.88, 0.89, 0.92)
+			env_res.ambient_light_energy = 0.65
+			env_res.glow_enabled = false
+
+	# 2. Directional Lights
+	if dir_light != null:
+		dir_light.light_color = Color(0.95, 0.96, 1.0) if is_dark else Color(1.0, 0.992, 0.98)
+		dir_light.light_energy = 0.95 if is_dark else 1.35
+	if fill_light != null:
+		fill_light.light_color = Color(0.25, 0.45, 0.70) if is_dark else Color(0.92, 0.94, 0.98)
+		fill_light.light_energy = 0.30 if is_dark else 0.45
+	if rim_light != null:
+		rim_light.light_color = Color(1.0, 0.55, 0.15) if is_dark else Color(0.98, 0.98, 1.0)
+		rim_light.light_energy = 0.90 if is_dark else 0.40
+
+	# 3. Showroom Bay Materials
+	if mat_floor != null:
+		mat_floor.albedo_color = Color(0.065, 0.075, 0.095) if is_dark else Color(0.905, 0.91, 0.925)
+		mat_floor.metallic = 0.22 if is_dark else 0.02
+		mat_floor.roughness = 0.35 if is_dark else 0.45
+	if mat_gantry != null:
+		mat_gantry.albedo_color = Color(0.12, 0.13, 0.16) if is_dark else Color(0.24, 0.25, 0.28)
+	if mat_gantry_accent != null:
+		mat_gantry_accent.albedo_color = Color(1.0, 0.55, 0.12) if is_dark else Color(0.78, 0.80, 0.85)
+		mat_gantry_accent.emission_enabled = is_dark
+		mat_gantry_accent.emission = Color(1.0, 0.55, 0.12) * 0.40 if is_dark else Color.BLACK
+
+	# 4. Rigs
+	if rig_a != null:
+		rig_a.set_dark_theme(is_dark)
+	if rig_c != null:
+		rig_c.set_dark_theme(is_dark)
+	if rig_b != null:
+		rig_b.set_dark_theme(is_dark)
+
+	# 5. LiveGraph
+	if live_graph != null:
+		live_graph.dark_theme = is_dark
+		live_graph.queue_redraw()
+
+	# 6. UI Panels StyleBoxes
+	var panel_bg := Color(0.07, 0.08, 0.12, 0.82) if is_dark else Color(1.0, 1.0, 1.0, 0.50)
+	var panel_border := Color(0.35, 0.40, 0.55, 0.40) if is_dark else Color(1.0, 1.0, 1.0, 0.80)
+	var panel_shadow := Color(0.0, 0.0, 0.0, 0.35) if is_dark else Color(0.0, 0.0, 0.0, 0.06)
+
+	for p in theme_panels:
+		var sb: StyleBoxFlat = p.get_theme_stylebox("panel") as StyleBoxFlat
+		if sb:
+			sb.bg_color = panel_bg
+			sb.border_color = panel_border
+			sb.shadow_color = panel_shadow
+
+	# 7. UI Buttons
+	var btn_normal_bg := Color(0.12, 0.14, 0.20, 0.80) if is_dark else Color(1.0, 1.0, 1.0, 0.65)
+	var btn_normal_border := Color(0.30, 0.35, 0.48, 0.50) if is_dark else Color(1.0, 1.0, 1.0, 0.90)
+	var btn_text_color := Color(0.92, 0.94, 0.98) if is_dark else Color(0.114, 0.114, 0.122)
+
+	var btn_hover_bg := Color(0.18, 0.21, 0.30, 0.95) if is_dark else Color(1.0, 1.0, 1.0, 0.90)
+	var btn_hover_border := Color(1.0, 0.55, 0.15, 0.80) if is_dark else Color(0.0, 0.443, 0.89, 0.40)
+
+	var btn_pressed_bg := Color(1.0, 0.55, 0.15, 0.20) if is_dark else Color(0.0, 0.443, 0.89, 0.15)
+	var btn_pressed_border := Color(1.0, 0.55, 0.15, 1.0) if is_dark else Color(0.0, 0.443, 0.89, 0.80)
+
+	for b in theme_buttons:
+		b.add_theme_color_override("font_color", btn_text_color)
+		b.add_theme_color_override("font_pressed_color", btn_text_color)
+		b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0) if is_dark else btn_text_color)
+		b.add_theme_color_override("font_focus_color", btn_text_color)
+
+		var s_norm: StyleBoxFlat = b.get_theme_stylebox("normal") as StyleBoxFlat
+		if s_norm:
+			s_norm.bg_color = btn_normal_bg
+			s_norm.border_color = btn_normal_border
+		var s_hov: StyleBoxFlat = b.get_theme_stylebox("hover") as StyleBoxFlat
+		if s_hov:
+			s_hov.bg_color = btn_hover_bg
+			s_hov.border_color = btn_hover_border
+		var s_press: StyleBoxFlat = b.get_theme_stylebox("pressed") as StyleBoxFlat
+		if s_press:
+			s_press.bg_color = btn_pressed_bg
+			s_press.border_color = btn_pressed_border
+
+	# 8. Labels
+	var col_title := Color(0.95, 0.96, 0.98) if is_dark else Color(0.114, 0.114, 0.122)
+	var col_sec := Color(0.65, 0.68, 0.76) if is_dark else Color(0.40, 0.42, 0.48)
+
+	for lbl in theme_labels_primary:
+		lbl.add_theme_color_override("font_color", col_title)
+	for lbl in theme_labels_secondary:
+		lbl.add_theme_color_override("font_color", col_sec)
+
+	# 9. Sliders & Progress Bars
+	var track_color := Color(0.18, 0.20, 0.28) if is_dark else Color(0.84, 0.85, 0.88)
+	for sl in theme_sliders:
+		var st: StyleBoxFlat = sl.get_theme_stylebox("slider") as StyleBoxFlat
+		if st:
+			st.bg_color = track_color
+
+	var bar_bg_color := Color(0.15, 0.17, 0.24) if is_dark else Color(0.86, 0.87, 0.90)
+	for item in theme_progress_bars:
+		var bar: ProgressBar = item["bar"]
+		var bg_sb: StyleBoxFlat = bar.get_theme_stylebox("background") as StyleBoxFlat
+		if bg_sb:
+			bg_sb.bg_color = bar_bg_color
+
+	# 10. Checkboxes
+	for cb in theme_checkboxes:
+		cb.add_theme_color_override("font_color", btn_text_color)
+		cb.add_theme_color_override("font_pressed_color", btn_text_color)
+		cb.add_theme_color_override("font_hover_color", btn_text_color)
+
+	# 11. Force Visualizer Materials
+	_apply_visualizer_theme(is_dark)
+
+	# 12. Update Button Labels
+	if btn_theme_toggle != null:
+		btn_theme_toggle.text = "☀️ Light Theme" if is_dark else "🌙 Dark Theme"
+
+
+func _apply_visualizer_theme(is_dark: bool) -> void:
+	if mat_ring != null:
+		mat_ring.emission_enabled = is_dark
+		mat_ring.emission = Color(1.0, 0.65, 0.15) * 0.40 if is_dark else Color.BLACK
+		mat_ring.emission_energy_multiplier = 0.50 if is_dark else 0.0
+
+	var arrows := [
+		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
+		{"data": arrow_fx_data, "col": Color(1.0, 0.35, 0.20) if is_dark else Color(0.95, 0.22, 0.22)},
+		{"data": arrow_res_data, "col": Color(0.25, 1.0, 0.50) if is_dark else Color(0.12, 0.75, 0.35)},
+		{"data": arrow_fric_data, "col": Color(1.0, 0.82, 0.15) if is_dark else Color(0.95, 0.65, 0.05)}
+	]
+
+	for a in arrows:
+		var dict: Dictionary = a["data"]
+		if dict.is_empty():
+			continue
+		var mat: StandardMaterial3D = dict["mat"]
+		var col: Color = a["col"]
+		mat.albedo_color = col
+		mat.emission_enabled = is_dark
+		mat.emission = col * 0.40 if is_dark else Color.BLACK
+		mat.emission_energy_multiplier = 0.45 if is_dark else 0.0
+		var lbl: Label3D = dict["label"]
+		lbl.modulate = col
+		lbl.outline_modulate = Color(0.04, 0.05, 0.08, 0.95) if is_dark else Color(1.0, 1.0, 1.0, 0.98)
+
+
+func _show_right_tab(tab_idx: int) -> void:
+	if tab_idx == 0:
+		if telemetry_view != null:
+			telemetry_view.visible = true
+		if joint_view != null:
+			joint_view.visible = false
+		if btn_tab_telemetry != null:
+			btn_tab_telemetry.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+		if btn_tab_joint != null:
+			var default_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+			btn_tab_joint.add_theme_color_override("font_color", default_col)
+	else:
+		if telemetry_view != null:
+			telemetry_view.visible = false
+		if joint_view != null:
+			joint_view.visible = true
+		if btn_tab_joint != null:
+			btn_tab_joint.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+		if btn_tab_telemetry != null:
+			var default_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+			btn_tab_telemetry.add_theme_color_override("font_color", default_col)
+
+
+func _toggle_mobile_drawer(drawer: Control) -> void:
+	if drawer == null:
+		return
+	var is_currently_open: bool = drawer.visible
+	# Close all drawers first
+	if left_panel != null:
+		left_panel.visible = false
+	if right_panel != null:
+		right_panel.visible = false
+	if bottom_panel != null:
+		bottom_panel.visible = false
+
+	if is_currently_open:
+		active_mobile_drawer = null
+	else:
+		drawer.visible = true
+		active_mobile_drawer = drawer
+
+
+func _check_responsive_layout() -> void:
+	if not is_inside_tree() or get_viewport() == null:
+		return
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	if vp_size.x <= 0 or vp_size.y <= 0:
+		return
+	var is_mobile := (vp_size.x < 1050.0) or (vp_size.x / maxf(vp_size.y, 1.0) < 1.18)
+	if is_mobile != is_mobile_layout:
+		_apply_responsive_layout(is_mobile, vp_size)
+	else:
+		if is_mobile:
+			_adjust_mobile_sizes(vp_size)
+		else:
+			_adjust_desktop_sizes(vp_size)
+
+
+func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
+	is_mobile_layout = is_mobile
+	if camera != null:
+		camera.set_mobile_mode(is_mobile)
+
+	if is_mobile:
+		# Header in mobile mode
+		if header_panel != null:
+			header_panel.anchor_left = 0.0
+			header_panel.anchor_right = 1.0
+			header_panel.offset_left = 8.0
+			header_panel.offset_right = -8.0
+			header_panel.offset_top = 8.0
+			header_panel.offset_bottom = 54.0
+		if sub_title != null:
+			sub_title.visible = false
+		if main_title != null:
+			main_title.text = "Scissor Pantograph Lab"
+			main_title.add_theme_font_size_override("font_size", 12)
+		if btn_formulas != null:
+			btn_formulas.text = "Theory"
+			btn_formulas.custom_minimum_size = Vector2(62, 28)
+		if btn_reset_cam != null:
+			btn_reset_cam.text = "↺"
+			btn_reset_cam.custom_minimum_size = Vector2(36, 28)
+		if btn_slowmo != null:
+			btn_slowmo.text = "⏸"
+			btn_slowmo.custom_minimum_size = Vector2(36, 28)
+		if btn_lasers != null:
+			btn_lasers.text = "📐"
+			btn_lasers.custom_minimum_size = Vector2(36, 28)
+		if btn_theme_toggle != null:
+			btn_theme_toggle.text = "🌙" if not is_dark_theme else "☀️"
+			btn_theme_toggle.custom_minimum_size = Vector2(36, 28)
+		if btn_focus_toggle != null:
+			btn_focus_toggle.text = "👁"
+			btn_focus_toggle.custom_minimum_size = Vector2(36, 28)
+
+		# Mobile Dock
+		if mobile_dock != null:
+			mobile_dock.visible = not is_focus_mode
+
+		# Drawers layout
+		_adjust_mobile_sizes(vp_size)
+
+		# Initially hide drawers so 3D scene is visible
+		if left_panel != null:
+			left_panel.visible = false
+		if right_panel != null:
+			right_panel.visible = false
+		if bottom_panel != null:
+			bottom_panel.visible = false
+	else:
+		# Header in desktop mode
+		if header_panel != null:
+			header_panel.anchor_left = 0.5
+			header_panel.anchor_right = 0.5
+			header_panel.offset_left = -590.0
+			header_panel.offset_right = 590.0
+			header_panel.offset_top = 16.0
+			header_panel.offset_bottom = 84.0
+		if sub_title != null:
+			sub_title.visible = true
+		if main_title != null:
+			main_title.text = "Scissor Pantograph Verification  ·  Golden Rule of Mechanics"
+			main_title.add_theme_font_size_override("font_size", 14)
+		if btn_formulas != null:
+			btn_formulas.text = "Formulas & Theory"
+			btn_formulas.custom_minimum_size = Vector2(138, 32)
+		if btn_reset_cam != null:
+			btn_reset_cam.text = "Reset View"
+			btn_reset_cam.custom_minimum_size = Vector2(92, 30)
+		if btn_slowmo != null:
+			btn_slowmo.text = "Normal Speed" if is_slow_motion else "Slow Motion"
+			btn_slowmo.custom_minimum_size = Vector2(92, 30)
+		if btn_lasers != null:
+			btn_lasers.text = "Hide Lasers" if lasers_enabled else "Show Lasers"
+			btn_lasers.custom_minimum_size = Vector2(92, 30)
+		if btn_theme_toggle != null:
+			btn_theme_toggle.text = "☀️ Light Theme" if is_dark_theme else "🌙 Dark Theme"
+			btn_theme_toggle.custom_minimum_size = Vector2(112, 30)
+		if btn_focus_toggle != null:
+			btn_focus_toggle.text = "Exit Focus" if is_focus_mode else "👁️ Focus Mode"
+			btn_focus_toggle.custom_minimum_size = Vector2(98, 30)
+
+		# Mobile Dock hidden
+		if mobile_dock != null:
+			mobile_dock.visible = false
+
+		# Side panels restored
+		_adjust_desktop_sizes(vp_size)
+
+		if left_panel != null:
+			left_panel.visible = not is_focus_mode
+		if right_panel != null:
+			right_panel.visible = not is_focus_mode
+		if bottom_panel != null:
+			bottom_panel.visible = not is_focus_mode
+
+
+func _adjust_mobile_sizes(vp_size: Vector2) -> void:
+	var h: float = clampf(vp_size.y * 0.46, 260.0, 480.0)
+	var bottom_offset: float = -68.0
+
+	if left_panel != null:
+		left_panel.anchor_left = 0.0
+		left_panel.anchor_right = 1.0
+		left_panel.anchor_top = 1.0
+		left_panel.anchor_bottom = 1.0
+		left_panel.offset_left = 8.0
+		left_panel.offset_right = -8.0
+		left_panel.offset_bottom = bottom_offset
+		left_panel.offset_top = bottom_offset - h
+
+	if right_panel != null:
+		right_panel.anchor_left = 0.0
+		right_panel.anchor_right = 1.0
+		right_panel.anchor_top = 1.0
+		right_panel.anchor_bottom = 1.0
+		right_panel.offset_left = 8.0
+		right_panel.offset_right = -8.0
+		right_panel.offset_bottom = bottom_offset
+		right_panel.offset_top = bottom_offset - h
+
+	if bottom_panel != null:
+		bottom_panel.anchor_left = 0.0
+		bottom_panel.anchor_right = 1.0
+		bottom_panel.anchor_top = 1.0
+		bottom_panel.anchor_bottom = 1.0
+		bottom_panel.offset_left = 8.0
+		bottom_panel.offset_right = -8.0
+		bottom_panel.offset_bottom = bottom_offset
+		bottom_panel.offset_top = bottom_offset - clampf(vp_size.y * 0.40, 240.0, 380.0)
+
+	if mobile_dock != null:
+		var dock_w: float = minf(vp_size.x - 16.0, 380.0)
+		mobile_dock.offset_left = -dock_w * 0.5
+		mobile_dock.offset_right = dock_w * 0.5
+
+
+func _adjust_desktop_sizes(vp_size: Vector2) -> void:
+	if left_panel != null:
+		left_panel.anchor_left = 0.0
+		left_panel.anchor_right = 0.0
+		left_panel.anchor_top = 0.0
+		left_panel.anchor_bottom = 0.0
+		left_panel.offset_left = 24.0
+		left_panel.offset_top = 96.0
+		left_panel.offset_right = 360.0
+		var max_h: float = minf(750.0, vp_size.y - 120.0)
+		left_panel.offset_bottom = 96.0 + max_h
+
+	if right_panel != null:
+		right_panel.anchor_left = 1.0
+		right_panel.anchor_right = 1.0
+		right_panel.anchor_top = 0.0
+		right_panel.anchor_bottom = 0.0
+		right_panel.offset_left = -374.0
+		right_panel.offset_right = -24.0
+		right_panel.offset_top = 96.0
+		var max_h: float = minf(750.0, vp_size.y - 120.0)
+		right_panel.offset_bottom = 96.0 + max_h
+
+	if bottom_panel != null:
+		bottom_panel.anchor_left = 0.5
+		bottom_panel.anchor_right = 0.5
+		bottom_panel.anchor_top = 1.0
+		bottom_panel.anchor_bottom = 1.0
+		bottom_panel.offset_left = -460.0
+		bottom_panel.offset_right = 460.0
+		bottom_panel.offset_top = -490.0 if is_graph_maximized else -278.0
+		bottom_panel.offset_bottom = -16.0

@@ -6,12 +6,14 @@ extends Node3D
 ## Minimalist VisionOS design language. Supports uniform and 1:2:3 variable-pitch pantographs.
 
 signal telemetry_updated(data: Dictionary)
+signal pin_clicked(rig: PantographRig, pin_index: int, pin_pos: Vector3)
 
 # Physical Experiment Parameters
 @export var n_stages: int = 3
 @export var rig_name: String = "Rig A (n=3)"
 @export var is_scaled_123: bool = false         # Scaled 1:2:3 Variable-Pitch Pantograph
 @export var rig_color_theme: String = "blue"   # "blue", "green", "orange"
+@export var dark_theme: bool = false           # Theme toggle (Light Studio vs Dark Obsidian Cyberpunk)
 @export var physical_link_length: float = 0.06 # Base arm length: 6.0 cm
 @export var physical_resting_H: float = 0.075  # Base unloaded rhombus height: 7.5 cm
 @export var spring_k: float = 1000.0           # Spring stiffness in N/m [500 - 1500]
@@ -102,7 +104,7 @@ func _ready() -> void:
 
 
 func _init_materials() -> void:
-	# --- Apple Hardware Materials ---
+	# --- Hardware Materials ---
 	mat_arm_body = StandardMaterial3D.new()
 	mat_arm_chamfer = StandardMaterial3D.new()
 	mat_pin_accent = StandardMaterial3D.new()
@@ -115,74 +117,143 @@ func _init_materials() -> void:
 
 	var theme: String = rig_color_theme.to_lower()
 	if theme == "green" or is_scaled_123:
-		# RIG C (Mechanism 3): Precision Satin Anodized Emerald Green (#30D158)
-		mat_arm_body.albedo_color = Color(0.19, 0.82, 0.35)
-		mat_arm_body.metallic = 0.58
-		mat_arm_body.roughness = 0.26
+		# RIG C (Mechanism 3): Emerald Green / Neon Jade
+		if dark_theme:
+			mat_arm_body.albedo_color = Color(0.12, 0.95, 0.42)
+			mat_arm_body.emission_enabled = true
+			mat_arm_body.emission = Color(0.08, 0.65, 0.28)
+			mat_arm_body.emission_energy_multiplier = 0.35
+			mat_arm_body.metallic = 0.70
+			mat_arm_body.roughness = 0.20
 
-		mat_arm_chamfer.albedo_color = Color(0.08, 0.39, 0.16) # Forest Green Chamfer
-		mat_arm_chamfer.metallic = 0.85
-		mat_arm_chamfer.roughness = 0.22
+			mat_arm_chamfer.albedo_color = Color(0.04, 0.25, 0.10)
+			mat_arm_chamfer.metallic = 0.90
+			mat_arm_chamfer.roughness = 0.15
 
-		# Mint / Jade Collar (#63E6BE)
-		mat_pin_accent.albedo_color = Color(0.39, 0.90, 0.75)
-		mat_pin_accent.metallic = 0.90
-		mat_pin_accent.roughness = 0.16
+			mat_pin_accent.albedo_color = Color(0.20, 1.0, 0.65)
+			mat_pin_accent.emission_enabled = true
+			mat_pin_accent.emission = Color(0.20, 1.0, 0.65)
+			mat_pin_accent.emission_energy_multiplier = 0.5
+			mat_pin_accent.metallic = 0.95
+			mat_pin_accent.roughness = 0.12
 
-		# Suspended Weight: Polished Satin Titanium Billet
-		mat_mass_metal.albedo_color = Color(0.85, 0.86, 0.88)
-		mat_mass_metal.metallic = 0.95
-		mat_mass_metal.roughness = 0.18
+			mat_mass_metal.albedo_color = Color(0.85, 0.92, 0.88)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.15
+			mat_laser.albedo_color = Color(0.25, 1.0, 0.48, 0.95)
+		else:
+			mat_arm_body.albedo_color = Color(0.19, 0.82, 0.35)
+			mat_arm_body.emission_enabled = false
+			mat_arm_body.metallic = 0.58
+			mat_arm_body.roughness = 0.26
 
-		mat_laser.albedo_color = Color(0.19, 0.82, 0.35, 0.85)
+			mat_arm_chamfer.albedo_color = Color(0.08, 0.39, 0.16)
+			mat_arm_chamfer.metallic = 0.85
+			mat_arm_chamfer.roughness = 0.22
+
+			mat_pin_accent.albedo_color = Color(0.39, 0.90, 0.75)
+			mat_pin_accent.emission_enabled = false
+			mat_pin_accent.metallic = 0.90
+			mat_pin_accent.roughness = 0.16
+
+			mat_mass_metal.albedo_color = Color(0.85, 0.86, 0.88)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.18
+			mat_laser.albedo_color = Color(0.19, 0.82, 0.35, 0.85)
 	elif theme == "orange" or (not is_left_rig and not is_scaled_123):
-		# RIG B (Mechanism 2): Precision Satin Anodized Ultra Orange (#FF6B0D)
-		mat_arm_body.albedo_color = Color(1.0, 0.42, 0.05)
-		mat_arm_body.metallic = 0.58
-		mat_arm_body.roughness = 0.26
+		# RIG B (Mechanism 2): Ultra Orange / Cyber Amber
+		if dark_theme:
+			mat_arm_body.albedo_color = Color(1.0, 0.46, 0.05)
+			mat_arm_body.emission_enabled = true
+			mat_arm_body.emission = Color(0.85, 0.32, 0.02)
+			mat_arm_body.emission_energy_multiplier = 0.40
+			mat_arm_body.metallic = 0.70
+			mat_arm_body.roughness = 0.20
 
-		mat_arm_chamfer.albedo_color = Color(0.65, 0.22, 0.02) # Deep Amber Chamfer
-		mat_arm_chamfer.metallic = 0.85
-		mat_arm_chamfer.roughness = 0.22
+			mat_arm_chamfer.albedo_color = Color(0.40, 0.12, 0.01)
+			mat_arm_chamfer.metallic = 0.90
+			mat_arm_chamfer.roughness = 0.15
 
-		# Warm Golden Amber Accent Collar (#FFB703)
-		mat_pin_accent.albedo_color = Color(1.0, 0.72, 0.15)
-		mat_pin_accent.metallic = 0.92
-		mat_pin_accent.roughness = 0.16
+			mat_pin_accent.albedo_color = Color(1.0, 0.80, 0.20)
+			mat_pin_accent.emission_enabled = true
+			mat_pin_accent.emission = Color(1.0, 0.75, 0.15)
+			mat_pin_accent.emission_energy_multiplier = 0.5
+			mat_pin_accent.metallic = 0.95
+			mat_pin_accent.roughness = 0.12
 
-		# Suspended Weight: Machined Brass / Bronze Billet
-		mat_mass_metal.albedo_color = Color(0.92, 0.78, 0.46)
-		mat_mass_metal.metallic = 0.94
-		mat_mass_metal.roughness = 0.16
+			mat_mass_metal.albedo_color = Color(0.95, 0.82, 0.52)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.15
+			mat_laser.albedo_color = Color(1.0, 0.52, 0.10, 0.95)
+		else:
+			mat_arm_body.albedo_color = Color(1.0, 0.42, 0.05)
+			mat_arm_body.emission_enabled = false
+			mat_arm_body.metallic = 0.58
+			mat_arm_body.roughness = 0.26
 
-		mat_laser.albedo_color = Color(1.0, 0.45, 0.0, 0.85)
+			mat_arm_chamfer.albedo_color = Color(0.65, 0.22, 0.02)
+			mat_arm_chamfer.metallic = 0.85
+			mat_arm_chamfer.roughness = 0.22
+
+			mat_pin_accent.albedo_color = Color(1.0, 0.72, 0.15)
+			mat_pin_accent.emission_enabled = false
+			mat_pin_accent.metallic = 0.92
+			mat_pin_accent.roughness = 0.16
+
+			mat_mass_metal.albedo_color = Color(0.92, 0.78, 0.46)
+			mat_mass_metal.metallic = 0.94
+			mat_mass_metal.roughness = 0.16
+			mat_laser.albedo_color = Color(1.0, 0.45, 0.0, 0.85)
 	else:
-		# RIG A (Mechanism 1): Precision Satin Anodized Electric Blue (#0071E3)
-		mat_arm_body.albedo_color = Color(0.06, 0.45, 0.92)
-		mat_arm_body.metallic = 0.58
-		mat_arm_body.roughness = 0.26
+		# RIG A (Mechanism 1): Electric Tech-Blue / Neon Cyan
+		if dark_theme:
+			mat_arm_body.albedo_color = Color(0.08, 0.55, 1.0)
+			mat_arm_body.emission_enabled = true
+			mat_arm_body.emission = Color(0.04, 0.38, 0.85)
+			mat_arm_body.emission_energy_multiplier = 0.38
+			mat_arm_body.metallic = 0.70
+			mat_arm_body.roughness = 0.20
 
-		mat_arm_chamfer.albedo_color = Color(0.03, 0.22, 0.54) # Deep Indigo Chamfer
-		mat_arm_chamfer.metallic = 0.85
-		mat_arm_chamfer.roughness = 0.22
+			mat_arm_chamfer.albedo_color = Color(0.02, 0.14, 0.36)
+			mat_arm_chamfer.metallic = 0.90
+			mat_arm_chamfer.roughness = 0.15
 
-		# Electric Ice-Cyan Accent Collar (#4CC9F0)
-		mat_pin_accent.albedo_color = Color(0.30, 0.80, 1.0)
-		mat_pin_accent.metallic = 0.90
-		mat_pin_accent.roughness = 0.16
+			mat_pin_accent.albedo_color = Color(0.35, 0.88, 1.0)
+			mat_pin_accent.emission_enabled = true
+			mat_pin_accent.emission = Color(0.35, 0.88, 1.0)
+			mat_pin_accent.emission_energy_multiplier = 0.5
+			mat_pin_accent.metallic = 0.95
+			mat_pin_accent.roughness = 0.12
 
-		# Suspended Weight: Polished Aerospace Aluminum
-		mat_mass_metal.albedo_color = Color(0.86, 0.88, 0.92)
-		mat_mass_metal.metallic = 0.95
-		mat_mass_metal.roughness = 0.18
+			mat_mass_metal.albedo_color = Color(0.88, 0.92, 0.98)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.15
+			mat_laser.albedo_color = Color(0.18, 0.72, 1.0, 0.95)
+		else:
+			mat_arm_body.albedo_color = Color(0.06, 0.45, 0.92)
+			mat_arm_body.emission_enabled = false
+			mat_arm_body.metallic = 0.58
+			mat_arm_body.roughness = 0.26
 
-		mat_laser.albedo_color = Color(0.0, 0.443, 0.89, 0.85)
+			mat_arm_chamfer.albedo_color = Color(0.03, 0.22, 0.54)
+			mat_arm_chamfer.metallic = 0.85
+			mat_arm_chamfer.roughness = 0.22
+
+			mat_pin_accent.albedo_color = Color(0.30, 0.80, 1.0)
+			mat_pin_accent.emission_enabled = false
+			mat_pin_accent.metallic = 0.90
+			mat_pin_accent.roughness = 0.16
+
+			mat_mass_metal.albedo_color = Color(0.86, 0.88, 0.92)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.18
+			mat_laser.albedo_color = Color(0.0, 0.443, 0.89, 0.85)
 
 	# Precision Turned Architectural Brass / Gold Joint Pins
 	mat_joint_brass = StandardMaterial3D.new()
-	mat_joint_brass.albedo_color = Color(0.96, 0.78, 0.32)
+	mat_joint_brass.albedo_color = Color(1.0, 0.84, 0.38) if dark_theme else Color(0.96, 0.78, 0.32)
 	mat_joint_brass.metallic = 0.96
-	mat_joint_brass.roughness = 0.14
+	mat_joint_brass.roughness = 0.12
 
 	# Stainless Steel Structural Bracket / Hook
 	mat_pin_steel = StandardMaterial3D.new()
@@ -294,6 +365,26 @@ func _build_rig_hierarchy() -> void:
 			washer.position = Vector3(0, 0, z_side)
 			washer.material_override = mat_pin_accent
 			pin_root.add_child(washer)
+
+		# Interactive Clickable StaticBody3D for Force Vector Inspection
+		var pin_body := StaticBody3D.new()
+		pin_body.name = "PinBody_%d" % p
+		var col_shape := CollisionShape3D.new()
+		var col_cyl := CylinderShape3D.new()
+		col_cyl.radius = 0.075 # Generous hitbox for easy clicking
+		col_cyl.height = 0.14
+		col_shape.shape = col_cyl
+		col_shape.rotation.x = deg_to_rad(90)
+		pin_body.add_child(col_shape)
+		var pin_idx: int = p
+		pin_body.input_event.connect(func(_cam: Camera3D, event: InputEvent, _pos: Vector3, _normal: Vector3, _shape_idx: int):
+			if event is InputEventMouseButton:
+				var mb := event as InputEventMouseButton
+				if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+					get_viewport().set_input_as_handled()
+					pin_clicked.emit(self, pin_idx, pin_nodes[pin_idx].global_position)
+		)
+		pin_root.add_child(pin_body)
 
 		pins_container.add_child(pin_root)
 		pin_nodes.append(pin_root)
@@ -774,3 +865,95 @@ func apply_impulse(velocity_kick: float = 0.08) -> void:
 func set_laser_visibility(enable_lasers: bool) -> void:
 	if dimension_lines_container:
 		dimension_lines_container.visible = enable_lasers
+
+
+func set_dark_theme(is_dark: bool) -> void:
+	dark_theme = is_dark
+	_init_materials()
+
+	# Re-apply materials to existing meshes
+	for arm_node in arm_nodes:
+		if arm_node.get_child_count() > 0:
+			var arm_mesh: MeshInstance3D = arm_node.get_child(0) as MeshInstance3D
+			if arm_mesh:
+				arm_mesh.material_override = mat_arm_body
+		if arm_node.get_child_count() > 1:
+			var groove: MeshInstance3D = arm_node.get_child(1) as MeshInstance3D
+			if groove:
+				groove.material_override = mat_arm_chamfer
+		for i in range(2, arm_node.get_child_count()):
+			var cap: MeshInstance3D = arm_node.get_child(i) as MeshInstance3D
+			if cap:
+				cap.material_override = mat_arm_body
+
+	for pin_root in pin_nodes:
+		if pin_root.get_child_count() > 0:
+			var pin_mesh: MeshInstance3D = pin_root.get_child(0) as MeshInstance3D
+			if pin_mesh:
+				pin_mesh.material_override = mat_joint_brass
+		if pin_root.get_child_count() > 1:
+			var w1: MeshInstance3D = pin_root.get_child(1) as MeshInstance3D
+			if w1:
+				w1.material_override = mat_pin_accent
+		if pin_root.get_child_count() > 2:
+			var w2: MeshInstance3D = pin_root.get_child(2) as MeshInstance3D
+			if w2:
+				w2.material_override = mat_pin_accent
+
+	if mass_cylinder:
+		mass_cylinder.material_override = mat_mass_metal
+
+	if spring_mesh_instance:
+		spring_mesh_instance.material_override = mat_spring_chrome
+
+	if line_h:
+		line_h.material_override = mat_laser
+	if line_l:
+		line_l.material_override = mat_laser
+	if tick_top:
+		tick_top.material_override = mat_laser
+	if tick_mid:
+		tick_mid.material_override = mat_laser
+	if tick_bot:
+		tick_bot.material_override = mat_laser
+	if arrow_h_top:
+		arrow_h_top.material_override = mat_laser
+	if arrow_h_bot:
+		arrow_h_bot.material_override = mat_laser
+	if arrow_l_top:
+		arrow_l_top.material_override = mat_laser
+	if arrow_l_bot:
+		arrow_l_bot.material_override = mat_laser
+
+	# Update dimension label colors and outlines
+	var theme: String = rig_color_theme.to_lower()
+	var label_color: Color
+	if theme == "green" or is_scaled_123:
+		label_color = Color(0.20, 1.0, 0.50, 1.0) if dark_theme else Color(0.25, 0.95, 0.45, 1.0)
+	elif theme == "orange" or not is_left_rig:
+		label_color = Color(1.0, 0.58, 0.15, 1.0) if dark_theme else Color(1.0, 0.52, 0.10, 1.0)
+	else:
+		label_color = Color(0.25, 0.75, 1.0, 1.0) if dark_theme else Color(0.15, 0.65, 1.0, 1.0)
+
+	if dim_label_h:
+		dim_label_h.modulate = label_color
+		dim_label_h.outline_modulate = Color(0.0, 0.0, 0.0, 1.0) if not dark_theme else Color(0.02, 0.04, 0.08, 1.0)
+	if dim_label_l:
+		dim_label_l.modulate = label_color
+		dim_label_l.outline_modulate = Color(0.0, 0.0, 0.0, 1.0) if not dark_theme else Color(0.02, 0.04, 0.08, 1.0)
+
+	if rig_title_label:
+		if dark_theme:
+			rig_title_label.outline_modulate = Color(0.05, 0.06, 0.10, 1.0)
+		else:
+			rig_title_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.95)
+
+
+func get_pin_global_position(pin_index: int) -> Vector3:
+	if pin_index >= 0 and pin_index < pin_nodes.size():
+		return pin_nodes[pin_index].global_position
+	return global_position
+
+
+func get_pin_count() -> int:
+	return pin_nodes.size()
