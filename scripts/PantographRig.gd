@@ -530,7 +530,7 @@ func _update_kinematics(delta: float) -> void:
 
 		for step in range(sub_steps):
 			var err: float = target_H - current_H
-			# Regularized smooth friction signum (tanh) prevents discrete numerical chatter around zero velocity
+			# Continuous 2nd-order ODE integration: hyperbolic friction + damping naturally decelerate the system
 			var sgn_v: float = tanh(velocity_H / 0.004)
 			var a0: float = omega * omega * err - damping_c * velocity_H - a_coulomb * sgn_v
 
@@ -542,12 +542,6 @@ func _update_kinematics(delta: float) -> void:
 			var sgn_v_half: float = tanh(v_half / 0.004)
 			var a1: float = omega * omega * err_next - damping_c * v_half - a_coulomb * sgn_v_half
 			velocity_H = v_half + 0.5 * a1 * sub_dt
-
-			# Coulomb stick-slip engagement: smoothly arrest motion within 3-4 clean decaying cycles
-			if absf(velocity_H) < v_stick and absf(err_next) < h_deadband:
-				velocity_H = 0.0
-				current_H = target_H
-				break
 
 	var base_link_len: float = get_base_link_length()
 	current_H = clampf(current_H, 0.030, base_link_len * 2.0 * 0.96)

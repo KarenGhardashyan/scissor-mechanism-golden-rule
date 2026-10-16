@@ -179,8 +179,6 @@ var arrow_fy_data: Dictionary = {}
 var arrow_fx_data: Dictionary = {}
 var arrow_res_data: Dictionary = {}
 var arrow_fric_data: Dictionary = {}
-var joint_billboard_badge: Label3D
-var joint_badge_pill: MeshInstance3D
 
 var inspected_rig: PantographRig = null
 var inspected_pin_idx: int = -1
@@ -1951,38 +1949,7 @@ func _build_force_visualizer() -> void:
 	pin_highlight_ring.material_override = mat_ring
 	force_visualizer_root.add_child(pin_highlight_ring)
 
-	# 2. Consolidated Floating 3D Billboard Badge (4: C)
-	joint_billboard_badge = Label3D.new()
-	joint_billboard_badge.name = "JointBillboardBadge"
-	joint_billboard_badge.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	joint_billboard_badge.pixel_size = 0.0030
-	joint_billboard_badge.font_size = 18
-	joint_billboard_badge.shaded = false
-	joint_billboard_badge.no_depth_test = true
-	joint_billboard_badge.render_priority = 20
-	joint_billboard_badge.outline_size = 6
-	joint_billboard_badge.outline_modulate = Color(0.02, 0.03, 0.05, 0.95)
-	joint_billboard_badge.modulate = Color(0.95, 0.96, 0.98)
-	joint_billboard_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	force_visualizer_root.add_child(joint_billboard_badge)
-
-	joint_badge_pill = MeshInstance3D.new()
-	joint_badge_pill.name = "JointBadgePill"
-	var badge_mesh := QuadMesh.new()
-	badge_mesh.size = Vector2(0.40, 0.22)
-	joint_badge_pill.mesh = badge_mesh
-	var badge_mat := StandardMaterial3D.new()
-	badge_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.75)
-	badge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	badge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	badge_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	badge_mat.no_depth_test = true
-	badge_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	badge_mat.render_priority = 19
-	joint_badge_pill.material_override = badge_mat
-	force_visualizer_root.add_child(joint_badge_pill)
-
-	# 3. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), F_fric (Pin Friction)
+	# 2. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), F_fric (Pin Friction)
 	arrow_fy_data = _create_arrow_node("ArrowFy", Color(0.0, 0.44, 0.95))
 	arrow_fx_data = _create_arrow_node("ArrowFx", Color(0.95, 0.22, 0.22))
 	arrow_res_data = _create_arrow_node("ArrowResultant", Color(0.12, 0.75, 0.35))
@@ -2035,35 +2002,17 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 	lbl.font_size = 20
 	lbl.shaded = false
 	lbl.no_depth_test = true
-	lbl.render_priority = 16
+	lbl.render_priority = 15
 	lbl.modulate = col
-	lbl.outline_size = 8
-	lbl.outline_modulate = Color(0.02, 0.03, 0.05, 0.95)
+	lbl.outline_size = 6
+	lbl.outline_modulate = Color(0.05, 0.05, 0.05, 0.95)
 	root.add_child(lbl)
-
-	# High-contrast semi-transparent dark backing pill behind 3D Label3D text (rgba(0, 0, 0, 0.65))
-	var pill := MeshInstance3D.new()
-	pill.name = "BackingPill"
-	var pill_mesh := QuadMesh.new()
-	pill_mesh.size = Vector2(0.24, 0.062)
-	pill.mesh = pill_mesh
-	var pill_mat := StandardMaterial3D.new()
-	pill_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.75)
-	pill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	pill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	pill_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	pill_mat.no_depth_test = true
-	pill_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	pill_mat.render_priority = 15
-	pill.material_override = pill_mat
-	root.add_child(pill)
 
 	return {
 		"root": root,
 		"stem": stem,
 		"tip": tip,
 		"label": lbl,
-		"pill": pill,
 		"mat": mat,
 		"base_color": col
 	}
@@ -2076,7 +2025,7 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 		return
 	root.visible = true
 
-	# Proportionate tip cone and shaft cylinder scaling (Requirement 1):
+	# Proportionate tip cone and shaft cylinder scaling
 	var tip_len: float = clampf(visual_length * 0.20, 0.025, 0.09)
 	var stem_len: float = maxf(visual_length - tip_len, 0.005)
 
@@ -2088,7 +2037,7 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 
 	root.global_transform = Transform3D(basis, origin)
 
-	# Proportional arrow thickness (so small micro-forces have slender arrows, not bulky cones)
+	# Proportional arrow thickness
 	var thickness_scale: float = clampf(visual_length / 0.55, 0.45, 1.20)
 
 	var stem: MeshInstance3D = arrow_dict["stem"]
@@ -2100,23 +2049,12 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 	tip.scale = Vector3(thickness_scale, tip_scale_y, thickness_scale)
 	tip.position = Vector3(0, stem_len + tip_len * 0.5, 0)
 
-	# Label placed at arrow tip with world offset (Requirement 2)
+	# Label placed at arrow tip with world offset (rendered once next to arrow tip)
 	var lbl: Label3D = arrow_dict["label"]
 	var tip_world_pos: Vector3 = origin + dir * visual_length
-	var final_label_pos: Vector3 = tip_world_pos + label_world_offset
-	lbl.global_position = final_label_pos
+	lbl.global_position = tip_world_pos + label_world_offset
 	# Strict guarantee: NEVER display negative signs on 3D arrows
 	lbl.text = label_text.replace("= -", "= ").replace("=-", "= ").replace("-", "")
-
-	# High-contrast backing pill (rgba(0, 0, 0, 0.65))
-	var pill: MeshInstance3D = arrow_dict.get("pill", null)
-	if pill != null:
-		pill.visible = true
-		pill.global_position = final_label_pos
-		var qmesh: QuadMesh = pill.mesh as QuadMesh
-		if qmesh != null:
-			var estimated_width: float = maxf(lbl.text.length() * 0.016 + 0.05, 0.16)
-			qmesh.size = Vector2(estimated_width, 0.062)
 
 
 func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
@@ -2154,18 +2092,16 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 
 	if pin_idx == 0:
 		# Top Gantry Anchor (Static ceiling beam - zero linear sliding displacement)
+		# Central Vertical Axis: Left and right scissor links exert equal and opposite forces -> Sum(Fx) = 0
 		var p_tot: float = m * g + float(n) * link_m * g
 		F_y = p_tot
-		dir_fy = Vector3(0, 1, 0) # Upward support reaction
+		dir_fy = Vector3(0, 1, 0) # Upward support reaction strictly vertical
+		F_x = 0.0
+		dir_fx = Vector3.ZERO
+		R = F_y
+		dir_res = Vector3(0, 1, 0)
 
-		F_x = rig.tensile_force_T / (2.0 * tan_theta)
-		dir_fx = Vector3(1, 0, 0) # Top scissor lateral tension
-
-		var raw_res := Vector3(F_x, F_y, 0.0)
-		R = raw_res.length()
-		dir_res = raw_res.normalized()
-
-		# Point 2 FIX: Hide F_fric on static ceiling gantry pins where linear sliding is zero
+		# Static ceiling gantry pins have zero linear displacement
 		F_fric = 0.0
 		tau_fric = 0.0
 		dir_fric = Vector3.ZERO
@@ -2192,10 +2128,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			dir_res = raw_res.normalized()
 			F_fric = mu * R
 			tau_fric = mu * R * r_pin
-			# Point 2 FIX: Coulomb friction opposes link displacement (tangential / opposite to link motion)
-			# During downward extension, left hinge travels inward (+X) and downward (-Y).
-			# Opposing friction points outward (-X) and upward (+Y).
-			# Fan out by at least 35° so F_fric does not clip or overlap with horizontal Fx:
+			# Coulomb friction opposes link displacement tangentially
 			var fan_angle_l: float = maxf(theta, deg_to_rad(35.0))
 			dir_fric = Vector3(-cos(fan_angle_l), sin(fan_angle_l), 0.0).normalized() * motion_dir
 
@@ -2215,10 +2148,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			dir_res = raw_res.normalized()
 			F_fric = mu * R
 			tau_fric = mu * R * r_pin
-			# Point 2 FIX: Coulomb friction opposes link displacement (tangential / opposite to link motion)
-			# During downward extension, right hinge travels inward (-X) and downward (-Y).
-			# Opposing friction points outward (+X) and upward (+Y).
-			# Fan out by at least 35° so F_fric does not clip or overlap with horizontal Fx:
+			# Coulomb friction opposes link displacement tangentially
 			var fan_angle_r: float = maxf(theta, deg_to_rad(35.0))
 			dir_fric = Vector3(cos(fan_angle_r), sin(fan_angle_r), 0.0).normalized() * motion_dir
 
@@ -2226,18 +2156,18 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
 
 		else:
-			# Central Coupling Hinge
+			# Central Coupling Hinge on Vertical Centerline Axis (Horizontal symmetry: Sum(Fx) = 0)
+			F_x = 0.0
+			dir_fx = Vector3.ZERO
+
 			if s == n - 1:
-				# Bottommost pin supporting mass directly
+				# Bottommost pin supporting payload mass directly
 				F_y = m * g
 				dir_fy = Vector3(0, -1, 0)
-				F_x = 0.0
-				dir_fx = Vector3.ZERO
-				R = m * g
+				R = F_y
 				dir_res = Vector3(0, -1, 0)
 				F_fric = mu * R
 				tau_fric = mu * R * r_pin
-				# Pure vertical displacement: friction opposes downward extension by pointing upward (+Y)
 				dir_fric = Vector3(0, 1.0, 0) * motion_dir
 
 				title = "%s · Bottom Payload Suspension Pin [Pin #%d]" % [rig.rig_name, pin_idx]
@@ -2246,14 +2176,10 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				# Intermediate central coupling hinge
 				F_y = p_below
 				dir_fy = Vector3(0, -1, 0)
-				F_x = p_below / (2.0 * tan_theta)
-				dir_fx = Vector3(1, 0, 0) # Scissor cross-shear
-				var raw_res := Vector3(F_x * 0.5, -F_y, 0.0)
-				R = raw_res.length()
-				dir_res = raw_res.normalized()
+				R = F_y
+				dir_res = Vector3(0, -1, 0)
 				F_fric = mu * R
 				tau_fric = mu * R * r_pin
-				# Intermediate central pin travels vertically; friction opposes extension by pointing upward (+Y)
 				dir_fric = Vector3(0, 1.0, 0) * motion_dir
 
 				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
@@ -2330,54 +2256,27 @@ func _update_force_visualizer() -> void:
 	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_THRESHOLD else ""
 	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if filtered_fric >= FORCE_THRESHOLD else ""
 
-	# 2. PREVENT VECTOR & LABEL STACKING: Separate concurrent vector origins along Z (z_offset = 0.05m)
-	# Fy origin at pin center, Z = -0.05m:
-	var fy_origin: Vector3 = pin_pos + Vector3(0.0, 0.0, -0.05)
-	var lbl_fy_offset := Vector3(-0.06, -0.08, 0.0) if data.dir_fy.y < 0.0 else Vector3(-0.06, 0.08, 0.0)
-	_update_arrow_vector(arrow_fy_data, fy_origin, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
+	# 2. COMMON CONCURRENT ANCHOR: All force vectors share the exact pin center as tail origin
+	# Fy (Vertical Load / Reaction Reaction):
+	var lbl_fy_offset := Vector3(-0.06, 0.08, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.06, -0.08, 0.0)
+	_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
 
-	# Resultant R origin: pin center, Z = 0.00m:
-	var res_origin: Vector3 = pin_pos + Vector3(0.0, 0.0, 0.00)
-	var lbl_res_offset := Vector3(0.14, -0.06, 0.0) if data.dir_res.y < 0.0 else Vector3(0.14, 0.06, 0.0)
-	_update_arrow_vector(arrow_res_data, res_origin, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
+	# Fx (Lateral Thrust): (Only drawn when Fx > 0, e.g. on lateral hinges)
+	if disp_len_fx >= 0.035 and not lbl_fx_str.is_empty():
+		_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.0, 0.08, 0.0))
+	else:
+		arrow_fx_data["root"].visible = false
 
-	# Fx origin: separated vertically (+0.012m Y) and offset along Z (+0.05m Z):
-	var fx_origin: Vector3 = pin_pos + Vector3(0.0, 0.012, 0.05)
-	# Place Fx text strictly above the red tip: tip_pos + Vector3(0.0, 0.08, 0.0)
-	_update_arrow_vector(arrow_fx_data, fx_origin, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.0, 0.08, 0.0))
+	# Resultant Contact R:
+	var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if data.dir_res.y > 0.0 else Vector3(0.12, -0.06, 0.0)
+	_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
 
-	# F_fric origin: separated vertically (-0.018m Y) and offset along Z (+0.10m Z) on front pin face:
-	var fric_origin: Vector3 = pin_pos + Vector3(0.0, -0.018, 0.10)
-	if data.len_fric > 0.01 and not lbl_fric_str.is_empty():
-		# Place F_fric text strictly below its tip: tip_pos + Vector3(0.0, -0.08, 0.0)
-		_update_arrow_vector(arrow_fric_data, fric_origin, data.dir_fric, disp_len_fric, lbl_fric_str, Vector3(0.0, -0.08, 0.0))
+	# F_fric (Coulomb Pin Friction):
+	if data.len_fric >= 0.035 and not lbl_fric_str.is_empty():
+		var lbl_fric_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fric.y > 0.0 else Vector3(0.0, -0.08, 0.0)
+		_update_arrow_vector(arrow_fric_data, pin_pos, data.dir_fric, disp_len_fric, lbl_fric_str, lbl_fric_offset)
 	else:
 		arrow_fric_data["root"].visible = false
-
-	# 4: C - Consolidated floating billboard badge
-	if joint_billboard_badge != null:
-		joint_billboard_badge.visible = true
-		var badge_pos: Vector3 = pin_pos + Vector3(0.26, 0.22, 0.04)
-		joint_billboard_badge.global_position = badge_pos
-		if joint_badge_pill != null:
-			joint_badge_pill.visible = true
-			joint_badge_pill.global_position = badge_pos + Vector3(0.08, -0.04, -0.002)
-
-		if filtered_fric >= FORCE_THRESHOLD:
-			joint_billboard_badge.text = "Pin #%d Load Summary\n  R  : %.2f N\n  Fy : %.2f N\n  Fx : %.2f N\n  fk : %.2f N" % [
-				inspected_pin_idx,
-				absf(filtered_res),
-				absf(filtered_fy),
-				absf(filtered_fx),
-				absf(filtered_fric)
-			]
-		else:
-			joint_billboard_badge.text = "Pin #%d Load Summary\n  R  : %.2f N\n  Fy : %.2f N\n  Fx : %.2f N" % [
-				inspected_pin_idx,
-				absf(filtered_res),
-				absf(filtered_fy),
-				absf(filtered_fx)
-			]
 
 	# 11: C - Update Tier 1 Core Statics
 	if joint_val_fy != null:
@@ -2466,10 +2365,6 @@ func _deselect_pin() -> void:
 	inspected_pin_idx = -1
 	if force_visualizer_root != null:
 		force_visualizer_root.visible = false
-	if joint_billboard_badge != null:
-		joint_billboard_badge.visible = false
-	if joint_badge_pill != null:
-		joint_badge_pill.visible = false
 	if mobile_pin_card != null:
 		mobile_pin_card.visible = false
 	_sync_quick_pin_buttons(null, -1)
@@ -2708,9 +2603,6 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		mat_ring.emission = Color(1.0, 0.72, 0.20) if is_dark else Color(1.0, 0.55, 0.12)
 		mat_ring.emission_energy_multiplier = 2.5 if is_dark else 1.8
 
-	if joint_billboard_badge != null:
-		joint_billboard_badge.modulate = Color(0.95, 0.96, 0.98)
-		joint_billboard_badge.outline_modulate = Color(0.04, 0.05, 0.08, 0.95)
 
 	var arrows := [
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
