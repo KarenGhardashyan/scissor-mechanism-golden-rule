@@ -1403,6 +1403,8 @@ func _build_liquid_glass_ui() -> void:
 	live_graph.name = "LiveGraph"
 	live_graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	live_graph.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	live_graph.friction_mu = friction_slider.value if friction_slider != null else 0.20
+	live_graph.stiction_enabled = is_stiction_enabled
 	live_graph.mass_scrubbed.connect(func(new_m: float):
 		mass_slider.value = new_m
 	)
@@ -1918,6 +1920,8 @@ func _on_friction_slider_changed(val: float) -> void:
 	rig_a.set_friction_mu(val)
 	rig_c.set_friction_mu(val)
 	rig_b.set_friction_mu(val)
+	if live_graph != null:
+		live_graph.set_friction_mu(val)
 	if inspected_rig != null and is_instance_valid(inspected_rig):
 		_update_force_visualizer()
 
@@ -1927,6 +1931,8 @@ func _on_toggle_stiction() -> void:
 	rig_a.set_stiction_enabled(is_stiction_enabled)
 	rig_c.set_stiction_enabled(is_stiction_enabled)
 	rig_b.set_stiction_enabled(is_stiction_enabled)
+	if live_graph != null:
+		live_graph.set_stiction_enabled(is_stiction_enabled)
 	_update_stiction_button_ui()
 	if inspected_rig != null and is_instance_valid(inspected_rig):
 		_update_force_visualizer()
@@ -1977,6 +1983,7 @@ func _apply_preset(m: float, k: float, eta: float = 1.0, g: float = 9.81, mu: fl
 		live_graph.set_stiffness(k)
 		live_graph.set_efficiency(eta)
 		live_graph.set_gravity(g)
+		live_graph.set_friction_mu(mu)
 
 
 func _on_rig_a_telemetry(data: Dictionary) -> void:

@@ -514,15 +514,18 @@ func _update_kinematics(delta: float) -> void:
 	var f_n: float = clampf(omega_phys / TAU, 1.2, 2.2)
 	var omega: float = TAU * f_n
 
-	# Calculate physical Coulomb stiction deadband:
-	var a_coulomb: float = 0.0
+	# Calculate physical Coulomb friction:
+	var a_kinetic: float = 0.0
+	var a_stiction_limit: float = 0.0
 	stiction_deadband_H = 0.0
 	if friction_mu > 0.0001:
 		var normal_load_factor: float = clampf(effective_load_P / 5.0, 0.40, 2.5)
-		# Calibrated Coulomb deceleration producing realistic 3-10mm stiction deadband
-		a_coulomb = (friction_mu / 0.20) * 0.40 * normal_load_factor
+		# 1. Gentle dynamic sliding drag (fk): matches realistic low pin friction during motion
+		a_kinetic = (friction_mu / 0.20) * 0.045 * normal_load_factor
+		# 2. Static holding threshold (fs): only engaged when stiction_enabled is true
 		if stiction_enabled:
-			stiction_deadband_H = a_coulomb / maxf(omega * omega, 1.0)
+			a_stiction_limit = (friction_mu / 0.20) * 0.40 * normal_load_factor
+			stiction_deadband_H = a_stiction_limit / maxf(omega * omega, 1.0)
 
 	if not oscillations_enabled:
 		# Smooth glide mode with Coulomb deadband holding
@@ -556,17 +559,15 @@ func _update_kinematics(delta: float) -> void:
 
 			# Coulomb friction logic (Stiction vs Kinetic sliding):
 			var a_fric: float = 0.0
-			if a_coulomb > 0.0001:
-				if stiction_enabled and absf(velocity_H) < v_stick_thresh and absf(a_restoring) <= a_coulomb:
-					# Stiction condition met: static friction exactly cancels restoring force!
-					# Mechanism is locked in static equilibrium at this position!
-					stiction_engaged = true
-					velocity_H = 0.0
-					acceleration_H = 0.0
-					break
-				else:
-					var sgn_v: float = clampf(velocity_H / v_stick_thresh, -1.0, 1.0)
-					a_fric = - a_coulomb * sgn_v
+			if stiction_enabled and a_stiction_limit > 0.0001 and absf(velocity_H) < v_stick_thresh and absf(a_restoring) <= a_stiction_limit:
+				# Stiction condition met: static friction locks mechanism in static equilibrium!
+				stiction_engaged = true
+				velocity_H = 0.0
+				acceleration_H = 0.0
+				break
+			elif a_kinetic > 0.0001:
+				var sgn_v: float = clampf(velocity_H / v_stick_thresh, -1.0, 1.0)
+				a_fric = - a_kinetic * sgn_v
 
 			var a0: float = a_restoring + a_viscous + a_fric
 
@@ -579,15 +580,14 @@ func _update_kinematics(delta: float) -> void:
 			var a_viscous_next: float = - damping_c * v_half
 			var a_fric_next: float = 0.0
 
-			if a_coulomb > 0.0001:
-				if stiction_enabled and absf(v_half) < v_stick_thresh and absf(a_restoring_next) <= a_coulomb:
-					stiction_engaged = true
-					velocity_H = 0.0
-					acceleration_H = 0.0
-					break
-				else:
-					var sgn_v_half: float = clampf(v_half / v_stick_thresh, -1.0, 1.0)
-					a_fric_next = - a_coulomb * sgn_v_half
+			if stiction_enabled and a_stiction_limit > 0.0001 and absf(v_half) < v_stick_thresh and absf(a_restoring_next) <= a_stiction_limit:
+				stiction_engaged = true
+				velocity_H = 0.0
+				acceleration_H = 0.0
+				break
+			elif a_kinetic > 0.0001:
+				var sgn_v_half: float = clampf(v_half / v_stick_thresh, -1.0, 1.0)
+				a_fric_next = - a_kinetic * sgn_v_half
 
 			var a1: float = a_restoring_next + a_viscous_next + a_fric_next
 			velocity_H = v_half + 0.5 * a1 * sub_dt
