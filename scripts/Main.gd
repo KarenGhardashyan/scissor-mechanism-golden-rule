@@ -432,15 +432,15 @@ func _setup_rigs() -> void:
 	if camera == null:
 		camera = OrbitCamera.new()
 		camera.name = "OrbitCamera"
-		camera.target_point = Vector3(-0.20, 1.80, 0.0)
-		camera.default_distance = 7.65
+		camera.target_point = Vector3(-0.20, 1.60, 0.0)
+		camera.default_distance = 8.25
 		camera.fov = 54.0
 		camera.target_pitch = deg_to_rad(-5.0)
 		camera.pitch = deg_to_rad(-5.0)
 		add_child(camera)
 	else:
-		camera.target_point = Vector3(-0.20, 1.80, 0.0)
-		camera.default_distance = 7.65
+		camera.target_point = Vector3(-0.20, 1.60, 0.0)
+		camera.default_distance = 8.25
 		camera.fov = 54.0
 		camera.target_pitch = deg_to_rad(-5.0)
 		camera.pitch = deg_to_rad(-5.0)
@@ -2034,9 +2034,9 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 	}
 
 
-func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vector3, visual_length: float, label_text: String, label_side_offset: float = 0.0) -> void:
+func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vector3, visual_length: float, label_text: String, label_world_offset: Vector3 = Vector3.ZERO) -> void:
 	var root: Node3D = arrow_dict["root"]
-	if visual_length < 0.02 or dir_unit.length_squared() < 0.001:
+	if visual_length < 0.02 or dir_unit.length_squared() < 0.001 or label_text.is_empty():
 		root.visible = false
 		return
 	root.visible = true
@@ -2059,10 +2059,12 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 	var tip: MeshInstance3D = arrow_dict["tip"]
 	tip.position = Vector3(0, stem_len + tip_len * 0.5, 0)
 
-	# Label offset radially along the arrow head to prevent text collisions
+	# Label placed at arrow tip with world radial angular offset to prevent text collisions (Point 3)
 	var lbl: Label3D = arrow_dict["label"]
-	lbl.position = Vector3(label_side_offset, stem_len + tip_len + 0.07, 0)
-	lbl.text = label_text
+	var tip_world_pos: Vector3 = origin + dir * visual_length
+	lbl.global_position = tip_world_pos + label_world_offset
+	# Strict guarantee: NEVER display negative signs on 3D arrows (Point 1)
+	lbl.text = label_text.replace("= -", "= ").replace("=-", "= ").replace("-", "")
 
 
 func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
@@ -2077,12 +2079,12 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var mu: float = 0.20 # Coulomb pin friction coefficient
 	var r_pin: float = 0.026 # Pin contact radius in meters
 
-	# Motion direction from Symplectic Euler integrator:
+	# Motion direction from numerical integrator:
 	# vel_H > 0: extending downward; vel_H < 0: contracting upward
 	var vel_h: float = rig.velocity_H
 	var motion_dir: float = signf(vel_h)
-	if absf(vel_h) < 0.001:
-		motion_dir = 1.0 # Static equilibrium incipient extension under gravity
+	if absf(vel_h) < 0.0005:
+		motion_dir = 1.0 # Incipient extension under gravity
 
 	var F_y: float = 0.0
 	var F_x: float = 0.0
@@ -2099,21 +2101,22 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var desc := ""
 
 	if pin_idx == 0:
-		# Top Gantry Anchor
+		# Top Gantry Anchor (Static ceiling beam - zero linear sliding displacement)
 		var p_tot: float = m * g + float(n) * link_m * g
 		F_y = p_tot
-		dir_fy = Vector3(0, 1, 0) # Points up (balancing total suspended weight)
+		dir_fy = Vector3(0, 1, 0) # Upward support reaction
 
 		F_x = rig.tensile_force_T / (2.0 * tan_theta)
-		dir_fx = Vector3(1, 0, 0) # Top slider thrust
+		dir_fx = Vector3(1, 0, 0) # Top scissor lateral tension
 
 		var raw_res := Vector3(F_x, F_y, 0.0)
 		R = raw_res.length()
 		dir_res = raw_res.normalized()
-		F_fric = mu * R
-		tau_fric = mu * R * r_pin
-		# Friction counter-force opposing slider extension/contraction
-		dir_fric = Vector3(-motion_dir, 0, 0)
+
+		# Point 2 FIX: Hide F_fric on static ceiling gantry pins where linear sliding is zero
+		F_fric = 0.0
+		tau_fric = 0.0
+		dir_fric = Vector3.ZERO
 
 		title = "%s · Top Gantry Pivot [Pin #0]" % rig.rig_name
 		desc = "Ceiling support reaction balancing total suspended mass + mechanism weight."
@@ -2126,47 +2129,51 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 
 		if type == 0:
 			# Left Lateral Hinge
-			F_y = -p_stage * 0.5
-			dir_fy = Vector3(0, -1, 0) # Downward load on left branch
+			F_y = p_stage * 0.5
+			dir_fy = Vector3(0, -1, 0) # Downward load transmission
 
 			F_x = p_stage / (2.0 * tan_theta)
-			dir_fx = Vector3(-1, 0, 0) # Outward thrust pointing left
+			dir_fx = Vector3(-1, 0, 0) # Outward lateral thrust pointing left
 
-			var raw_res := Vector3(-F_x, F_y, 0.0)
+			var raw_res := Vector3(-F_x, -F_y, 0.0)
 			R = raw_res.length()
 			dir_res = raw_res.normalized()
 			F_fric = mu * R
 			tau_fric = mu * R * r_pin
-			# When extending (motion_dir > 0), left hinge moves inward (+X). Friction opposes outward (-X).
-			dir_fric = Vector3(-motion_dir, 0, 0)
+			# Point 2 FIX: Coulomb friction opposes link displacement (tangential / opposite to link motion)
+			# During downward extension, left hinge travels inward (+X) and downward (-Y).
+			# Opposing friction points outward (-X) and upward (+Y):
+			dir_fric = Vector3(-cos(theta), sin(theta), 0.0).normalized() * motion_dir
 
 			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
 
 		elif type == 1:
 			# Right Lateral Hinge
-			F_y = -p_stage * 0.5
-			dir_fy = Vector3(0, -1, 0) # Downward load on right branch
+			F_y = p_stage * 0.5
+			dir_fy = Vector3(0, -1, 0) # Downward load transmission
 
 			F_x = p_stage / (2.0 * tan_theta)
-			dir_fx = Vector3(1, 0, 0) # Outward thrust pointing right
+			dir_fx = Vector3(1, 0, 0) # Outward lateral thrust pointing right
 
-			var raw_res := Vector3(F_x, F_y, 0.0)
+			var raw_res := Vector3(F_x, -F_y, 0.0)
 			R = raw_res.length()
 			dir_res = raw_res.normalized()
 			F_fric = mu * R
 			tau_fric = mu * R * r_pin
-			# When extending (motion_dir > 0), right hinge moves inward (-X). Friction opposes outward (+X).
-			dir_fric = Vector3(motion_dir, 0, 0)
+			# Point 2 FIX: Coulomb friction opposes link displacement (tangential / opposite to link motion)
+			# During downward extension, right hinge travels inward (-X) and downward (-Y).
+			# Opposing friction points outward (+X) and upward (+Y):
+			dir_fric = Vector3(cos(theta), sin(theta), 0.0).normalized() * motion_dir
 
 			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
 
 		else:
-			# Central Hinge
+			# Central Coupling Hinge
 			if s == n - 1:
 				# Bottommost pin supporting mass directly
-				F_y = -m * g
+				F_y = m * g
 				dir_fy = Vector3(0, -1, 0)
 				F_x = 0.0
 				dir_fx = Vector3.ZERO
@@ -2174,30 +2181,29 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_res = Vector3(0, -1, 0)
 				F_fric = mu * R
 				tau_fric = mu * R * r_pin
-				# Opposes vertical downward extension by pointing upward (+Y)
-				dir_fric = Vector3(0, motion_dir, 0)
+				# Pure vertical displacement: friction opposes downward extension by pointing upward (+Y)
+				dir_fric = Vector3(0, 1.0, 0) * motion_dir
 
 				title = "%s · Bottom Payload Suspension Pin [Pin #%d]" % [rig.rig_name, pin_idx]
 				desc = "Lowest pivot transmitting payload gravity directly into the bottom scissor stage."
 			else:
 				# Intermediate central coupling hinge
-				F_y = -p_below
+				F_y = p_below
 				dir_fy = Vector3(0, -1, 0)
 				F_x = p_below / (2.0 * tan_theta)
 				dir_fx = Vector3(1, 0, 0) # Scissor cross-shear
-				var raw_res := Vector3(F_x * 0.5, F_y, 0.0)
+				var raw_res := Vector3(F_x * 0.5, -F_y, 0.0)
 				R = raw_res.length()
 				dir_res = raw_res.normalized()
 				F_fric = mu * R
 				tau_fric = mu * R * r_pin
-				# Opposes vertical downward expansion motion
-				dir_fric = Vector3(0, motion_dir, 0)
+				# Intermediate central pin travels vertically; friction opposes extension by pointing upward (+Y)
+				dir_fric = Vector3(0, 1.0, 0) * motion_dir
 
 				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 				desc = "Intermediate coupling pivot transferring vertical load between consecutive scissor stages."
 
-	# 2: B - Sublinear Square-Root scaling: length = clamp(sqrt(|F|) * k_scale, min_len, max_len)
-	# 3: A - Hard cutoff: Completely hide vector arrow when |F| < 0.15 N
+	# Sublinear Square-Root scaling with 0.15N threshold (Point 1 & Point 2)
 	var min_arrow_len: float = 0.22
 	var max_arrow_len: float = 1.15
 	var force_threshold: float = 0.15
@@ -2205,8 +2211,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 
 	var len_fy: float = clampf(sqrt(absf(F_y)) * k_scale, min_arrow_len, max_arrow_len) if absf(F_y) >= force_threshold else 0.0
 	var len_fx: float = clampf(sqrt(absf(F_x)) * k_scale, min_arrow_len, max_arrow_len) if absf(F_x) >= force_threshold else 0.0
-	var len_res: float = clampf(sqrt(R) * k_scale, min_arrow_len, max_arrow_len) if R >= force_threshold else 0.0
-	var len_fric: float = clampf(sqrt(F_fric) * k_scale, min_arrow_len, max_arrow_len) if F_fric >= force_threshold else 0.0
+	var len_res: float = clampf(sqrt(absf(R)) * k_scale, min_arrow_len, max_arrow_len) if absf(R) >= force_threshold else 0.0
+	var len_fric: float = clampf(sqrt(absf(F_fric)) * k_scale, min_arrow_len, max_arrow_len) if absf(F_fric) >= force_threshold else 0.0
 
 	return {
 		"dir_fy": dir_fy,
@@ -2219,12 +2225,12 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"len_fric": len_fric,
 		"lbl_fy": "Fy = %.2f N" % absf(F_y),
 		"lbl_fx": "Fx = %.2f N" % absf(F_x),
-		"lbl_res": "R = %.2f N" % R,
-		"lbl_fric": "fk = %.2f N" % F_fric,
-		"F_y": F_y,
-		"F_x": F_x,
-		"R": R,
-		"F_fric": F_fric,
+		"lbl_res": "R = %.2f N" % absf(R),
+		"lbl_fric": ("fk = %.2f N" % absf(F_fric)) if F_fric > 0.01 else "",
+		"F_y": absf(F_y),
+		"F_x": absf(F_x),
+		"R": absf(R),
+		"F_fric": absf(F_fric),
 		"tau_fric": tau_fric,
 		"theta_deg": rad_to_deg(theta),
 		"title": title,
@@ -2247,8 +2253,8 @@ func _update_force_visualizer() -> void:
 	var filter_alpha: float = clampf(14.0 * dt, 0.0, 1.0)
 	filtered_fy = lerpf(filtered_fy, absf(data.F_y), filter_alpha)
 	filtered_fx = lerpf(filtered_fx, absf(data.F_x), filter_alpha)
-	filtered_res = lerpf(filtered_res, data.R, filter_alpha)
-	filtered_fric = lerpf(filtered_fric, data.F_fric, filter_alpha)
+	filtered_res = lerpf(filtered_res, absf(data.R), filter_alpha)
+	filtered_fric = lerpf(filtered_fric, absf(data.F_fric), filter_alpha)
 	filtered_theta = lerpf(filtered_theta, data.theta_deg, filter_alpha)
 
 	# Sublinear Square-Root scaling (2: B) & Hard cutoff (3: A)
@@ -2262,40 +2268,56 @@ func _update_force_visualizer() -> void:
 	var disp_len_res: float = clampf(sqrt(filtered_res) * k_scale, min_arrow_len, max_arrow_len) if filtered_res >= force_threshold else 0.0
 	var disp_len_fric: float = clampf(sqrt(filtered_fric) * k_scale, min_arrow_len, max_arrow_len) if filtered_fric >= force_threshold else 0.0
 
-	var lbl_fy_str := "Fy = %.2f N" % filtered_fy
-	var lbl_fx_str := "Fx = %.2f N" % filtered_fx
-	var lbl_res_str := "R = %.2f N" % filtered_res
-	var lbl_fric_str := "fk = %.2f N" % filtered_fric
+	# Strict non-negative label strings (Point 1)
+	var lbl_fy_str := "Fy = %.2f N" % absf(filtered_fy)
+	var lbl_fx_str := "Fx = %.2f N" % absf(filtered_fx)
+	var lbl_res_str := "R = %.2f N" % absf(filtered_res)
+	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if filtered_fric >= force_threshold else ""
 
-	# Fy, Fx, R originate at pin center — each with unique radial offset to prevent label collisions
-	_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, 0.06)
-	_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, -0.06)
-	_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, 0.12)
+	# Point 3 FIX: Radial angular offsets around the pin to eliminate collisions
+	# Fx label placed at arrow tip with Vector3(0.15, 0.05, 0)
+	# Fy label placed at arrow tip with Vector3(0.05, -0.15, 0)
+	# R label placed at arrow tip with Vector3(0.15, -0.15, 0)
+	# F_fric label placed with clear clearance Vector3(-0.16, 0.14, 0.04)
+	_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, Vector3(0.05, -0.15, 0.0))
+	_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.15, 0.05, 0.0))
+	_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, Vector3(0.15, -0.15, 0.0))
 
-	# F_fric originates on the front washer face of the pin (+0.065m Z)
+	# F_fric originates on the front washer face of the pin (+0.065m Z) - hidden if static gantry pin or micro-force
 	var fric_origin: Vector3 = pin_pos + Vector3(0, 0, 0.065)
-	_update_arrow_vector(arrow_fric_data, fric_origin, data.dir_fric, disp_len_fric, lbl_fric_str, -0.08)
+	if data.len_fric > 0.01 and not lbl_fric_str.is_empty():
+		_update_arrow_vector(arrow_fric_data, fric_origin, data.dir_fric, disp_len_fric, lbl_fric_str, Vector3(-0.16, 0.14, 0.04))
+	else:
+		arrow_fric_data["root"].visible = false
 
 	# 4: C - Consolidated floating billboard badge
 	if joint_billboard_badge != null:
 		joint_billboard_badge.visible = true
-		joint_billboard_badge.global_position = pin_pos + Vector3(0.24, 0.22, 0.04)
-		joint_billboard_badge.text = "Pin #%d Load Summary\n  R  : %.2f N\n  Fy : %.2f N\n  Fx : %.2f N\n  fk : %.2f N" % [
-			inspected_pin_idx,
-			filtered_res,
-			filtered_fy,
-			filtered_fx,
-			filtered_fric
-		]
+		joint_billboard_badge.global_position = pin_pos + Vector3(0.26, 0.22, 0.04)
+		if filtered_fric >= force_threshold:
+			joint_billboard_badge.text = "Pin #%d Load Summary\n  R  : %.2f N\n  Fy : %.2f N\n  Fx : %.2f N\n  fk : %.2f N" % [
+				inspected_pin_idx,
+				absf(filtered_res),
+				absf(filtered_fy),
+				absf(filtered_fx),
+				absf(filtered_fric)
+			]
+		else:
+			joint_billboard_badge.text = "Pin #%d Load Summary\n  R  : %.2f N\n  Fy : %.2f N\n  Fx : %.2f N" % [
+				inspected_pin_idx,
+				absf(filtered_res),
+				absf(filtered_fy),
+				absf(filtered_fx)
+			]
 
 	# 11: C - Update Tier 1 Core Statics
 	if joint_val_fy != null:
 		joint_card_title.text = data.title
 		joint_card_desc.text = data.desc
-		joint_val_fy.text = "%.2f N  (Vertical Load / Reaction)" % filtered_fy
-		joint_val_fx.text = "%.2f N  (Lateral Scissor Thrust)" % filtered_fx
-		joint_val_res.text = "%.2f N  (Joint Resultant Contact R)" % filtered_res
-		joint_val_fric.text = "%.2f N  (Coulomb Hinge Friction fk)" % filtered_fric
+		joint_val_fy.text = "%.2f N  (Vertical Load / Reaction)" % absf(filtered_fy)
+		joint_val_fx.text = "%.2f N  (Lateral Scissor Thrust)" % absf(filtered_fx)
+		joint_val_res.text = "%.2f N  (Joint Resultant Contact R)" % absf(filtered_res)
+		joint_val_fric.text = "%.2f N  (Coulomb Hinge Friction fk)" % absf(filtered_fric)
 		joint_val_theta.text = "%.1f°  (Scissor Half-Angle θ)" % filtered_theta
 
 	# 11: C - Update Tier 2 Advanced Stress & Pin Analysis
@@ -2319,6 +2341,8 @@ func _update_force_visualizer() -> void:
 
 
 func _sync_quick_pin_buttons(active_rig: PantographRig, active_pin: int) -> void:
+	var def_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.118, 0.161, 0.231)
+	var active_col: Color = Color(1.0, 0.72, 0.20) if is_dark_theme else Color(0.85, 0.45, 0.0)
 	for btn in quick_pin_buttons:
 		if not btn.has_meta("get_rig") or not btn.has_meta("idx"):
 			continue
@@ -2327,11 +2351,11 @@ func _sync_quick_pin_buttons(active_rig: PantographRig, active_pin: int) -> void
 		var idx: int = btn.get_meta("idx")
 		var is_active: bool = (r == active_rig and idx == active_pin)
 		if is_active:
-			btn.add_theme_color_override("font_color", Color(1.0, 0.72, 0.20))
-			btn.add_theme_color_override("font_hover_color", Color(1.0, 0.85, 0.35))
-			btn.add_theme_color_override("font_pressed_color", Color(1.0, 0.72, 0.20))
+			btn.add_theme_color_override("font_color", active_col)
+			btn.add_theme_color_override("font_hover_color", active_col)
+			btn.add_theme_color_override("font_pressed_color", active_col)
 		else:
-			btn.remove_theme_color_override("font_color")
+			btn.add_theme_color_override("font_color", def_col)
 			btn.remove_theme_color_override("font_hover_color")
 			btn.remove_theme_color_override("font_pressed_color")
 
@@ -2489,12 +2513,15 @@ func _apply_theme(is_dark: bool) -> void:
 			sb.shadow_color = panel_shadow
 
 	# 7. UI Buttons
-	var btn_normal_bg := Color(0.12, 0.14, 0.20, 0.80) if is_dark else Color(1.0, 1.0, 1.0, 0.65)
-	var btn_normal_border := Color(0.30, 0.35, 0.48, 0.50) if is_dark else Color(1.0, 1.0, 1.0, 0.90)
-	var btn_text_color := Color(0.92, 0.94, 0.98) if is_dark else Color(0.114, 0.114, 0.122)
+	var col_dark_slate := Color(0.118, 0.161, 0.231) # #1e293b
+	var col_sec_slate := Color(0.28, 0.33, 0.42)   # #475569
 
-	var btn_hover_bg := Color(0.18, 0.21, 0.30, 0.95) if is_dark else Color(1.0, 1.0, 1.0, 0.90)
-	var btn_hover_border := Color(1.0, 0.55, 0.15, 0.80) if is_dark else Color(0.0, 0.443, 0.89, 0.40)
+	var btn_normal_bg := Color(0.12, 0.14, 0.20, 0.80) if is_dark else Color(1.0, 1.0, 1.0, 0.75)
+	var btn_normal_border := Color(0.30, 0.35, 0.48, 0.50) if is_dark else Color(0.80, 0.84, 0.90, 0.95)
+	var btn_text_color := Color(0.92, 0.94, 0.98) if is_dark else col_dark_slate
+
+	var btn_hover_bg := Color(0.18, 0.21, 0.30, 0.95) if is_dark else Color(1.0, 1.0, 1.0, 0.95)
+	var btn_hover_border := Color(1.0, 0.55, 0.15, 0.80) if is_dark else Color(0.0, 0.443, 0.89, 0.60)
 
 	var btn_pressed_bg := Color(1.0, 0.55, 0.15, 0.20) if is_dark else Color(0.0, 0.443, 0.89, 0.15)
 	var btn_pressed_border := Color(1.0, 0.55, 0.15, 1.0) if is_dark else Color(0.0, 0.443, 0.89, 0.80)
@@ -2502,7 +2529,7 @@ func _apply_theme(is_dark: bool) -> void:
 	for b in theme_buttons:
 		b.add_theme_color_override("font_color", btn_text_color)
 		b.add_theme_color_override("font_pressed_color", btn_text_color)
-		b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0) if is_dark else btn_text_color)
+		b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0) if is_dark else col_dark_slate)
 		b.add_theme_color_override("font_focus_color", btn_text_color)
 
 		var s_norm: StyleBoxFlat = b.get_theme_stylebox("normal") as StyleBoxFlat
@@ -2518,14 +2545,50 @@ func _apply_theme(is_dark: bool) -> void:
 			s_press.bg_color = btn_pressed_bg
 			s_press.border_color = btn_pressed_border
 
-	# 8. Labels
-	var col_title := Color(0.95, 0.96, 0.98) if is_dark else Color(0.114, 0.114, 0.122)
-	var col_sec := Color(0.65, 0.68, 0.76) if is_dark else Color(0.40, 0.42, 0.48)
+	# 8. Labels (Enforce #1e293b in Light Theme for high contrast readability)
+	var col_title := Color(0.95, 0.96, 0.98) if is_dark else col_dark_slate
+	var col_sec := Color(0.65, 0.68, 0.76) if is_dark else col_sec_slate
 
 	for lbl in theme_labels_primary:
 		lbl.add_theme_color_override("font_color", col_title)
 	for lbl in theme_labels_secondary:
 		lbl.add_theme_color_override("font_color", col_sec)
+
+	# 8b. Joint Inspector Panel Specific High-Contrast Theming (Point 4)
+	if joint_card_title != null:
+		joint_card_title.add_theme_color_override("font_color", col_title)
+	if joint_card_desc != null:
+		joint_card_desc.add_theme_color_override("font_color", col_sec)
+	if joint_note_lbl_ref != null:
+		joint_note_lbl_ref.add_theme_color_override("font_color", col_sec)
+	if quick_pins_title_lbl_ref != null:
+		quick_pins_title_lbl_ref.add_theme_color_override("font_color", col_sec)
+
+	for lbl in joint_view_labels:
+		if lbl != null and is_instance_valid(lbl):
+			if lbl == joint_val_fy:
+				lbl.add_theme_color_override("font_color", Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.35, 0.85))
+			elif lbl == joint_val_fx:
+				lbl.add_theme_color_override("font_color", Color(1.0, 0.35, 0.20) if is_dark else Color(0.85, 0.15, 0.15))
+			elif lbl == joint_val_res:
+				lbl.add_theme_color_override("font_color", Color(0.25, 1.0, 0.50) if is_dark else Color(0.05, 0.55, 0.22))
+			elif lbl == joint_val_fric:
+				lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.15) if is_dark else Color(0.75, 0.45, 0.0))
+			elif lbl == joint_val_tau_shear or lbl == joint_val_sigma_b:
+				lbl.add_theme_color_override("font_color", Color(0.95, 0.55, 0.25) if is_dark else Color(0.75, 0.35, 0.10))
+			elif lbl == joint_val_sf:
+				lbl.add_theme_color_override("font_color", Color(0.25, 0.95, 0.50) if is_dark else Color(0.08, 0.60, 0.25))
+			elif lbl == joint_val_tau_fric:
+				lbl.add_theme_color_override("font_color", Color(1.0, 0.80, 0.25) if is_dark else Color(0.75, 0.48, 0.0))
+			else:
+				lbl.add_theme_color_override("font_color", col_title)
+
+	for btn in quick_pin_buttons:
+		if btn != null and is_instance_valid(btn):
+			btn.add_theme_color_override("font_color", btn_text_color)
+			btn.add_theme_color_override("font_pressed_color", btn_text_color)
+			btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0) if is_dark else Color(0.0, 0.0, 0.0))
+			btn.add_theme_color_override("font_focus_color", btn_text_color)
 
 	# 9. Sliders & Progress Bars
 	var track_color := Color(0.18, 0.20, 0.28) if is_dark else Color(0.84, 0.85, 0.88)
