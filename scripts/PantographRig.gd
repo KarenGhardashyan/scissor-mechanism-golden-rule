@@ -502,32 +502,36 @@ func _update_kinematics(delta: float) -> void:
 		current_H = lerpf(current_H, target_H, clampf(dt * smooth_speed, 0.0, 1.0))
 		velocity_H = 0.0
 	else:
-		# 5: A - Lumped equivalent payload mass + fixed equivalent link mass lumped at joint pivots
+		# 1. NATURAL OSCILLATION TUNING (Kill the Numeric Buzzing):
 		var effective_n: float = 6.0 if is_scaled_123 else float(n_stages)
-		var struct_weight_factor: float = 3.0 if is_scaled_123 else (float(n_stages) * 0.5)
-		var lumped_joint_mass: float = struct_weight_factor * link_mass_per_stage * 0.35
-		var m_eff: float = maxf(suspended_mass + lumped_joint_mass, 0.05)
-		var k_eff: float = spring_k / maxf(effective_n * effective_n, 1.0)
-		var omega_phys: float = sqrt(k_eff / m_eff)
+		var total_link_mass: float = (6.0 * link_mass_per_stage) if is_scaled_123 else (float(n_stages) * link_mass_per_stage)
 
-		# 6: B - Snappy mechanical response clamped to 1.8 - 2.5 Hz natural frequency
-		var f_n: float = clampf(omega_phys / TAU, 1.8, 2.5)
+		# Factor in the effective distributed mass of the scissors mechanism:
+		# When expanding, all links accelerate, drastically increasing effective dynamic inertia:
+		# m_effective = m_payload + (0.33 * total_link_mass * lambda)
+		var m_effective: float = maxf(suspended_mass + (0.33 * total_link_mass * effective_n), 0.15)
+		var k_eff: float = spring_k / maxf(effective_n * effective_n, 1.0)
+		var omega_phys: float = sqrt(k_eff / m_effective)
+
+		# Clamp maximum visual oscillation frequency to realistic mechanical range (1.2 Hz to 2.2 Hz):
+		var f_n: float = clampf(omega_phys / TAU, 1.2, 2.2)
 		var omega: float = TAU * f_n
 
-		# 7: C - Hybrid Viscous + Coulomb Friction model
-		var damping_c: float = 2.0 * omega * damping_ratio_zeta
-		var a_coulomb: float = 0.28 # m/s² dry friction deceleration
-		var v_stick: float = 0.0025 # m/s stiction velocity threshold
-		var h_deadband: float = 0.0008 # m displacement deadband
+		# Damping profile: analytical viscous damping + Coulomb dry friction
+		var damping_c: float = 2.0 * omega * maxf(damping_ratio_zeta, 0.06)
+		var a_coulomb: float = 0.20 # m/s² dry friction deceleration
+		var v_stick: float = 0.0035 # m/s stiction velocity threshold
+		var h_deadband: float = 0.0012 # m displacement deadband
 
-		# 8: B - Sub-stepped Velocity Verlet integrator with analytical Rayleigh damping
+		# Sub-stepped Velocity Verlet integrator (400 Hz physics sub-step)
 		var target_sub_dt: float = 0.0025 # 400 Hz physics sub-step
 		var sub_steps: int = clampi(int(ceil(dt / target_sub_dt)), 4, 16)
 		var sub_dt: float = dt / float(sub_steps)
 
 		for step in range(sub_steps):
 			var err: float = target_H - current_H
-			var sgn_v: float = signf(velocity_H) if absf(velocity_H) > 0.0005 else 0.0
+			# Regularized smooth friction signum (tanh) prevents discrete numerical chatter around zero velocity
+			var sgn_v: float = tanh(velocity_H / 0.004)
 			var a0: float = omega * omega * err - damping_c * velocity_H - a_coulomb * sgn_v
 
 			# Velocity Verlet half-step & position update
@@ -535,12 +539,12 @@ func _update_kinematics(delta: float) -> void:
 			current_H += v_half * sub_dt
 
 			var err_next: float = target_H - current_H
-			var sgn_v_half: float = signf(v_half) if absf(v_half) > 0.0005 else 0.0
+			var sgn_v_half: float = tanh(v_half / 0.004)
 			var a1: float = omega * omega * err_next - damping_c * v_half - a_coulomb * sgn_v_half
 			velocity_H = v_half + 0.5 * a1 * sub_dt
 
-			# Coulomb stick-slip engagement: lock into equilibrium when kinetic energy is below stick limit
-			if absf(velocity_H) < v_stick and absf(target_H - current_H) < h_deadband:
+			# Coulomb stick-slip engagement: smoothly arrest motion within 3-4 clean decaying cycles
+			if absf(velocity_H) < v_stick and absf(err_next) < h_deadband:
 				velocity_H = 0.0
 				current_H = target_H
 				break

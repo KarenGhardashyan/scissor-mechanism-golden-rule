@@ -1972,7 +1972,7 @@ func _build_force_visualizer() -> void:
 	badge_mesh.size = Vector2(0.40, 0.22)
 	joint_badge_pill.mesh = badge_mesh
 	var badge_mat := StandardMaterial3D.new()
-	badge_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.65)
+	badge_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.75)
 	badge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	badge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	badge_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
@@ -2048,7 +2048,7 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 	pill_mesh.size = Vector2(0.24, 0.062)
 	pill.mesh = pill_mesh
 	var pill_mat := StandardMaterial3D.new()
-	pill_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.65)
+	pill_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.75)
 	pill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	pill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	pill_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
@@ -2259,15 +2259,16 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 				desc = "Intermediate coupling pivot transferring vertical load between consecutive scissor stages."
 
-	# 1. STRICT LINEAR SCALING WITHOUT FAKE MINIMUMS:
+	# 1. STRICT LINEAR SCALING: length = clamp(magnitude * 0.35, 0.1, 1.2)
 	const FORCE_SCALE: float = 0.35 # meters per Newton
 	const FORCE_THRESHOLD: float = 0.10 # Hide if force_mag < 0.1 N
-	const MAX_ARROW_LEN: float = 1.40
+	const MIN_ARROW_LEN: float = 0.10
+	const MAX_ARROW_LEN: float = 1.20
 
-	var len_fy: float = minf(absf(F_y) * FORCE_SCALE, MAX_ARROW_LEN) if absf(F_y) >= FORCE_THRESHOLD else 0.0
-	var len_fx: float = minf(absf(F_x) * FORCE_SCALE, MAX_ARROW_LEN) if absf(F_x) >= FORCE_THRESHOLD else 0.0
-	var len_res: float = minf(absf(R) * FORCE_SCALE, MAX_ARROW_LEN) if absf(R) >= FORCE_THRESHOLD else 0.0
-	var len_fric: float = minf(absf(F_fric) * FORCE_SCALE, MAX_ARROW_LEN) if absf(F_fric) >= FORCE_THRESHOLD else 0.0
+	var len_fy: float = clampf(absf(F_y) * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if absf(F_y) >= FORCE_THRESHOLD else 0.0
+	var len_fx: float = clampf(absf(F_x) * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if absf(F_x) >= FORCE_THRESHOLD else 0.0
+	var len_res: float = clampf(absf(R) * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if absf(R) >= FORCE_THRESHOLD else 0.0
+	var len_fric: float = clampf(absf(F_fric) * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if absf(F_fric) >= FORCE_THRESHOLD else 0.0
 
 	return {
 		"dir_fy": dir_fy,
@@ -2312,15 +2313,16 @@ func _update_force_visualizer() -> void:
 	filtered_fric = lerpf(filtered_fric, absf(data.F_fric), filter_alpha)
 	filtered_theta = lerpf(filtered_theta, data.theta_deg, filter_alpha)
 
-	# 1. STRICT LINEAR SCALING:
+	# 1. STRICT LINEAR SCALING: length = clamp(magnitude * 0.35, 0.1, 1.2)
 	const FORCE_SCALE: float = 0.35 # meters per Newton
 	const FORCE_THRESHOLD: float = 0.10 # Hide if force_mag < 0.1 N
-	const MAX_ARROW_LEN: float = 1.40
+	const MIN_ARROW_LEN: float = 0.10
+	const MAX_ARROW_LEN: float = 1.20
 
-	var disp_len_fy: float = minf(filtered_fy * FORCE_SCALE, MAX_ARROW_LEN) if filtered_fy >= FORCE_THRESHOLD else 0.0
-	var disp_len_fx: float = minf(filtered_fx * FORCE_SCALE, MAX_ARROW_LEN) if filtered_fx >= FORCE_THRESHOLD else 0.0
-	var disp_len_res: float = minf(filtered_res * FORCE_SCALE, MAX_ARROW_LEN) if filtered_res >= FORCE_THRESHOLD else 0.0
-	var disp_len_fric: float = minf(filtered_fric * FORCE_SCALE, MAX_ARROW_LEN) if filtered_fric >= FORCE_THRESHOLD else 0.0
+	var disp_len_fy: float = clampf(filtered_fy * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if filtered_fy >= FORCE_THRESHOLD else 0.0
+	var disp_len_fx: float = clampf(filtered_fx * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if filtered_fx >= FORCE_THRESHOLD else 0.0
+	var disp_len_res: float = clampf(filtered_res * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if filtered_res >= FORCE_THRESHOLD else 0.0
+	var disp_len_fric: float = clampf(filtered_fric * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if filtered_fric >= FORCE_THRESHOLD else 0.0
 
 	# Strict non-negative label strings
 	var lbl_fy_str := ("Fy = %.2f N" % absf(filtered_fy)) if filtered_fy >= FORCE_THRESHOLD else ""
@@ -2328,24 +2330,24 @@ func _update_force_visualizer() -> void:
 	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_THRESHOLD else ""
 	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if filtered_fric >= FORCE_THRESHOLD else ""
 
-	# 2. PREVENT VECTOR & LABEL STACKING (Fx vs F_fric):
-	# Fy origin at pin center, slight Z recess:
-	var fy_origin: Vector3 = pin_pos + Vector3(0.0, 0.0, -0.015)
+	# 2. PREVENT VECTOR & LABEL STACKING: Separate concurrent vector origins along Z (z_offset = 0.05m)
+	# Fy origin at pin center, Z = -0.05m:
+	var fy_origin: Vector3 = pin_pos + Vector3(0.0, 0.0, -0.05)
 	var lbl_fy_offset := Vector3(-0.06, -0.08, 0.0) if data.dir_fy.y < 0.0 else Vector3(-0.06, 0.08, 0.0)
 	_update_arrow_vector(arrow_fy_data, fy_origin, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
 
-	# Fx origin: separated vertically (+0.012m Y) and slightly forward (+0.015m Z)
-	var fx_origin: Vector3 = pin_pos + Vector3(0.0, 0.012, 0.015)
-	# Place Fx text strictly above the red tip: tip_pos + Vector3(0.0, 0.08, 0.0)
-	_update_arrow_vector(arrow_fx_data, fx_origin, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.0, 0.08, 0.0))
-
-	# Resultant R origin: pin center
-	var res_origin: Vector3 = pin_pos + Vector3(0.0, 0.0, -0.005)
+	# Resultant R origin: pin center, Z = 0.00m:
+	var res_origin: Vector3 = pin_pos + Vector3(0.0, 0.0, 0.00)
 	var lbl_res_offset := Vector3(0.14, -0.06, 0.0) if data.dir_res.y < 0.0 else Vector3(0.14, 0.06, 0.0)
 	_update_arrow_vector(arrow_res_data, res_origin, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
 
-	# F_fric origin: separated vertically (-0.018m Y) and offset along Z (+0.075m Z) on front pin face
-	var fric_origin: Vector3 = pin_pos + Vector3(0.0, -0.018, 0.075)
+	# Fx origin: separated vertically (+0.012m Y) and offset along Z (+0.05m Z):
+	var fx_origin: Vector3 = pin_pos + Vector3(0.0, 0.012, 0.05)
+	# Place Fx text strictly above the red tip: tip_pos + Vector3(0.0, 0.08, 0.0)
+	_update_arrow_vector(arrow_fx_data, fx_origin, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.0, 0.08, 0.0))
+
+	# F_fric origin: separated vertically (-0.018m Y) and offset along Z (+0.10m Z) on front pin face:
+	var fric_origin: Vector3 = pin_pos + Vector3(0.0, -0.018, 0.10)
 	if data.len_fric > 0.01 and not lbl_fric_str.is_empty():
 		# Place F_fric text strictly below its tip: tip_pos + Vector3(0.0, -0.08, 0.0)
 		_update_arrow_vector(arrow_fric_data, fric_origin, data.dir_fric, disp_len_fric, lbl_fric_str, Vector3(0.0, -0.08, 0.0))
@@ -2569,10 +2571,14 @@ func _apply_theme(is_dark: bool) -> void:
 		live_graph.dark_theme = is_dark
 		live_graph.queue_redraw()
 
-	# 6. UI Panels StyleBoxes
-	var panel_bg := Color(0.07, 0.08, 0.12, 0.82) if is_dark else Color(1.0, 1.0, 1.0, 0.50)
-	var panel_border := Color(0.35, 0.40, 0.55, 0.40) if is_dark else Color(1.0, 1.0, 1.0, 0.80)
-	var panel_shadow := Color(0.0, 0.0, 0.0, 0.35) if is_dark else Color(0.0, 0.0, 0.0, 0.06)
+	# 6. UI Panels StyleBoxes (Clean Light Theme with subtle #cbd5e1 border & soft drop shadow)
+	var col_dark_charcoal := Color(0.059, 0.090, 0.165) # #0f172a
+	var col_dark_slate := Color(0.118, 0.161, 0.231)    # #1e293b
+	var col_sec_slate := Color(0.278, 0.333, 0.412)     # #475569
+
+	var panel_bg := Color(0.07, 0.08, 0.12, 0.82) if is_dark else Color(0.985, 0.988, 0.995, 0.92)
+	var panel_border := Color(0.35, 0.40, 0.55, 0.40) if is_dark else Color(0.796, 0.835, 0.882, 0.95) # #cbd5e1
+	var panel_shadow := Color(0.0, 0.0, 0.0, 0.35) if is_dark else Color(0.09, 0.15, 0.28, 0.12)
 
 	for p in theme_panels:
 		var sb: StyleBoxFlat = p.get_theme_stylebox("panel") as StyleBoxFlat
@@ -2580,16 +2586,23 @@ func _apply_theme(is_dark: bool) -> void:
 			sb.bg_color = panel_bg
 			sb.border_color = panel_border
 			sb.shadow_color = panel_shadow
+			sb.border_width_left = 1
+			sb.border_width_top = 1
+			sb.border_width_right = 1
+			sb.border_width_bottom = 1
+			if not is_dark:
+				sb.shadow_size = 10
+				sb.shadow_offset = Vector2(0, 4)
+			else:
+				sb.shadow_size = 8
+				sb.shadow_offset = Vector2(0, 2)
 
 	# 7. UI Buttons
-	var col_dark_slate := Color(0.118, 0.161, 0.231) # #1e293b
-	var col_sec_slate := Color(0.28, 0.33, 0.42)   # #475569
-
-	var btn_normal_bg := Color(0.12, 0.14, 0.20, 0.80) if is_dark else Color(1.0, 1.0, 1.0, 0.75)
-	var btn_normal_border := Color(0.30, 0.35, 0.48, 0.50) if is_dark else Color(0.80, 0.84, 0.90, 0.95)
+	var btn_normal_bg := Color(0.12, 0.14, 0.20, 0.80) if is_dark else Color(1.0, 1.0, 1.0, 0.85)
+	var btn_normal_border := Color(0.30, 0.35, 0.48, 0.50) if is_dark else Color(0.796, 0.835, 0.882, 0.95) # #cbd5e1
 	var btn_text_color := Color(0.92, 0.94, 0.98) if is_dark else col_dark_slate
 
-	var btn_hover_bg := Color(0.18, 0.21, 0.30, 0.95) if is_dark else Color(1.0, 1.0, 1.0, 0.95)
+	var btn_hover_bg := Color(0.18, 0.21, 0.30, 0.95) if is_dark else Color(0.94, 0.96, 0.98, 0.95)
 	var btn_hover_border := Color(1.0, 0.55, 0.15, 0.80) if is_dark else Color(0.0, 0.443, 0.89, 0.60)
 
 	var btn_pressed_bg := Color(1.0, 0.55, 0.15, 0.20) if is_dark else Color(0.0, 0.443, 0.89, 0.15)
@@ -2598,7 +2611,7 @@ func _apply_theme(is_dark: bool) -> void:
 	for b in theme_buttons:
 		b.add_theme_color_override("font_color", btn_text_color)
 		b.add_theme_color_override("font_pressed_color", btn_text_color)
-		b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0) if is_dark else col_dark_slate)
+		b.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0) if is_dark else col_dark_charcoal)
 		b.add_theme_color_override("font_focus_color", btn_text_color)
 
 		var s_norm: StyleBoxFlat = b.get_theme_stylebox("normal") as StyleBoxFlat
@@ -2614,9 +2627,9 @@ func _apply_theme(is_dark: bool) -> void:
 			s_press.bg_color = btn_pressed_bg
 			s_press.border_color = btn_pressed_border
 
-	# 8. Labels (Enforce #1e293b in Light Theme for high contrast readability)
-	var col_title := Color(0.95, 0.96, 0.98) if is_dark else col_dark_slate
-	var col_sec := Color(0.65, 0.68, 0.76) if is_dark else col_sec_slate
+	# 8. Labels (Enforce #0f172a & #1e293b in Light Theme for high contrast readability)
+	var col_title := Color(0.95, 0.96, 0.98) if is_dark else col_dark_charcoal
+	var col_sec := Color(0.65, 0.68, 0.76) if is_dark else col_dark_slate
 
 	for lbl in theme_labels_primary:
 		lbl.add_theme_color_override("font_color", col_title)
@@ -2730,7 +2743,7 @@ func _show_right_tab(tab_idx: int) -> void:
 		if btn_tab_telemetry != null:
 			btn_tab_telemetry.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
 		if btn_tab_joint != null:
-			var default_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+			var default_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.118, 0.161, 0.231)
 			btn_tab_joint.add_theme_color_override("font_color", default_col)
 	else:
 		if telemetry_view != null:
@@ -2740,7 +2753,7 @@ func _show_right_tab(tab_idx: int) -> void:
 		if btn_tab_joint != null:
 			btn_tab_joint.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
 		if btn_tab_telemetry != null:
-			var default_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+			var default_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.118, 0.161, 0.231)
 			btn_tab_telemetry.add_theme_color_override("font_color", default_col)
 
 
