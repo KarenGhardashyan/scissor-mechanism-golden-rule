@@ -177,6 +177,19 @@ func reset_camera() -> void:
 	current_target = default_target
 
 
+func zoom_in(amount: float = 0.6) -> void:
+	target_distance = clampf(target_distance - amount, min_distance, max_distance)
+
+
+func zoom_out(amount: float = 0.6) -> void:
+	target_distance = clampf(target_distance + amount, min_distance, max_distance)
+
+
+func get_current_distance() -> float:
+	return current_distance
+
+
+
 ## Smoothly focus on a specific mechanism or reset to all rigs
 func focus_rig(rig_id: String) -> void:
 	match rig_id.to_upper():

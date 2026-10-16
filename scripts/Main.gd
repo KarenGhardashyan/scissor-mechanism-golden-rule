@@ -88,6 +88,22 @@ var lbl_mob_pin_summary: Label
 var btn_mob_pin_inspect: Button
 var btn_mob_pin_close: Button
 
+# Header Logo
+var header_logo: TextureRect
+
+# Mobile Screen Zoom (+ / -) & Main Tab Mass Quick Controls
+var mobile_zoom_controls: PanelContainer
+var btn_mob_zoom_in: Button
+var btn_mob_zoom_out: Button
+var lbl_mob_zoom_dist: Label
+
+var mobile_mass_panel: PanelContainer
+var lbl_mob_mass_title: Label
+var btn_mob_mass_dec: Button
+var slider_mob_mass: HSlider
+var btn_mob_mass_inc: Button
+var lbl_mob_mass_val: Label
+
 var sb_margin_ref: MarginContainer
 var sb_main_lbl_ref: Label
 var sb_sub_lbl_ref: Label
@@ -497,6 +513,12 @@ func _build_liquid_glass_ui() -> void:
 	header_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	header_margin.add_child(header_box)
 
+	header_logo = TextureRect.new()
+	header_logo.custom_minimum_size = Vector2(36, 36)
+	header_logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	header_logo.texture = _get_svg_icon("logo", Color.WHITE, Vector2i(36, 36))
+	header_box.add_child(header_logo)
+
 	var title_vbox := VBoxContainer.new()
 	title_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -511,7 +533,7 @@ func _build_liquid_glass_ui() -> void:
 	header_box.add_child(title_vbox)
 
 	# Header Action Pills
-	btn_formulas = _create_liquid_button("Formulas & Theory")
+	btn_formulas = _create_liquid_button("Formulas & Theory", "formulas")
 	btn_formulas.custom_minimum_size = Vector2(138, 32)
 	var blue_accent := Color(0.0, 0.443, 0.89)
 	btn_formulas.add_theme_color_override("font_color", blue_accent)
@@ -525,23 +547,23 @@ func _build_liquid_glass_ui() -> void:
 	)
 	header_box.add_child(btn_formulas)
 
-	btn_reset_cam = _create_liquid_button("Reset View")
+	btn_reset_cam = _create_liquid_button("Reset View", "reset")
 	btn_reset_cam.custom_minimum_size = Vector2(92, 30)
 	btn_reset_cam.pressed.connect(func(): camera.reset_camera())
 	header_box.add_child(btn_reset_cam)
 
-	btn_follow_cam = _create_liquid_button("🎯 Follow Rig")
+	btn_follow_cam = _create_liquid_button("Follow Rig", "follow")
 	btn_follow_cam.custom_minimum_size = Vector2(98, 30)
 	btn_follow_cam.toggle_mode = true
 	btn_follow_cam.toggled.connect(func(toggled_on: bool):
 		is_follow_rig_cam = toggled_on
 		var target_rig = inspected_rig if (inspected_rig != null and is_instance_valid(inspected_rig)) else rig_c
 		camera.set_follow_rig(is_follow_rig_cam, target_rig)
-		btn_follow_cam.text = "🎯 Lock Rig" if is_follow_rig_cam else "🎯 Follow Rig"
+		btn_follow_cam.text = "Lock Rig" if is_follow_rig_cam else "Follow Rig"
 	)
 	header_box.add_child(btn_follow_cam)
 
-	btn_slowmo = _create_liquid_button("Slow Motion")
+	btn_slowmo = _create_liquid_button("Slow Motion", "slowmo")
 	btn_slowmo.custom_minimum_size = Vector2(92, 30)
 	btn_slowmo.toggle_mode = true
 	btn_slowmo.toggled.connect(func(toggled_on: bool):
@@ -551,7 +573,7 @@ func _build_liquid_glass_ui() -> void:
 	)
 	header_box.add_child(btn_slowmo)
 
-	btn_lasers = _create_liquid_button("Hide Lasers")
+	btn_lasers = _create_liquid_button("Hide Lasers", "lasers")
 	btn_lasers.custom_minimum_size = Vector2(92, 30)
 	btn_lasers.toggle_mode = true
 	btn_lasers.button_pressed = true
@@ -564,14 +586,14 @@ func _build_liquid_glass_ui() -> void:
 	)
 	header_box.add_child(btn_lasers)
 
-	btn_theme_toggle = _create_liquid_button("🌙 Dark Theme")
+	btn_theme_toggle = _create_liquid_button("Light Theme" if is_dark_theme else "Dark Theme", "sun" if is_dark_theme else "moon")
 	btn_theme_toggle.custom_minimum_size = Vector2(112, 30)
 	btn_theme_toggle.pressed.connect(func():
 		_apply_theme(not is_dark_theme)
 	)
 	header_box.add_child(btn_theme_toggle)
 
-	btn_focus_toggle = _create_liquid_button("👁️ Focus Mode")
+	btn_focus_toggle = _create_liquid_button("Focus Mode", "focus")
 	btn_focus_toggle.custom_minimum_size = Vector2(98, 30)
 	btn_focus_toggle.pressed.connect(func():
 		_set_focus_mode(not is_focus_mode)
@@ -579,7 +601,7 @@ func _build_liquid_glass_ui() -> void:
 	header_box.add_child(btn_focus_toggle)
 
 	# Floating button to restore UI when in Focus Mode
-	btn_restore_ui = _create_liquid_button("⛶ Show UI")
+	btn_restore_ui = _create_liquid_button("Show UI", "maximize")
 	btn_restore_ui.position = Vector2(24, 20)
 	btn_restore_ui.custom_minimum_size = Vector2(108, 34)
 	btn_restore_ui.visible = false
@@ -843,26 +865,37 @@ func _build_liquid_glass_ui() -> void:
 	left_vbox.add_child(btn_jolt)
 
 	# 3. RIGHT COMPARISON CARD & JOINT INSPECTOR (Tabbed Liquid Glass Card)
-	right_panel = _create_liquid_glass_panel(Vector2(0, 96), Vector2(350, 750), 22)
+	right_panel = _create_liquid_glass_panel(Vector2(0, 96), Vector2(370, 750), 22)
 	right_panel.anchor_left = 1.0
 	right_panel.anchor_right = 1.0
-	right_panel.offset_left = -374.0
-	right_panel.offset_right = -24.0
+	right_panel.offset_left = -390.0
+	right_panel.offset_right = -20.0
 	right_panel.offset_top = 96.0
 	right_panel.offset_bottom = 846.0
+	right_panel.clip_contents = true
 	root.add_child(right_panel)
 
 	right_margin = MarginContainer.new()
 	right_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	right_margin.add_theme_constant_override("margin_top", 18)
-	right_margin.add_theme_constant_override("margin_bottom", 18)
-	right_margin.add_theme_constant_override("margin_left", 16)
-	right_margin.add_theme_constant_override("margin_right", 16)
+	right_margin.add_theme_constant_override("margin_top", 16)
+	right_margin.add_theme_constant_override("margin_bottom", 16)
+	right_margin.add_theme_constant_override("margin_left", 14)
+	right_margin.add_theme_constant_override("margin_right", 14)
 	right_panel.add_child(right_margin)
 
+	var right_scroll := ScrollContainer.new()
+	right_scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	right_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	right_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	right_margin.add_child(right_scroll)
+
 	right_vbox = VBoxContainer.new()
+	right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right_vbox.add_theme_constant_override("separation", 10)
-	right_margin.add_child(right_vbox)
+	right_scroll.add_child(right_vbox)
 
 	# Tab Switcher Header (All Rigs Telemetry vs Joint Force Inspector)
 	var tab_bar := HBoxContainer.new()
@@ -870,13 +903,13 @@ func _build_liquid_glass_ui() -> void:
 	tab_bar.add_theme_constant_override("separation", 8)
 	right_vbox.add_child(tab_bar)
 
-	btn_tab_telemetry = _create_liquid_button("📊 All Rigs")
+	btn_tab_telemetry = _create_liquid_button("All Rigs", "chart")
 	btn_tab_telemetry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_tab_telemetry.custom_minimum_size = Vector2(0, 30)
 	btn_tab_telemetry.pressed.connect(func(): _show_right_tab(0))
 	tab_bar.add_child(btn_tab_telemetry)
 
-	btn_tab_joint = _create_liquid_button("🔬 Joint Inspector")
+	btn_tab_joint = _create_liquid_button("Joint Inspector", "joint")
 	btn_tab_joint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_tab_joint.custom_minimum_size = Vector2(0, 30)
 	btn_tab_joint.pressed.connect(func(): _show_right_tab(1))
@@ -1041,7 +1074,7 @@ func _build_liquid_glass_ui() -> void:
 	theme_labels_primary.append(joint_card_title)
 	joint_header_row.add_child(joint_card_title)
 
-	var btn_deselect := _create_liquid_button("✕ Deselect")
+	var btn_deselect := _create_liquid_button("Deselect", "close")
 	btn_deselect.custom_minimum_size = Vector2(76, 26)
 	btn_deselect.pressed.connect(func(): _deselect_pin())
 	btn_deselect_pin_ref = btn_deselect
@@ -1060,14 +1093,14 @@ func _build_liquid_glass_ui() -> void:
 	btn_row_modes.add_theme_constant_override("separation", 6)
 	joint_view.add_child(btn_row_modes)
 
-	btn_toggle_vector_mode = _create_liquid_button("📐 All Vectors")
+	btn_toggle_vector_mode = _create_liquid_button("All Vectors", "vector_mode")
 	btn_toggle_vector_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_toggle_vector_mode.custom_minimum_size = Vector2(0, 26)
 	btn_toggle_vector_mode.add_theme_font_size_override("font_size", 10)
 	btn_toggle_vector_mode.pressed.connect(_on_toggle_vector_mode)
 	btn_row_modes.add_child(btn_toggle_vector_mode)
 
-	btn_toggle_force_dir = _create_liquid_button("↓ Down Load (Action)")
+	btn_toggle_force_dir = _create_liquid_button("Down Load (Action)", "arrow_down")
 	btn_toggle_force_dir.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_toggle_force_dir.custom_minimum_size = Vector2(0, 26)
 	btn_toggle_force_dir.add_theme_font_size_override("font_size", 10)
@@ -1111,7 +1144,7 @@ func _build_liquid_glass_ui() -> void:
 			joint_view_labels.append(child)
 
 	# Two-Tier Display: Expandable Accordion for Advanced Stress & Pin Analysis (11: C)
-	btn_toggle_advanced_stress = _create_liquid_button("▼ Advanced Stress & Pin Analysis")
+	btn_toggle_advanced_stress = _create_liquid_button("Advanced Stress & Pin Analysis", "chevron_down")
 	btn_toggle_advanced_stress.custom_minimum_size = Vector2(0, 26)
 	btn_toggle_advanced_stress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_toggle_advanced_stress.add_theme_font_size_override("font_size", 10)
@@ -1151,7 +1184,9 @@ func _build_liquid_glass_ui() -> void:
 	btn_toggle_advanced_stress.pressed.connect(func():
 		is_advanced_stress_expanded = not is_advanced_stress_expanded
 		advanced_stress_container.visible = is_advanced_stress_expanded
-		btn_toggle_advanced_stress.text = "▲ Collapse Stress Analysis" if is_advanced_stress_expanded else "▼ Advanced Stress & Pin Analysis"
+		btn_toggle_advanced_stress.text = "Collapse Stress Analysis" if is_advanced_stress_expanded else "Advanced Stress & Pin Analysis"
+		var text_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+		btn_toggle_advanced_stress.icon = _get_svg_icon("chevron_up" if is_advanced_stress_expanded else "chevron_down", text_col)
 	)
 
 	var sep_j2 := HSeparator.new()
@@ -1182,15 +1217,15 @@ func _build_liquid_glass_ui() -> void:
 	joint_view.add_child(quick_pins_grid)
 
 	var quick_pin_defs := [
-		{"name": "Rig A: Top", "get_rig": func(): return rig_a, "idx": 0},
-		{"name": "Rig A: Mid", "get_rig": func(): return rig_a, "idx": 4},
-		{"name": "Rig A: Mass", "get_rig": func(): return rig_a, "idx": 9},
-		{"name": "Rig C: Top", "get_rig": func(): return rig_c, "idx": 0},
-		{"name": "Rig C: Stg 2", "get_rig": func(): return rig_c, "idx": 6},
-		{"name": "Rig C: Mass", "get_rig": func(): return rig_c, "idx": 9},
-		{"name": "Rig B: Top", "get_rig": func(): return rig_b, "idx": 0},
-		{"name": "Rig B: Mid", "get_rig": func(): return rig_b, "idx": 8},
-		{"name": "Rig B: Mass", "get_rig": func(): return rig_b, "idx": 15},
+		{"name": "A: Top", "get_rig": func(): return rig_a, "idx": 0},
+		{"name": "A: Mid", "get_rig": func(): return rig_a, "idx": 4},
+		{"name": "A: Mass", "get_rig": func(): return rig_a, "idx": 9},
+		{"name": "C: Top", "get_rig": func(): return rig_c, "idx": 0},
+		{"name": "C: Stg 2", "get_rig": func(): return rig_c, "idx": 6},
+		{"name": "C: Mass", "get_rig": func(): return rig_c, "idx": 9},
+		{"name": "B: Top", "get_rig": func(): return rig_b, "idx": 0},
+		{"name": "B: Mid", "get_rig": func(): return rig_b, "idx": 8},
+		{"name": "B: Mass", "get_rig": func(): return rig_b, "idx": 15},
 	]
 
 	quick_pin_buttons.clear()
@@ -1249,26 +1284,29 @@ func _build_liquid_glass_ui() -> void:
 	bar_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	graph_bar.add_child(bar_spacer)
 
-	btn_graph_theme = _create_liquid_button("◑ Canvas Theme")
-	btn_graph_theme.custom_minimum_size = Vector2(105, 26)
+	btn_graph_theme = _create_liquid_button("Canvas Theme", "moon")
+	btn_graph_theme.custom_minimum_size = Vector2(115, 26)
 	btn_graph_theme.pressed.connect(func():
 		if live_graph != null:
 			live_graph.toggle_theme()
 	)
 	graph_bar.add_child(btn_graph_theme)
 
-	btn_graph_expand = _create_liquid_button("⤢ Maximize Graph")
-	btn_graph_expand.custom_minimum_size = Vector2(115, 26)
+	btn_graph_expand = _create_liquid_button("Maximize Graph", "maximize")
+	btn_graph_expand.custom_minimum_size = Vector2(125, 26)
 	btn_graph_expand.pressed.connect(func():
 		is_graph_maximized = not is_graph_maximized
+		var text_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
 		if is_graph_maximized:
 			bottom_panel.offset_top = -490.0
 			bottom_panel.custom_minimum_size.y = 474.0
-			btn_graph_expand.text = "⤡ Compact View"
+			btn_graph_expand.text = "Compact View"
+			btn_graph_expand.icon = _get_svg_icon("compact", text_col)
 		else:
 			bottom_panel.offset_top = -278.0
 			bottom_panel.custom_minimum_size.y = 262.0
-			btn_graph_expand.text = "⤢ Maximize Graph"
+			btn_graph_expand.text = "Maximize Graph"
+			btn_graph_expand.icon = _get_svg_icon("maximize", text_col)
 		if live_graph != null:
 			live_graph.queue_redraw()
 	)
@@ -1331,7 +1369,7 @@ func _build_formulas_modal(root: Control) -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	modal_header.add_child(spacer)
 
-	var btn_close := _create_liquid_button("✕ Close")
+	var btn_close := _create_liquid_button("Close", "close")
 	btn_close.custom_minimum_size = Vector2(85, 28)
 	btn_close.pressed.connect(func(): formulas_modal.visible = false)
 	modal_header.add_child(btn_close)
@@ -1426,7 +1464,7 @@ func _build_mobile_ui(root: Control) -> void:
 	top_hbox_ref = top_hbox
 	top_margin.add_child(top_hbox)
 
-	btn_mobile_menu = _create_liquid_button("☰ Menu")
+	btn_mobile_menu = _create_liquid_button("Menu", "menu")
 	btn_mobile_menu.custom_minimum_size = Vector2(74, 34)
 	btn_mobile_menu.add_theme_font_size_override("font_size", 12)
 	btn_mobile_menu.pressed.connect(func():
@@ -1466,15 +1504,14 @@ func _build_mobile_ui(root: Control) -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_hbox.add_child(spacer)
 
-	btn_mob_theme = _create_liquid_button("🌙" if not is_dark_theme else "☀️")
+	btn_mob_theme = _create_liquid_button("", "sun" if is_dark_theme else "moon")
 	btn_mob_theme.custom_minimum_size = Vector2(34, 32)
 	btn_mob_theme.pressed.connect(func():
 		_apply_theme(not is_dark_theme)
-		btn_mob_theme.text = "☀️" if is_dark_theme else "🌙"
 	)
 	top_hbox.add_child(btn_mob_theme)
 
-	btn_mob_reset = _create_liquid_button("↺")
+	btn_mob_reset = _create_liquid_button("", "reset")
 	btn_mob_reset.custom_minimum_size = Vector2(34, 32)
 	btn_mob_reset.pressed.connect(func(): camera.reset_camera())
 	top_hbox.add_child(btn_mob_reset)
@@ -1523,7 +1560,7 @@ func _build_mobile_ui(root: Control) -> void:
 	sb_titles.add_child(sb_sub_lbl)
 	sb_header.add_child(sb_titles)
 
-	btn_close_sidebar = _create_liquid_button("✕")
+	btn_close_sidebar = _create_liquid_button("", "close")
 	btn_close_sidebar.custom_minimum_size = Vector2(36, 32)
 	btn_close_sidebar.pressed.connect(func(): _toggle_mobile_sidebar(false))
 	sb_header.add_child(btn_close_sidebar)
@@ -1537,25 +1574,25 @@ func _build_mobile_ui(root: Control) -> void:
 	sb_tabs.add_theme_constant_override("separation", 6)
 	sb_vbox.add_child(sb_tabs)
 
-	btn_mob_tab_0 = _create_liquid_button("⚙️ Controls")
+	btn_mob_tab_0 = _create_liquid_button("Controls", "mass")
 	btn_mob_tab_0.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_mob_tab_0.custom_minimum_size.y = 32
 	btn_mob_tab_0.pressed.connect(func(): _show_mobile_tab(0))
 	sb_tabs.add_child(btn_mob_tab_0)
 
-	btn_mob_tab_1 = _create_liquid_button("📊 Data")
+	btn_mob_tab_1 = _create_liquid_button("Data", "chart")
 	btn_mob_tab_1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_mob_tab_1.custom_minimum_size.y = 32
 	btn_mob_tab_1.pressed.connect(func(): _show_mobile_tab(1))
 	sb_tabs.add_child(btn_mob_tab_1)
 
-	btn_mob_tab_2 = _create_liquid_button("🔬 Joint")
+	btn_mob_tab_2 = _create_liquid_button("Joint", "joint")
 	btn_mob_tab_2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_mob_tab_2.custom_minimum_size.y = 32
 	btn_mob_tab_2.pressed.connect(func(): _show_mobile_tab(2))
 	sb_tabs.add_child(btn_mob_tab_2)
 
-	btn_mob_tab_3 = _create_liquid_button("📈 Curves")
+	btn_mob_tab_3 = _create_liquid_button("Curves", "chart")
 	btn_mob_tab_3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_mob_tab_3.custom_minimum_size.y = 32
 	btn_mob_tab_3.pressed.connect(func(): _show_mobile_tab(3))
@@ -1624,7 +1661,7 @@ func _build_mobile_ui(root: Control) -> void:
 	lbl_mob_pin_summary.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
 	pin_card_hbox.add_child(lbl_mob_pin_summary)
 
-	btn_mob_pin_inspect = _create_liquid_button("Details ❯")
+	btn_mob_pin_inspect = _create_liquid_button("Details", "joint")
 	btn_mob_pin_inspect.custom_minimum_size = Vector2(74, 28)
 	btn_mob_pin_inspect.add_theme_font_size_override("font_size", 11)
 	btn_mob_pin_inspect.pressed.connect(func():
@@ -1633,15 +1670,134 @@ func _build_mobile_ui(root: Control) -> void:
 	)
 	pin_card_hbox.add_child(btn_mob_pin_inspect)
 
-	btn_mob_pin_close = _create_liquid_button("✕")
+	btn_mob_pin_close = _create_liquid_button("", "close")
 	btn_mob_pin_close.custom_minimum_size = Vector2(28, 28)
 	btn_mob_pin_close.pressed.connect(func(): _deselect_pin())
 	pin_card_hbox.add_child(btn_mob_pin_close)
 
+	# 5. Mobile Screen Zoom (+ / -) Controller
+	mobile_zoom_controls = _create_liquid_glass_panel(Vector2.ZERO, Vector2(46, 120), 16, 0.90)
+	mobile_zoom_controls.name = "MobileZoomControls"
+	mobile_zoom_controls.anchor_left = 1.0
+	mobile_zoom_controls.anchor_right = 1.0
+	mobile_zoom_controls.anchor_top = 0.5
+	mobile_zoom_controls.anchor_bottom = 0.5
+	mobile_zoom_controls.offset_left = -58.0
+	mobile_zoom_controls.offset_right = -12.0
+	mobile_zoom_controls.offset_top = -60.0
+	mobile_zoom_controls.offset_bottom = 60.0
+	mobile_zoom_controls.visible = false
+	root.add_child(mobile_zoom_controls)
+
+	var zoom_margin := MarginContainer.new()
+	zoom_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	zoom_margin.add_theme_constant_override("margin_left", 4)
+	zoom_margin.add_theme_constant_override("margin_right", 4)
+	zoom_margin.add_theme_constant_override("margin_top", 6)
+	zoom_margin.add_theme_constant_override("margin_bottom", 6)
+	mobile_zoom_controls.add_child(zoom_margin)
+
+	var zoom_vbox := VBoxContainer.new()
+	zoom_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	zoom_vbox.add_theme_constant_override("separation", 4)
+	zoom_margin.add_child(zoom_vbox)
+
+	btn_mob_zoom_in = _create_liquid_button("+", "plus")
+	btn_mob_zoom_in.custom_minimum_size = Vector2(38, 32)
+	btn_mob_zoom_in.pressed.connect(func(): if camera: camera.zoom_in(0.6))
+	zoom_vbox.add_child(btn_mob_zoom_in)
+
+	lbl_mob_zoom_dist = Label.new()
+	lbl_mob_zoom_dist.text = "8.5m"
+	lbl_mob_zoom_dist.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_mob_zoom_dist.add_theme_font_size_override("font_size", 10)
+	lbl_mob_zoom_dist.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+	zoom_vbox.add_child(lbl_mob_zoom_dist)
+
+	btn_mob_zoom_out = _create_liquid_button("-", "minus")
+	btn_mob_zoom_out.custom_minimum_size = Vector2(38, 32)
+	btn_mob_zoom_out.pressed.connect(func(): if camera: camera.zoom_out(0.6))
+	zoom_vbox.add_child(btn_mob_zoom_out)
+
+	# 6. Mobile Main Tab Mass Quick Adjust Controller
+	mobile_mass_panel = _create_liquid_glass_panel(Vector2.ZERO, Vector2(320, 46), 22, 0.92)
+	mobile_mass_panel.name = "MobileMassPanel"
+	mobile_mass_panel.anchor_left = 0.5
+	mobile_mass_panel.anchor_right = 0.5
+	mobile_mass_panel.anchor_top = 1.0
+	mobile_mass_panel.anchor_bottom = 1.0
+	mobile_mass_panel.offset_left = -160.0
+	mobile_mass_panel.offset_right = 160.0
+	mobile_mass_panel.offset_top = -60.0
+	mobile_mass_panel.offset_bottom = -14.0
+	mobile_mass_panel.visible = false
+	root.add_child(mobile_mass_panel)
+
+	var mass_margin := MarginContainer.new()
+	mass_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mass_margin.add_theme_constant_override("margin_left", 10)
+	mass_margin.add_theme_constant_override("margin_right", 10)
+	mass_margin.add_theme_constant_override("margin_top", 4)
+	mass_margin.add_theme_constant_override("margin_bottom", 4)
+	mobile_mass_panel.add_child(mass_margin)
+
+	var mass_hbox_mob := HBoxContainer.new()
+	mass_hbox_mob.alignment = BoxContainer.ALIGNMENT_CENTER
+	mass_hbox_mob.add_theme_constant_override("separation", 6)
+	mass_margin.add_child(mass_hbox_mob)
+
+	lbl_mob_mass_title = Label.new()
+	lbl_mob_mass_title.text = "Mass:"
+	lbl_mob_mass_title.add_theme_font_size_override("font_size", 11)
+	theme_labels_primary.append(lbl_mob_mass_title)
+	mass_hbox_mob.add_child(lbl_mob_mass_title)
+
+	btn_mob_mass_dec = _create_liquid_button("-", "minus")
+	btn_mob_mass_dec.custom_minimum_size = Vector2(30, 28)
+	btn_mob_mass_dec.pressed.connect(func():
+		var nv: float = clampf(mass_slider.value - 0.05, 0.0, 1.5)
+		mass_slider.value = nv
+		_on_mass_slider_changed(nv)
+	)
+	mass_hbox_mob.add_child(btn_mob_mass_dec)
+
+	slider_mob_mass = HSlider.new()
+	slider_mob_mass.min_value = 0.0
+	slider_mob_mass.max_value = 1.5
+	slider_mob_mass.step = 0.01
+	slider_mob_mass.value = mass_slider.value
+	slider_mob_mass.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider_mob_mass.value_changed.connect(func(val: float):
+		if absf(mass_slider.value - val) > 0.005:
+			mass_slider.value = val
+			_on_mass_slider_changed(val)
+	)
+	_style_tech_slider(slider_mob_mass)
+	mass_hbox_mob.add_child(slider_mob_mass)
+
+	btn_mob_mass_inc = _create_liquid_button("+", "plus")
+	btn_mob_mass_inc.custom_minimum_size = Vector2(30, 28)
+	btn_mob_mass_inc.pressed.connect(func():
+		var nv: float = clampf(mass_slider.value + 0.05, 0.0, 1.5)
+		mass_slider.value = nv
+		_on_mass_slider_changed(nv)
+	)
+	mass_hbox_mob.add_child(btn_mob_mass_inc)
+
+	lbl_mob_mass_val = Label.new()
+	lbl_mob_mass_val.text = "%.2f kg" % mass_slider.value
+	lbl_mob_mass_val.custom_minimum_size = Vector2(48, 0)
+	lbl_mob_mass_val.add_theme_font_size_override("font_size", 11)
+	lbl_mob_mass_val.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
+	mass_hbox_mob.add_child(lbl_mob_mass_val)
 
 
 func _on_mass_slider_changed(val: float) -> void:
 	mass_val_label.text = "%.2f kg" % val
+	if lbl_mob_mass_val != null:
+		lbl_mob_mass_val.text = "%.2f kg" % val
+	if slider_mob_mass != null and absf(slider_mob_mass.value - val) > 0.005:
+		slider_mob_mass.set_value_no_signal(val)
 	rig_a.set_mass(val)
 	rig_c.set_mass(val)
 	rig_b.set_mass(val)
@@ -1746,6 +1902,9 @@ func _update_ui_telemetry() -> void:
 	ratio_bar_c.value = telemetry_c.get("L_cm", 0.0)
 	ratio_bar_b.value = telemetry_b.get("L_cm", 0.0)
 
+	if lbl_mob_zoom_dist != null and camera != null and is_instance_valid(camera):
+		lbl_mob_zoom_dist.text = "%.1fm" % camera.current_distance
+
 
 # --- VisionOS Liquid Glass UI Helpers ---
 func _create_liquid_glass_panel(pos: Vector2, size: Vector2, radius: int = 22, bg_alpha: float = 0.50) -> PanelContainer:
@@ -1776,7 +1935,77 @@ func _create_liquid_glass_panel(pos: Vector2, size: Vector2, radius: int = 22, b
 	return panel
 
 
-func _create_liquid_button(text: String) -> Button:
+var _icon_cache: Dictionary = {}
+
+func _get_svg_icon(name: String, color: Color = Color.WHITE, size: Vector2i = Vector2i(16, 16)) -> ImageTexture:
+	var key := "%s_%s_%dx%d" % [name, color.to_html(false), size.x, size.y]
+	if _icon_cache.has(key):
+		return _icon_cache[key]
+	var hex := "#" + color.to_html(false)
+	var svg := _get_svg_template(name).replace("%COLOR%", hex)
+	if svg.is_empty():
+		return null
+	var img := Image.new()
+	var err := img.load_svg_from_buffer(svg.to_utf8_buffer(), float(size.x) / 16.0)
+	if err == OK:
+		var tex := ImageTexture.create_from_image(img)
+		_icon_cache[key] = tex
+		return tex
+	return null
+
+func _get_svg_template(name: String) -> String:
+	match name:
+		"logo":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='#1e222e'/><path d='M9 10 L27 26 M27 10 L9 26' stroke='#0071E3' stroke-width='3' stroke-linecap='round'/><circle cx='9' cy='10' r='2.5' fill='#FF9500'/><circle cx='27' cy='10' r='2.5' fill='#FF9500'/><circle cx='18' cy='18' r='3.2' fill='#FFFFFF'/><circle cx='9' cy='26' r='2.5' fill='#30D158'/><circle cx='27' cy='26' r='2.5' fill='#30D158'/><path d='M18 18 L18 31' stroke='#0071E3' stroke-width='2' stroke-dasharray='2,2'/><circle cx='18' cy='31' r='2.2' fill='#FF9500'/></svg>"
+		"formulas":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polygon points='2,14 14,14 2,2' stroke='%COLOR%' stroke-width='1.8' fill='none'/><line x1='2' y1='10' x2='4.5' y2='10' stroke='%COLOR%' stroke-width='1.4'/><line x1='2' y1='6.5' x2='5.5' y2='6.5' stroke='%COLOR%' stroke-width='1.4'/><line x1='6.5' y1='14' x2='6.5' y2='11.5' stroke='%COLOR%' stroke-width='1.4'/><line x1='10' y1='14' x2='10' y2='12' stroke='%COLOR%' stroke-width='1.4'/></svg>"
+		"reset":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M8 2.5a5.5 5.5 0 1 0 5.2 3.7.8.8 0 1 0-1.5-.5A4 4 0 1 1 8 4a3.9 3.9 0 0 1 2.8 1.2L9.5 6.5H14V2l-1.6 1.6A5.4 5.4 0 0 0 8 2.5z' fill='%COLOR%'/></svg>"
+		"follow":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='8' cy='8' r='5' stroke='%COLOR%' stroke-width='1.5' fill='none'/><circle cx='8' cy='8' r='2' fill='%COLOR%'/><line x1='8' y1='1' x2='8' y2='4' stroke='%COLOR%' stroke-width='1.5'/><line x1='8' y1='12' x2='8' y2='15' stroke='%COLOR%' stroke-width='1.5'/><line x1='1' y1='8' x2='4' y2='8' stroke='%COLOR%' stroke-width='1.5'/><line x1='12' y1='8' x2='15' y2='8' stroke='%COLOR%' stroke-width='1.5'/></svg>"
+		"slowmo":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' stroke='%COLOR%' stroke-width='1.5' fill='none'/><polyline points='8,4.5 8,8 10.5,9.5' stroke='%COLOR%' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>"
+		"lasers":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><line x1='2' y1='8' x2='14' y2='8' stroke='%COLOR%' stroke-width='2' stroke-dasharray='3,1.5'/><circle cx='2' cy='8' r='2' fill='%COLOR%'/><circle cx='14' cy='8' r='2' fill='%COLOR%'/></svg>"
+		"moon":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M12.3 10.2A5.5 5.5 0 0 1 5.8 3.7a6 6 0 1 0 6.5 6.5z' fill='%COLOR%'/></svg>"
+		"sun":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='8' cy='8' r='3.2' fill='%COLOR%'/><line x1='8' y1='1.5' x2='8' y2='3.2' stroke='%COLOR%' stroke-width='1.5' stroke-linecap='round'/><line x1='8' y1='12.8' x2='8' y2='14.5' stroke='%COLOR%' stroke-width='1.5' stroke-linecap='round'/><line x1='1.5' y1='8' x2='3.2' y2='8' stroke='%COLOR%' stroke-width='1.5' stroke-linecap='round'/><line x1='12.8' y1='8' x2='14.5' y2='8' stroke='%COLOR%' stroke-width='1.5' stroke-linecap='round'/><line x1='3.4' y1='3.4' x2='4.6' y2='4.6' stroke='%COLOR%' stroke-width='1.5' stroke-linecap='round'/><line x1='11.4' y1='11.4' x2='12.6' y2='12.6' stroke='%COLOR%' stroke-width='1.5' stroke-linecap='round'/><line x1='3.4' y1='12.6' x2='4.6' y2='11.4' stroke='%COLOR%' stroke-width='1.5' stroke-linecap='round'/><line x1='11.4' y1='4.6' x2='12.6' y2='3.4' stroke='%COLOR%' stroke-width='1.5' stroke-linecap='round'/></svg>"
+		"focus":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M1.5 8s2.5-4.5 6.5-4.5 6.5 4.5 6.5 4.5-2.5 4.5-6.5 4.5S1.5 8 1.5 8z' stroke='%COLOR%' stroke-width='1.5' fill='none'/><circle cx='8' cy='8' r='2.2' fill='%COLOR%'/></svg>"
+		"chart":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='2' y='8' width='3' height='6' rx='0.8' fill='%COLOR%'/><rect x='6.5' y='4' width='3' height='10' rx='0.8' fill='%COLOR%'/><rect x='11' y='2' width='3' height='12' rx='0.8' fill='%COLOR%'/></svg>"
+		"joint":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='8' cy='8' r='3' stroke='%COLOR%' stroke-width='1.8' fill='none'/><line x1='2' y1='2' x2='6' y2='6' stroke='%COLOR%' stroke-width='2' stroke-linecap='round'/><line x1='14' y1='14' x2='10' y2='10' stroke='%COLOR%' stroke-width='2' stroke-linecap='round'/></svg>"
+		"vector_mode":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polyline points='2,2 2,14 14,14' stroke='%COLOR%' stroke-width='1.6' fill='none' stroke-linecap='round'/><line x1='2' y1='14' x2='11' y2='5' stroke='%COLOR%' stroke-width='1.6' stroke-linecap='round'/><polyline points='8,5 11,5 11,8' stroke='%COLOR%' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>"
+		"arrow_down":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><line x1='8' y1='2' x2='8' y2='12' stroke='%COLOR%' stroke-width='1.8' stroke-linecap='round'/><polyline points='4.5,8.5 8,12 11.5,8.5' stroke='%COLOR%' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>"
+		"arrow_up":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><line x1='8' y1='14' x2='8' y2='4' stroke='%COLOR%' stroke-width='1.8' stroke-linecap='round'/><polyline points='4.5,7.5 8,4 11.5,7.5' stroke='%COLOR%' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>"
+		"chevron_down":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polyline points='3,6 8,11 13,6' stroke='%COLOR%' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>"
+		"chevron_up":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polyline points='3,10 8,5 13,10' stroke='%COLOR%' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>"
+		"close":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><line x1='4' y1='4' x2='12' y2='12' stroke='%COLOR%' stroke-width='2' stroke-linecap='round'/><line x1='12' y1='4' x2='4' y2='12' stroke='%COLOR%' stroke-width='2' stroke-linecap='round'/></svg>"
+		"maximize":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polyline points='10,2 14,2 14,6' stroke='%COLOR%' stroke-width='1.8' fill='none' stroke-linecap='round'/><line x1='14' y1='2' x2='8.5' y2='7.5' stroke='%COLOR%' stroke-width='1.8' stroke-linecap='round'/><polyline points='6,14 2,14 2,10' stroke='%COLOR%' stroke-width='1.8' fill='none' stroke-linecap='round'/><line x1='2' y1='14' x2='7.5' y2='8.5' stroke='%COLOR%' stroke-width='1.8' stroke-linecap='round'/></svg>"
+		"compact":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polyline points='14,6 10,6 10,2' stroke='%COLOR%' stroke-width='1.8' fill='none' stroke-linecap='round'/><line x1='10' y1='6' x2='15' y2='1' stroke='%COLOR%' stroke-width='1.8' stroke-linecap='round'/><polyline points='2,10 6,10 6,14' stroke='%COLOR%' stroke-width='1.8' fill='none' stroke-linecap='round'/><line x1='6' y1='10' x2='1' y2='15' stroke='%COLOR%' stroke-width='1.8' stroke-linecap='round'/></svg>"
+		"menu":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><line x1='2.5' y1='4' x2='13.5' y2='4' stroke='%COLOR%' stroke-width='2' stroke-linecap='round'/><line x1='2.5' y1='8' x2='13.5' y2='8' stroke='%COLOR%' stroke-width='2' stroke-linecap='round'/><line x1='2.5' y1='12' x2='13.5' y2='12' stroke='%COLOR%' stroke-width='2' stroke-linecap='round'/></svg>"
+		"plus":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><line x1='8' y1='3' x2='8' y2='13' stroke='%COLOR%' stroke-width='2.2' stroke-linecap='round'/><line x1='3' y1='8' x2='13' y2='8' stroke='%COLOR%' stroke-width='2.2' stroke-linecap='round'/></svg>"
+		"minus":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><line x1='3' y1='8' x2='13' y2='8' stroke='%COLOR%' stroke-width='2.2' stroke-linecap='round'/></svg>"
+		"mass":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M6 3.5a2 2 0 1 1 4 0v1h1.5l1.5 8.5H3L4.5 4.5H6v-1z' stroke='%COLOR%' stroke-width='1.4' fill='none'/><circle cx='8' cy='8.5' r='1.5' fill='%COLOR%'/></svg>"
+		_:
+			return ""
+
+
+func _create_liquid_button(text: String, icon_name: String = "") -> Button:
 	var btn := Button.new()
 	btn.text = text
 	btn.custom_minimum_size = Vector2(105, 30)
@@ -1789,6 +2018,15 @@ func _create_liquid_button(text: String) -> Button:
 	btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0) if is_dark else text_col)
 	btn.add_theme_color_override("font_focus_color", text_col)
 	btn.add_theme_color_override("font_hover_pressed_color", text_col)
+
+	if not icon_name.is_empty():
+		btn.set_meta("icon_name", icon_name)
+		var icon_tex := _get_svg_icon(icon_name, text_col, Vector2i(15, 15))
+		if icon_tex != null:
+			btn.icon = icon_tex
+			btn.expand_icon = true
+			btn.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color(0.12, 0.14, 0.20, 0.80) if is_dark else Color(1.0, 1.0, 1.0, 0.65)
@@ -2369,15 +2607,15 @@ func _update_force_visualizer() -> void:
 	if joint_val_fy != null:
 		joint_card_title.text = data.title
 		joint_card_desc.text = data.desc
-		var fy_tag: String = "(Upper Support ↑)" if is_upper_force_reaction else "(Lower Load ↓)"
+		var fy_tag: String = "[Upper Support]" if is_upper_force_reaction else "[Lower Load]"
 		joint_val_fy.text = "%.2f N  %s" % [absf(filtered_fy), fy_tag]
-		joint_val_fx.text = "%.2f N  (Lateral Scissor Thrust)" % absf(filtered_fx)
-		joint_val_res.text = "%.2f N  (Contact Resultant R)" % absf(filtered_res)
+		joint_val_fx.text = "%.2f N" % absf(filtered_fx)
+		joint_val_res.text = "%.2f N" % absf(filtered_res)
 		if data.len_fric >= 0.035 and not lbl_fric_str.is_empty():
-			joint_val_fric.text = "%.2f N  (Dynamic Coulomb Friction)" % absf(filtered_fric)
+			joint_val_fric.text = "%.2f N" % absf(filtered_fric)
 		else:
-			joint_val_fric.text = "0.00 N  (Static Equilibrium)"
-		joint_val_theta.text = "%.1f°  (Scissor Half-Angle θ)" % filtered_theta
+			joint_val_fric.text = "0.00 N"
+		joint_val_theta.text = "%.1f°" % filtered_theta
 
 	# 11: C - Update Tier 2 Advanced Stress & Pin Analysis
 	if is_advanced_stress_expanded and joint_val_tau_shear != null:
@@ -2393,23 +2631,27 @@ func _update_force_visualizer() -> void:
 		var sf: float = clampf(tau_yield_mpa / maxf(tau_shear_mpa, 0.001), 1.0, 99.9)
 		var tau_fric_nm: float = 0.20 * filtered_res * r_pin if data.len_fric >= 0.035 else 0.0
 
-		joint_val_tau_shear.text = "%.2f MPa  (Double Shear)" % tau_shear_mpa
-		joint_val_sigma_b.text = "%.2f MPa  (Bushing Contact)" % sigma_b_mpa
-		joint_val_sf.text = "%.1f  (Yield Margin)" % sf
-		joint_val_tau_fric.text = "%.4f N·m  (Pin Resistance)" % tau_fric_nm
+		joint_val_tau_shear.text = "%.2f MPa" % tau_shear_mpa
+		joint_val_sigma_b.text = "%.2f MPa" % sigma_b_mpa
+		joint_val_sf.text = "%.1f" % sf
+		joint_val_tau_fric.text = "%.4f N·m" % tau_fric_nm
 
 
 func _on_toggle_vector_mode() -> void:
 	is_resultant_only_mode = not is_resultant_only_mode
 	if btn_toggle_vector_mode != null:
-		btn_toggle_vector_mode.text = "⚡ Resultant (R Only)" if is_resultant_only_mode else "📐 All Vectors"
+		btn_toggle_vector_mode.text = "Resultant (R Only)" if is_resultant_only_mode else "All Vectors"
+		var text_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+		btn_toggle_vector_mode.icon = _get_svg_icon("vector_mode", text_col)
 	_update_force_visualizer()
 
 
 func _on_toggle_force_dir() -> void:
 	is_upper_force_reaction = not is_upper_force_reaction
 	if btn_toggle_force_dir != null:
-		btn_toggle_force_dir.text = "↑ Upper Support (Reaction)" if is_upper_force_reaction else "↓ Down Load (Action)"
+		btn_toggle_force_dir.text = "Upper Support (Reaction)" if is_upper_force_reaction else "Down Load (Action)"
+		var text_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+		btn_toggle_force_dir.icon = _get_svg_icon("arrow_up" if is_upper_force_reaction else "arrow_down", text_col)
 	_update_force_visualizer()
 
 
@@ -2461,6 +2703,7 @@ func _on_pin_clicked(rig: PantographRig, pin_idx: int, _pos: Vector3) -> void:
 				mobile_pin_card.visible = true
 				if lbl_mob_pin_summary != null:
 					lbl_mob_pin_summary.text = "%s [Pin #%d] · R=%.1fN, Fx=%.1fN" % [rig.rig_name, pin_idx, data.R, data.F_x]
+			_update_mobile_bottom_positions()
 		else:
 			_show_right_tab(1)
 		_update_force_visualizer()
@@ -2473,6 +2716,7 @@ func _deselect_pin() -> void:
 		force_visualizer_root.visible = false
 	if mobile_pin_card != null:
 		mobile_pin_card.visible = false
+	_update_mobile_bottom_positions()
 	_sync_quick_pin_buttons(null, -1)
 	if not is_mobile_layout:
 		_show_right_tab(0)
@@ -2490,6 +2734,10 @@ func _set_focus_mode(focus: bool) -> void:
 			backdrop_scrim.visible = false
 		if mobile_pin_card != null:
 			mobile_pin_card.visible = (not focus) if inspected_rig != null else false
+		if mobile_zoom_controls != null:
+			mobile_zoom_controls.visible = not focus
+		if mobile_mass_panel != null:
+			mobile_mass_panel.visible = not focus
 	else:
 		if header_panel != null:
 			header_panel.visible = not focus
@@ -2504,7 +2752,7 @@ func _set_focus_mode(focus: bool) -> void:
 	if btn_restore_ui != null:
 		btn_restore_ui.visible = focus
 	if btn_focus_toggle != null:
-		btn_focus_toggle.text = "Exit Focus" if focus else "👁️ Focus Mode"
+		btn_focus_toggle.text = "Exit Focus" if focus else "Focus Mode"
 
 
 func _apply_theme(is_dark: bool) -> void:
@@ -2696,11 +2944,35 @@ func _apply_theme(is_dark: bool) -> void:
 	# 11. Force Visualizer Materials
 	_apply_visualizer_theme(is_dark)
 
-	# 12. Update Button Labels
+	# 12. Update Button Labels & Icons
 	if btn_theme_toggle != null:
-		btn_theme_toggle.text = "☀️ Light Theme" if is_dark else "🌙 Dark Theme"
+		btn_theme_toggle.text = "Light Theme" if is_dark else "Dark Theme"
+		btn_theme_toggle.set_meta("icon_name", "sun" if is_dark else "moon")
 	if btn_mob_theme != null:
-		btn_mob_theme.text = "☀️" if is_dark else "🌙"
+		btn_mob_theme.text = ""
+		btn_mob_theme.set_meta("icon_name", "sun" if is_dark else "moon")
+	_refresh_all_button_icons(is_dark)
+
+
+func _refresh_all_button_icons(is_dark: bool) -> void:
+	var col: Color = Color(0.92, 0.94, 0.98) if is_dark else Color(0.114, 0.114, 0.122)
+	var blue_accent := Color(0.0, 0.443, 0.89)
+	var all_btns: Array = [
+		btn_formulas, btn_reset_cam, btn_follow_cam, btn_slowmo, btn_lasers,
+		btn_theme_toggle, btn_focus_toggle, btn_restore_ui, btn_tab_telemetry,
+		btn_tab_joint, btn_deselect_pin_ref, btn_toggle_vector_mode,
+		btn_toggle_force_dir, btn_toggle_advanced_stress, btn_graph_expand,
+		btn_graph_theme, btn_mobile_menu, btn_mob_theme, btn_mob_reset,
+		btn_close_sidebar, btn_mob_tab_0, btn_mob_tab_1, btn_mob_tab_2,
+		btn_mob_tab_3, btn_mob_pin_inspect, btn_mob_pin_close,
+		btn_mob_zoom_in, btn_mob_zoom_out, btn_mob_mass_dec, btn_mob_mass_inc
+	]
+	for btn in all_btns:
+		if btn != null and is_instance_valid(btn) and btn.has_meta("icon_name"):
+			var iname: String = btn.get_meta("icon_name")
+			var c: Color = blue_accent if (btn == btn_formulas) else col
+			var sz := Vector2i(20, 20) if (btn == btn_mob_theme or btn == btn_mob_reset) else Vector2i(15, 15)
+			btn.icon = _get_svg_icon(iname, c, sz)
 
 
 func _apply_visualizer_theme(is_dark: bool) -> void:
@@ -2766,8 +3038,28 @@ func _toggle_mobile_sidebar(open: bool) -> void:
 			mobile_pin_card.visible = false
 		elif inspected_rig != null and not is_focus_mode:
 			mobile_pin_card.visible = true
+	if mobile_zoom_controls != null:
+		mobile_zoom_controls.visible = (not open) and is_mobile_layout and (not is_focus_mode)
+	if mobile_mass_panel != null:
+		mobile_mass_panel.visible = (not open) and is_mobile_layout and (not is_focus_mode)
+	_update_mobile_bottom_positions()
 	if open:
 		_show_mobile_tab(current_mobile_tab)
+
+
+func _update_mobile_bottom_positions() -> void:
+	if not is_mobile_layout or mobile_mass_panel == null or not is_inside_tree() or get_viewport() == null:
+		return
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	var S: float = clampf(vp_size.x / 400.0, 1.0, 4.5)
+	var card_h: float = 46.0 * S
+	var pin_card_active := (inspected_rig != null and not is_focus_mode and not (mobile_sidebar != null and mobile_sidebar.visible))
+	if pin_card_active:
+		mobile_mass_panel.offset_bottom = -14.0 * S - 52.0 * S
+		mobile_mass_panel.offset_top = -14.0 * S - 52.0 * S - card_h
+	else:
+		mobile_mass_panel.offset_bottom = -14.0 * S
+		mobile_mass_panel.offset_top = -14.0 * S - card_h
 
 
 func _show_mobile_tab(tab_idx: int) -> void:
@@ -2972,6 +3264,64 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 			btn_mob_pin_close.custom_minimum_size = Vector2(40.0 * S, 40.0 * S)
 			btn_mob_pin_close.add_theme_font_size_override("font_size", int(20 * S))
 			_scale_button_stylebox(btn_mob_pin_close, int(12 * S))
+
+	# 4. Mobile Zoom (+ / -) Controller
+	if mobile_zoom_controls != null:
+		var zoom_w: float = 46.0 * S
+		var zoom_h: float = 120.0 * S
+		mobile_zoom_controls.offset_right = -12.0 * S
+		mobile_zoom_controls.offset_left = -12.0 * S - zoom_w
+		mobile_zoom_controls.offset_top = -zoom_h * 0.5
+		mobile_zoom_controls.offset_bottom = zoom_h * 0.5
+
+		var zoom_sb: StyleBoxFlat = mobile_zoom_controls.get_theme_stylebox("panel") as StyleBoxFlat
+		if zoom_sb:
+			var z_rad: int = int(16 * S)
+			zoom_sb.corner_radius_top_left = z_rad
+			zoom_sb.corner_radius_top_right = z_rad
+			zoom_sb.corner_radius_bottom_left = z_rad
+			zoom_sb.corner_radius_bottom_right = z_rad
+
+		var zb_h: float = 38.0 * S
+		if btn_mob_zoom_in != null:
+			btn_mob_zoom_in.custom_minimum_size = Vector2(zoom_w - 8 * S, zb_h)
+			btn_mob_zoom_in.add_theme_font_size_override("font_size", int(18 * S))
+			_scale_button_stylebox(btn_mob_zoom_in, int(10 * S))
+		if btn_mob_zoom_out != null:
+			btn_mob_zoom_out.custom_minimum_size = Vector2(zoom_w - 8 * S, zb_h)
+			btn_mob_zoom_out.add_theme_font_size_override("font_size", int(18 * S))
+			_scale_button_stylebox(btn_mob_zoom_out, int(10 * S))
+		if lbl_mob_zoom_dist != null:
+			lbl_mob_zoom_dist.add_theme_font_size_override("font_size", int(11 * S))
+
+	# 5. Mobile Mass Panel (Main Tab Quick Adjust)
+	if mobile_mass_panel != null:
+		var mass_w: float = minf(vp_size.x - 24.0 * S, 330.0 * S)
+		mobile_mass_panel.offset_left = -mass_w * 0.5
+		mobile_mass_panel.offset_right = mass_w * 0.5
+		var m_sb: StyleBoxFlat = mobile_mass_panel.get_theme_stylebox("panel") as StyleBoxFlat
+		if m_sb:
+			var m_rad: int = int(22 * S)
+			m_sb.corner_radius_top_left = m_rad
+			m_sb.corner_radius_top_right = m_rad
+			m_sb.corner_radius_bottom_left = m_rad
+			m_sb.corner_radius_bottom_right = m_rad
+
+		if lbl_mob_mass_title != null:
+			lbl_mob_mass_title.add_theme_font_size_override("font_size", int(12 * S))
+		if lbl_mob_mass_val != null:
+			lbl_mob_mass_val.add_theme_font_size_override("font_size", int(12 * S))
+		var step_w: float = 34.0 * S
+		var step_h: float = 30.0 * S
+		if btn_mob_mass_dec != null:
+			btn_mob_mass_dec.custom_minimum_size = Vector2(step_w, step_h)
+			btn_mob_mass_dec.add_theme_font_size_override("font_size", int(16 * S))
+			_scale_button_stylebox(btn_mob_mass_dec, int(10 * S))
+		if btn_mob_mass_inc != null:
+			btn_mob_mass_inc.custom_minimum_size = Vector2(step_w, step_h)
+			btn_mob_mass_inc.add_theme_font_size_override("font_size", int(16 * S))
+			_scale_button_stylebox(btn_mob_mass_inc, int(10 * S))
+	_update_mobile_bottom_positions()
 
 	# 4. Content inside Tab 0: Controls
 	for lbl in left_vbox_titles:
@@ -3217,6 +3567,11 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 			mobile_top_bar.visible = not is_focus_mode
 		if mobile_pin_card != null:
 			mobile_pin_card.visible = (inspected_rig != null and not is_focus_mode and not (mobile_sidebar != null and mobile_sidebar.visible))
+		if mobile_zoom_controls != null:
+			mobile_zoom_controls.visible = not is_focus_mode
+		if mobile_mass_panel != null:
+			mobile_mass_panel.visible = not is_focus_mode and not (mobile_sidebar != null and mobile_sidebar.visible)
+		_update_mobile_bottom_positions()
 
 	else:
 		# Desktop Mode:
@@ -3229,6 +3584,10 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 			backdrop_scrim.visible = false
 		if mobile_pin_card != null:
 			mobile_pin_card.visible = false
+		if mobile_zoom_controls != null:
+			mobile_zoom_controls.visible = false
+		if mobile_mass_panel != null:
+			mobile_mass_panel.visible = false
 
 		# 2. Reparent Content VBoxes back to Desktop Panels
 		if left_vbox != null and left_margin != null and left_vbox.get_parent() != left_margin:
@@ -3281,8 +3640,8 @@ func _adjust_desktop_sizes(vp_size: Vector2) -> void:
 		right_panel.anchor_right = 1.0
 		right_panel.anchor_top = 0.0
 		right_panel.anchor_bottom = 0.0
-		right_panel.offset_left = -374.0
-		right_panel.offset_right = -24.0
+		right_panel.offset_left = -390.0
+		right_panel.offset_right = -20.0
 		right_panel.offset_top = 96.0
 		var max_h: float = minf(750.0, vp_size.y - 120.0)
 		right_panel.offset_bottom = 96.0 + max_h
