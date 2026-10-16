@@ -197,6 +197,8 @@ var mat_ring: StandardMaterial3D
 var arrow_fy_data: Dictionary = {}
 var arrow_fx_data: Dictionary = {}
 var arrow_res_data: Dictionary = {}
+var arrow_fk_data: Dictionary = {}
+var arrow_fs_data: Dictionary = {}
 var arrow_fric_data: Dictionary = {}
 
 var inspected_rig: PantographRig = null
@@ -206,6 +208,8 @@ var inspected_pin_idx: int = -1
 var filtered_fy: float = 0.0
 var filtered_fx: float = 0.0
 var filtered_res: float = 0.0
+var filtered_fk: float = 0.0
+var filtered_fs: float = 0.0
 var filtered_fric: float = 0.0
 var filtered_theta: float = 0.0
 
@@ -216,6 +220,8 @@ var joint_card_desc: Label
 var joint_val_fy: Label
 var joint_val_fx: Label
 var joint_val_res: Label
+var joint_val_fk: Label
+var joint_val_fs: Label
 var joint_val_fric: Label
 var joint_val_tau: Label
 var joint_val_theta: Label
@@ -1194,9 +1200,13 @@ func _build_liquid_glass_ui() -> void:
 	joint_val_res = _create_value_cell("0.0 N", Color(0.12, 0.75, 0.35))
 	jgrid.add_child(joint_val_res)
 
-	jgrid.add_child(_create_body_label("Coulomb Friction fk:"))
-	joint_val_fric = _create_value_cell("0.0 N", Color(0.95, 0.65, 0.05))
-	jgrid.add_child(joint_val_fric)
+	jgrid.add_child(_create_body_label("Kinetic Friction fk:"))
+	joint_val_fk = _create_value_cell("0.0 N", Color(0.95, 0.65, 0.05))
+	jgrid.add_child(joint_val_fk)
+
+	jgrid.add_child(_create_body_label("Static Friction fs:"))
+	joint_val_fs = _create_value_cell("0.0 N", Color(0.68, 0.36, 0.16))
+	jgrid.add_child(joint_val_fs)
 
 
 
@@ -2337,11 +2347,13 @@ func _build_force_visualizer() -> void:
 	pin_highlight_ring.material_override = mat_ring
 	force_visualizer_root.add_child(pin_highlight_ring)
 
-	# 2. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), F_fric (Pin Friction)
+	# 2. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), fk (Kinetic Friction), fs (Static Friction)
 	arrow_fy_data = _create_arrow_node("ArrowFy", Color(0.0, 0.44, 0.95))
 	arrow_fx_data = _create_arrow_node("ArrowFx", Color(0.95, 0.22, 0.22))
 	arrow_res_data = _create_arrow_node("ArrowResultant", Color(0.12, 0.75, 0.35))
-	arrow_fric_data = _create_arrow_node("ArrowFriction", Color(0.95, 0.65, 0.05))
+	arrow_fk_data = _create_arrow_node("ArrowKineticFriction", Color(0.95, 0.65, 0.05))
+	arrow_fs_data = _create_arrow_node("ArrowStaticFriction", Color(0.68, 0.36, 0.16)) # Brown
+	arrow_fric_data = arrow_fk_data
 
 
 func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
@@ -2475,12 +2487,16 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var F_y: float = 0.0
 	var F_x: float = 0.0
 	var R: float = 0.0
+	var F_k: float = 0.0
+	var F_s: float = 0.0
 	var F_fric: float = 0.0
 	var tau_fric: float = 0.0
 
 	var dir_fy := Vector3.ZERO
 	var dir_fx := Vector3.ZERO
 	var dir_res := Vector3.ZERO
+	var dir_fk := Vector3.ZERO
+	var dir_fs := Vector3.ZERO
 	var dir_fric := Vector3.ZERO
 
 	var title := ""
@@ -2505,8 +2521,12 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			desc = "Total suspended weight pulling down on the ceiling anchor (Transmitted Load ↓)."
 
 		# Static ceiling gantry pins have zero linear displacement
+		F_k = 0.0
+		F_s = 0.0
 		F_fric = 0.0
 		tau_fric = 0.0
+		dir_fk = Vector3.ZERO
+		dir_fs = Vector3.ZERO
 		dir_fric = Vector3.ZERO
 
 		title = "%s · Top Gantry Pivot [Pin #0]" % rig.rig_name
@@ -2539,13 +2559,26 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 
 			# Joint pin friction: strictly 0 when mu == 0, dynamic during motion, static capacity at rest
 			if mu <= 0.0001:
+				F_k = 0.0
+				F_s = 0.0
 				F_fric = 0.0
 				tau_fric = 0.0
+				dir_fk = Vector3.ZERO
+				dir_fs = Vector3.ZERO
 				dir_fric = Vector3.ZERO
 			else:
-				F_fric = mu * R * (vel_norm if is_moving else 1.0)
+				var tangent_unit := Vector3(-sin(theta_clamped), cos(theta_clamped), 0.0).normalized()
+				F_s = mu * R
+				dir_fs = tangent_unit
+				if is_moving:
+					F_k = mu * R * vel_norm
+					dir_fk = tangent_unit * motion_dir
+				else:
+					F_k = 0.0
+					dir_fk = Vector3.ZERO
+				F_fric = F_k if is_moving else F_s
 				tau_fric = F_fric * r_pin
-				dir_fric = Vector3(-sin(theta_clamped), cos(theta_clamped), 0.0).normalized() * motion_dir
+				dir_fric = dir_fk if is_moving else dir_fs
 
 			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 
@@ -2571,13 +2604,26 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 
 			# Joint pin friction: strictly 0 when mu == 0, dynamic during motion, static capacity at rest
 			if mu <= 0.0001:
+				F_k = 0.0
+				F_s = 0.0
 				F_fric = 0.0
 				tau_fric = 0.0
+				dir_fk = Vector3.ZERO
+				dir_fs = Vector3.ZERO
 				dir_fric = Vector3.ZERO
 			else:
-				F_fric = mu * R * (vel_norm if is_moving else 1.0)
+				var tangent_unit := Vector3(sin(theta_clamped), cos(theta_clamped), 0.0).normalized()
+				F_s = mu * R
+				dir_fs = tangent_unit
+				if is_moving:
+					F_k = mu * R * vel_norm
+					dir_fk = tangent_unit * motion_dir
+				else:
+					F_k = 0.0
+					dir_fk = Vector3.ZERO
+				F_fric = F_k if is_moving else F_s
 				tau_fric = F_fric * r_pin
-				dir_fric = Vector3(sin(theta_clamped), cos(theta_clamped), 0.0).normalized() * motion_dir
+				dir_fric = dir_fk if is_moving else dir_fs
 
 			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 
@@ -2617,13 +2663,25 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 
 			# Joint pin friction on vertical centerline
 			if mu <= 0.0001:
+				F_k = 0.0
+				F_s = 0.0
 				F_fric = 0.0
 				tau_fric = 0.0
+				dir_fk = Vector3.ZERO
+				dir_fs = Vector3.ZERO
 				dir_fric = Vector3.ZERO
 			else:
-				F_fric = mu * R * (vel_norm if is_moving else 1.0)
+				F_s = mu * R
+				dir_fs = Vector3(0, 1.0, 0)
+				if is_moving:
+					F_k = mu * R * vel_norm
+					dir_fk = Vector3(0, 1.0, 0) * motion_dir
+				else:
+					F_k = 0.0
+					dir_fk = Vector3.ZERO
+				F_fric = F_k if is_moving else F_s
 				tau_fric = F_fric * r_pin
-				dir_fric = Vector3(0, 1.0, 0) * motion_dir
+				dir_fric = dir_fk if is_moving else dir_fs
 
 	# STRICT LINEAR SCALING: Length scales continuously with force down to 0!
 	const FORCE_SCALE: float = 0.35 # meters per Newton
@@ -2633,11 +2691,13 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var len_fy: float = clampf(absf(F_y) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_y) >= FORCE_MIN_DISPLAY else 0.0
 	var len_fx: float = clampf(absf(F_x) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_x) >= FORCE_MIN_DISPLAY else 0.0
 	var len_res: float = clampf(absf(R) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(R) >= FORCE_MIN_DISPLAY else 0.0
-	var len_fric: float = clampf(absf(F_fric) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (absf(F_fric) >= FORCE_MIN_DISPLAY and mu > 0.0001) else 0.0
+	var len_fk: float = clampf(absf(F_k) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (absf(F_k) >= FORCE_MIN_DISPLAY and mu > 0.0001) else 0.0
+	var len_fs: float = clampf(absf(F_s) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (absf(F_s) >= FORCE_MIN_DISPLAY and mu > 0.0001) else 0.0
+	var len_fric: float = len_fk if is_moving else len_fs
 
-	var lbl_fric: String = ""
-	if mu > 0.0001 and F_fric >= FORCE_MIN_DISPLAY:
-		lbl_fric = ("fk = %.2f N" % absf(F_fric)) if is_moving else ("fs = %.2f N" % absf(F_fric))
+	var lbl_fk: String = ("fk = %.2f N" % absf(F_k)) if (mu > 0.0001 and len_fk >= 0.012) else ""
+	var lbl_fs: String = ("fs = %.2f N" % absf(F_s)) if (mu > 0.0001 and len_fs >= 0.012) else ""
+	var lbl_fric: String = lbl_fk if is_moving else lbl_fs
 
 	return {
 		"dir_fy": dir_fy,
@@ -2646,19 +2706,28 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"len_fx": len_fx,
 		"dir_res": dir_res,
 		"len_res": len_res,
+		"dir_fk": dir_fk,
+		"len_fk": len_fk,
+		"dir_fs": dir_fs,
+		"len_fs": len_fs,
 		"dir_fric": dir_fric,
 		"len_fric": len_fric,
 		"lbl_fy": "Fy = %.2f N" % absf(F_y),
 		"lbl_fx": "Fx = %.2f N" % absf(F_x),
 		"lbl_res": "R = %.2f N" % absf(R),
+		"lbl_fk": lbl_fk,
+		"lbl_fs": lbl_fs,
 		"lbl_fric": lbl_fric,
 		"F_y": absf(F_y),
 		"F_x": absf(F_x),
 		"R": absf(R),
+		"F_k": absf(F_k),
+		"F_s": absf(F_s),
 		"F_fric": absf(F_fric),
 		"tau_fric": tau_fric,
 		"theta_deg": rad_to_deg(theta),
 		"friction_mu": mu,
+		"is_moving": is_moving,
 		"is_fric_static": not is_moving,
 		"title": title,
 		"desc": desc
@@ -2687,9 +2756,13 @@ func _update_force_visualizer() -> void:
 	filtered_res = lerpf(filtered_res, absf(data.R), filter_alpha)
 	var mu_val: float = data.get("friction_mu", 0.20)
 	if mu_val <= 0.0001:
+		filtered_fk = 0.0
+		filtered_fs = 0.0
 		filtered_fric = 0.0
 	else:
-		filtered_fric = lerpf(filtered_fric, absf(data.F_fric), filter_alpha)
+		filtered_fk = lerpf(filtered_fk, absf(data.F_k), filter_alpha)
+		filtered_fs = lerpf(filtered_fs, absf(data.F_s), filter_alpha)
+		filtered_fric = filtered_fk if is_dynamic else filtered_fs
 	filtered_theta = lerpf(filtered_theta, data.theta_deg, filter_alpha)
 
 	# STRICT LINEAR SCALING: length scales continuously to 0
@@ -2700,15 +2773,16 @@ func _update_force_visualizer() -> void:
 	var disp_len_fy: float = clampf(filtered_fy * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fy >= FORCE_MIN_DISPLAY else 0.0
 	var disp_len_fx: float = clampf(filtered_fx * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fx >= FORCE_MIN_DISPLAY else 0.0
 	var disp_len_res: float = clampf(filtered_res * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_res >= FORCE_MIN_DISPLAY else 0.0
-	var disp_len_fric: float = clampf(filtered_fric * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (filtered_fric >= FORCE_MIN_DISPLAY and mu_val > 0.0001) else 0.0
+	var disp_len_fk: float = clampf(filtered_fk * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (filtered_fk >= FORCE_MIN_DISPLAY and mu_val > 0.0001) else 0.0
+	var disp_len_fs: float = clampf(filtered_fs * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (filtered_fs >= FORCE_MIN_DISPLAY and mu_val > 0.0001) else 0.0
 
 	# Strict non-negative label strings
 	var lbl_fy_str := ("Fy = %.2f N" % absf(filtered_fy)) if filtered_fy >= FORCE_MIN_DISPLAY else ""
 	var lbl_fx_str := ("Fx = %.2f N" % absf(filtered_fx)) if filtered_fx >= FORCE_MIN_DISPLAY else ""
 	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_MIN_DISPLAY else ""
 	var is_moving: bool = inspected_rig.oscillations_enabled and (absf(inspected_rig.velocity_H) > 0.0005)
-	var fric_prefix: String = "fk" if is_moving else "fs"
-	var lbl_fric_str := ("%s = %.2f N" % [fric_prefix, absf(filtered_fric)]) if (disp_len_fric >= 0.012 and mu_val > 0.0001) else ""
+	var lbl_fk_str := ("fk = %.2f N" % absf(filtered_fk)) if (disp_len_fk >= 0.012 and mu_val > 0.0001) else ""
+	var lbl_fs_str := ("fs = %.2f N" % absf(filtered_fs)) if (disp_len_fs >= 0.012 and mu_val > 0.0001) else ""
 
 	# COMMON CONCURRENT ANCHOR & VECTOR MODE FILTERING
 	if is_resultant_only_mode:
@@ -2744,12 +2818,33 @@ func _update_force_visualizer() -> void:
 			# Hide redundant R arrow to strictly prevent double-arrow / label collision!
 			arrow_res_data["root"].visible = false
 
-	# F_fric (Coulomb Pin Friction): Smoothly scales with velocity, shows static limit at rest, hides when mu == 0!
-	if disp_len_fric >= 0.012 and not lbl_fric_str.is_empty() and data.dir_fric.length_squared() > 0.01 and mu_val > 0.0001:
-		var lbl_fric_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fric.y >= 0.0 else Vector3(0.0, -0.08, 0.0)
-		_update_arrow_vector(arrow_fric_data, pin_pos, data.dir_fric, disp_len_fric, lbl_fric_str, lbl_fric_offset)
+	# Joint Pin Friction Vectors:
+	# fk (Kinetic Friction - Amber): Active when mechanism oscillates/moves
+	# fs (Static Friction - Brown): Active when mechanism is at rest / holding
+	# When mu == 0: BOTH arrows are strictly hidden!
+	if mu_val <= 0.0001:
+		if arrow_fk_data.has("root"):
+			arrow_fk_data["root"].visible = false
+		if arrow_fs_data.has("root"):
+			arrow_fs_data["root"].visible = false
+	elif is_moving:
+		# In motion: Show fk (Amber), Hide fs (Brown)
+		if arrow_fs_data.has("root"):
+			arrow_fs_data["root"].visible = false
+		if disp_len_fk >= 0.012 and not lbl_fk_str.is_empty() and data.dir_fk.length_squared() > 0.01:
+			var lbl_fk_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fk.y >= 0.0 else Vector3(0.0, -0.08, 0.0)
+			_update_arrow_vector(arrow_fk_data, pin_pos, data.dir_fk, disp_len_fk, lbl_fk_str, lbl_fk_offset)
+		elif arrow_fk_data.has("root"):
+			arrow_fk_data["root"].visible = false
 	else:
-		arrow_fric_data["root"].visible = false
+		# At rest: Show fs (Brown), Hide fk (Amber)
+		if arrow_fk_data.has("root"):
+			arrow_fk_data["root"].visible = false
+		if disp_len_fs >= 0.012 and not lbl_fs_str.is_empty() and data.dir_fs.length_squared() > 0.01:
+			var lbl_fs_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fs.y >= 0.0 else Vector3(0.0, -0.08, 0.0)
+			_update_arrow_vector(arrow_fs_data, pin_pos, data.dir_fs, disp_len_fs, lbl_fs_str, lbl_fs_offset)
+		elif arrow_fs_data.has("root"):
+			arrow_fs_data["root"].visible = false
 
 	# 11: C - Update Tier 1 Core Statics
 	if joint_val_fy != null:
@@ -2759,13 +2854,30 @@ func _update_force_visualizer() -> void:
 		joint_val_fy.text = "%.2f N  %s" % [absf(filtered_fy), fy_tag]
 		joint_val_fx.text = "%.2f N" % absf(filtered_fx)
 		joint_val_res.text = "%.2f N" % absf(filtered_res)
+
 		if mu_val <= 0.0001:
-			joint_val_fric.text = "0.00 N (Zero Friction)"
-		elif filtered_fric >= FORCE_MIN_DISPLAY and data.F_fric >= FORCE_MIN_DISPLAY:
-			var dyn_tag: String = "[Dynamic]" if is_moving else "[Static]"
-			joint_val_fric.text = "%.2f N  %s" % [absf(filtered_fric), dyn_tag]
+			if joint_val_fk != null:
+				joint_val_fk.text = "0.00 N (Zero Friction)"
+			if joint_val_fs != null:
+				joint_val_fs.text = "0.00 N (Zero Friction)"
+			if joint_val_fric != null:
+				joint_val_fric.text = "0.00 N (Zero Friction)"
 		else:
-			joint_val_fric.text = "0.00 N (Null)"
+			if is_moving:
+				if joint_val_fk != null:
+					joint_val_fk.text = "%.2f N  [Dynamic]" % absf(filtered_fk)
+				if joint_val_fs != null:
+					joint_val_fs.text = "%.2f N  [Overcome]" % absf(filtered_fs)
+				if joint_val_fric != null:
+					joint_val_fric.text = "%.2f N  [Dynamic]" % absf(filtered_fk)
+			else:
+				if joint_val_fk != null:
+					joint_val_fk.text = "0.00 N  [At Rest]"
+				if joint_val_fs != null:
+					joint_val_fs.text = "%.2f N  [Static Holding]" % absf(filtered_fs)
+				if joint_val_fric != null:
+					joint_val_fric.text = "%.2f N  [Static]" % absf(filtered_fs)
+
 		joint_val_theta.text = "%.1f°" % filtered_theta
 
 	# 11: C - Update Tier 2 Advanced Stress & Pin Analysis
@@ -3054,6 +3166,10 @@ func _apply_theme(is_dark: bool) -> void:
 				lbl.add_theme_color_override("font_color", Color(1.0, 0.35, 0.20) if is_dark else Color(0.85, 0.15, 0.15))
 			elif lbl == joint_val_res:
 				lbl.add_theme_color_override("font_color", Color(0.25, 1.0, 0.50) if is_dark else Color(0.05, 0.55, 0.22))
+			elif lbl == joint_val_fk:
+				lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.15) if is_dark else Color(0.75, 0.45, 0.0))
+			elif lbl == joint_val_fs:
+				lbl.add_theme_color_override("font_color", Color(0.82, 0.48, 0.25) if is_dark else Color(0.68, 0.36, 0.16))
 			elif lbl == joint_val_fric:
 				lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.15) if is_dark else Color(0.75, 0.45, 0.0))
 			elif lbl == joint_val_tau_shear or lbl == joint_val_sigma_b:
@@ -3138,6 +3254,8 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
 		{"data": arrow_fx_data, "col": Color(1.0, 0.35, 0.20) if is_dark else Color(0.95, 0.22, 0.22)},
 		{"data": arrow_res_data, "col": Color(0.25, 1.0, 0.50) if is_dark else Color(0.12, 0.75, 0.35)},
+		{"data": arrow_fk_data, "col": Color(1.0, 0.82, 0.15) if is_dark else Color(0.95, 0.65, 0.05)},
+		{"data": arrow_fs_data, "col": Color(0.82, 0.48, 0.25) if is_dark else Color(0.68, 0.36, 0.16)},
 		{"data": arrow_fric_data, "col": Color(1.0, 0.82, 0.15) if is_dark else Color(1.0, 0.78, 0.12)}
 	]
 
@@ -3820,7 +3938,7 @@ func _adjust_desktop_sizes(vp_size: Vector2) -> void:
 	var vp_scale: float = clampf(vp_size.x / 1920.0, 0.7, 1.3)
 	var label_pixel: float = lerpf(0.0036, 0.0030, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0))
 	var label_font: int = int(lerpf(22.0, 20.0, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0)))
-	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fric_data]:
+	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
 		if arrow_data.has("label"):
 			var lbl: Label3D = arrow_data["label"]
 			lbl.pixel_size = label_pixel
