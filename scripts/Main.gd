@@ -2482,7 +2482,9 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var vel_h: float = rig.velocity_H
 	var is_moving: bool = rig.oscillations_enabled and (absf(vel_h) > 0.0005)
 	var vel_norm: float = clampf(absf(vel_h) / 0.035, 0.0, 1.0) if is_moving else 1.0
-	var motion_dir: float = signf(vel_h) if is_moving else 1.0
+	# Kinetic friction opposes velocity; static friction opposes incipient slip towards target equilibrium
+	var motion_dir: float = - signf(vel_h) if is_moving else 1.0
+	var static_tendency_dir: float = 1.0 if (rig.target_H >= rig.current_H) else -1.0
 
 	var F_y: float = 0.0
 	var F_x: float = 0.0
@@ -2569,7 +2571,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			else:
 				var tangent_unit := Vector3(-sin(theta_clamped), cos(theta_clamped), 0.0).normalized()
 				F_s = mu * R
-				dir_fs = tangent_unit
+				dir_fs = tangent_unit * static_tendency_dir
 				if is_moving:
 					F_k = mu * R * vel_norm
 					dir_fk = tangent_unit * motion_dir
@@ -2614,7 +2616,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			else:
 				var tangent_unit := Vector3(sin(theta_clamped), cos(theta_clamped), 0.0).normalized()
 				F_s = mu * R
-				dir_fs = tangent_unit
+				dir_fs = tangent_unit * static_tendency_dir
 				if is_moving:
 					F_k = mu * R * vel_norm
 					dir_fk = tangent_unit * motion_dir
@@ -2672,7 +2674,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_fric = Vector3.ZERO
 			else:
 				F_s = mu * R
-				dir_fs = Vector3(0, 1.0, 0)
+				dir_fs = Vector3(0, 1.0, 0) * static_tendency_dir
 				if is_moving:
 					F_k = mu * R * vel_norm
 					dir_fk = Vector3(0, 1.0, 0) * motion_dir
@@ -2849,7 +2851,11 @@ func _update_force_visualizer() -> void:
 	# 11: C - Update Tier 1 Core Statics
 	if joint_val_fy != null:
 		joint_card_title.text = data.title
-		joint_card_desc.text = data.desc
+		var stuck_desc: String = ""
+		if mu_val > 0.0001 and inspected_rig != null and ("is_stuck" in inspected_rig) and inspected_rig.is_stuck:
+			stuck_desc = " · [STICTION ACTIVE: Joint pin friction holds mechanism in static balance]"
+		joint_card_desc.text = data.desc + stuck_desc
+
 		var fy_tag: String = "[Upper Support]" if is_upper_force_reaction else "[Lower Load]"
 		joint_val_fy.text = "%.2f N  %s" % [absf(filtered_fy), fy_tag]
 		joint_val_fx.text = "%.2f N" % absf(filtered_fx)
@@ -2863,20 +2869,23 @@ func _update_force_visualizer() -> void:
 			if joint_val_fric != null:
 				joint_val_fric.text = "0.00 N (Zero Friction)"
 		else:
+			var is_stuck: bool = inspected_rig.is_stuck if (inspected_rig != null and "is_stuck" in inspected_rig) else (not is_moving)
+			var deadband_l_mm: float = (inspected_rig.stiction_deadband_H * 1000.0 * float(inspected_rig.n_stages)) if (inspected_rig != null and "stiction_deadband_H" in inspected_rig) else 0.0
 			if is_moving:
 				if joint_val_fk != null:
-					joint_val_fk.text = "%.2f N  [Dynamic]" % absf(filtered_fk)
+					joint_val_fk.text = "%.2f N  [Dynamic Drag]" % absf(filtered_fk)
 				if joint_val_fs != null:
-					joint_val_fs.text = "%.2f N  [Overcome]" % absf(filtered_fs)
+					joint_val_fs.text = "%.2f N  [Slip Limit]" % absf(filtered_fs)
 				if joint_val_fric != null:
-					joint_val_fric.text = "%.2f N  [Dynamic]" % absf(filtered_fk)
+					joint_val_fric.text = "%.2f N  [Dynamic Drag]" % absf(filtered_fk)
 			else:
 				if joint_val_fk != null:
 					joint_val_fk.text = "0.00 N  [At Rest]"
 				if joint_val_fs != null:
-					joint_val_fs.text = "%.2f N  [Static Holding]" % absf(filtered_fs)
+					var st_tag: String = "[Stiction Lock: ±%.1f mm]" % deadband_l_mm if is_stuck else "[Static Hold]"
+					joint_val_fs.text = "%.2f N  %s" % [absf(filtered_fs), st_tag]
 				if joint_val_fric != null:
-					joint_val_fric.text = "%.2f N  [Static]" % absf(filtered_fs)
+					joint_val_fric.text = "%.2f N  [Static Hold]" % absf(filtered_fs)
 
 		joint_val_theta.text = "%.1f°" % filtered_theta
 

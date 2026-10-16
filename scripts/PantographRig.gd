@@ -33,6 +33,8 @@ signal pin_clicked(rig: PantographRig, pin_index: int, pin_pos: Vector3)
 @export var natural_frequency_omega: float = 20.0 # Nominal frequency [4.0 - 75.0 rad/s]
 
 var current_H: float = 0.075
+var is_stuck: bool = false
+var stiction_deadband_H: float = 0.0
 var velocity_H: float = 0.0
 var acceleration_H: float = 0.0
 var target_H: float = 0.075
@@ -498,56 +500,98 @@ func _update_kinematics(delta: float) -> void:
 	# Prevent time spikes from causing numerical instability
 	var dt: float = clampf(delta, 0.0005, 0.033)
 
+	var effective_n: float = 6.0 if is_scaled_123 else float(n_stages)
+	var total_link_mass: float = (6.0 * link_mass_per_stage) if is_scaled_123 else (float(n_stages) * link_mass_per_stage)
+
+	# Factor in the effective distributed mass of the scissors mechanism:
+	# m_effective = m_payload + (0.33 * total_link_mass * lambda)
+	var m_effective: float = maxf(suspended_mass + (0.33 * total_link_mass * effective_n), 0.15)
+	var k_eff: float = spring_k / maxf(effective_n * effective_n, 1.0)
+	var omega_phys: float = sqrt(k_eff / m_effective)
+
+	# Clamp maximum visual oscillation frequency to realistic mechanical range (1.2 Hz to 2.2 Hz):
+	var f_n: float = clampf(omega_phys / TAU, 1.2, 2.2)
+	var omega: float = TAU * f_n
+
+	# Calculate physical Coulomb stiction deadband:
+	var a_coulomb: float = 0.0
+	stiction_deadband_H = 0.0
+	if friction_mu > 0.0001:
+		var normal_load_factor: float = clampf(effective_load_P / 5.0, 0.40, 2.5)
+		# Calibrated Coulomb deceleration producing realistic 3-10mm stiction deadband
+		a_coulomb = (friction_mu / 0.20) * 0.40 * normal_load_factor
+		stiction_deadband_H = a_coulomb / maxf(omega * omega, 1.0)
+
 	if not oscillations_enabled:
-		# Critically damped smooth glide
+		# Smooth glide mode with Coulomb deadband holding
 		var smooth_speed: float = 14.0
-		current_H = lerpf(current_H, target_H, clampf(dt * smooth_speed, 0.0, 1.0))
+		var static_target_H: float = target_H
+		if friction_mu > 0.0001:
+			if current_H < target_H - stiction_deadband_H:
+				static_target_H = target_H - stiction_deadband_H
+			elif current_H > target_H + stiction_deadband_H:
+				static_target_H = target_H + stiction_deadband_H
+			else:
+				static_target_H = current_H # Inside deadband: static friction locks position!
+		current_H = lerpf(current_H, static_target_H, clampf(dt * smooth_speed, 0.0, 1.0))
 		velocity_H = 0.0
 		acceleration_H = 0.0
+		is_stuck = (friction_mu > 0.0001 and absf(current_H - target_H) <= stiction_deadband_H + 0.0005)
 	else:
-		# 1. NATURAL OSCILLATION TUNING (Kill the Numeric Buzzing):
-		var effective_n: float = 6.0 if is_scaled_123 else float(n_stages)
-		var total_link_mass: float = (6.0 * link_mass_per_stage) if is_scaled_123 else (float(n_stages) * link_mass_per_stage)
-
-		# Factor in the effective distributed mass of the scissors mechanism:
-		# When expanding, all links accelerate, drastically increasing effective dynamic inertia:
-		# m_effective = m_payload + (0.33 * total_link_mass * lambda)
-		var m_effective: float = maxf(suspended_mass + (0.33 * total_link_mass * effective_n), 0.15)
-		var k_eff: float = spring_k / maxf(effective_n * effective_n, 1.0)
-		var omega_phys: float = sqrt(k_eff / m_effective)
-
-		# Clamp maximum visual oscillation frequency to realistic mechanical range (1.2 Hz to 2.2 Hz):
-		var f_n: float = clampf(omega_phys / TAU, 1.2, 2.2)
-		var omega: float = TAU * f_n
-
-		# Damping profile: analytical viscous damping + physical Coulomb joint pin friction
-		# When damping_ratio_zeta is 0.0 and friction_mu is 0.0, damping is strictly 0 for true perpetual harmonic oscillation!
+		# Sub-stepped Velocity Verlet integrator with Coulomb Stiction Deadband
 		var damping_c: float = 2.0 * omega * damping_ratio_zeta
-		var a_coulomb: float = 0.0
-		if friction_mu > 0.0001:
-			var normal_load_factor: float = clampf(effective_load_P / 5.0, 0.35, 3.0)
-			a_coulomb = (friction_mu / 0.20) * 0.045 * normal_load_factor
-
-		# Sub-stepped Velocity Verlet integrator (400 Hz physics sub-step)
 		var target_sub_dt: float = 0.0025 # 400 Hz physics sub-step
 		var sub_steps: int = clampi(int(ceil(dt / target_sub_dt)), 4, 16)
 		var sub_dt: float = dt / float(sub_steps)
 
+		var v_stick_thresh: float = 0.0025 # 2.5 mm/s cutoff
+		var stiction_engaged: bool = false
+
 		for step in range(sub_steps):
 			var err: float = target_H - current_H
-			# Continuous 2nd-order ODE integration: hyperbolic friction + damping naturally decelerate the system
-			var sgn_v: float = tanh(velocity_H / 0.004)
-			var a0: float = omega * omega * err - damping_c * velocity_H - a_coulomb * sgn_v
+			var a_restoring: float = omega * omega * err
+			var a_viscous: float = - damping_c * velocity_H
+
+			# Coulomb friction logic (Stiction vs Kinetic sliding):
+			var a_fric: float = 0.0
+			if a_coulomb > 0.0001:
+				if absf(velocity_H) < v_stick_thresh and absf(a_restoring) <= a_coulomb:
+					# Stiction condition met: static friction exactly cancels restoring force!
+					# Mechanism is locked in static equilibrium at this position!
+					stiction_engaged = true
+					velocity_H = 0.0
+					acceleration_H = 0.0
+					break
+				else:
+					var sgn_v: float = clampf(velocity_H / v_stick_thresh, -1.0, 1.0)
+					a_fric = - a_coulomb * sgn_v
+
+			var a0: float = a_restoring + a_viscous + a_fric
 
 			# Velocity Verlet half-step & position update
 			var v_half: float = velocity_H + 0.5 * a0 * sub_dt
 			current_H += v_half * sub_dt
 
 			var err_next: float = target_H - current_H
-			var sgn_v_half: float = tanh(v_half / 0.004)
-			var a1: float = omega * omega * err_next - damping_c * v_half - a_coulomb * sgn_v_half
+			var a_restoring_next: float = omega * omega * err_next
+			var a_viscous_next: float = - damping_c * v_half
+			var a_fric_next: float = 0.0
+
+			if a_coulomb > 0.0001:
+				if absf(v_half) < v_stick_thresh and absf(a_restoring_next) <= a_coulomb:
+					stiction_engaged = true
+					velocity_H = 0.0
+					acceleration_H = 0.0
+					break
+				else:
+					var sgn_v_half: float = clampf(v_half / v_stick_thresh, -1.0, 1.0)
+					a_fric_next = - a_coulomb * sgn_v_half
+
+			var a1: float = a_restoring_next + a_viscous_next + a_fric_next
 			velocity_H = v_half + 0.5 * a1 * sub_dt
 			acceleration_H = a1
+
+		is_stuck = stiction_engaged
 
 	var base_link_len: float = get_base_link_length()
 	current_H = clampf(current_H, 0.030, base_link_len * 2.0 * 0.96)
@@ -844,7 +888,10 @@ func _broadcast_telemetry() -> void:
 		"work_in_Joules": work_in,
 		"work_out_Joules": work_out,
 		"work_ratio_pct": efficiency_eta * 100.0,
-		"friction_mu": friction_mu
+		"friction_mu": friction_mu,
+		"is_stuck": is_stuck,
+		"stiction_deadband_H": stiction_deadband_H,
+		"stiction_deadband_L_mm": stiction_deadband_H * effective_n * 1000.0
 	}
 	telemetry_updated.emit(data)
 
