@@ -180,6 +180,7 @@ var arrow_fx_data: Dictionary = {}
 var arrow_res_data: Dictionary = {}
 var arrow_fric_data: Dictionary = {}
 var joint_billboard_badge: Label3D
+var joint_badge_pill: MeshInstance3D
 
 var inspected_rig: PantographRig = null
 var inspected_pin_idx: int = -1
@@ -1960,10 +1961,26 @@ func _build_force_visualizer() -> void:
 	joint_billboard_badge.no_depth_test = true
 	joint_billboard_badge.render_priority = 20
 	joint_billboard_badge.outline_size = 6
-	joint_billboard_badge.outline_modulate = Color(0.04, 0.05, 0.08, 0.95)
-	joint_billboard_badge.modulate = Color(1.0, 1.0, 1.0)
+	joint_billboard_badge.outline_modulate = Color(0.02, 0.03, 0.05, 0.95)
+	joint_billboard_badge.modulate = Color(0.95, 0.96, 0.98)
 	joint_billboard_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	force_visualizer_root.add_child(joint_billboard_badge)
+
+	joint_badge_pill = MeshInstance3D.new()
+	joint_badge_pill.name = "JointBadgePill"
+	var badge_mesh := QuadMesh.new()
+	badge_mesh.size = Vector2(0.40, 0.22)
+	joint_badge_pill.mesh = badge_mesh
+	var badge_mat := StandardMaterial3D.new()
+	badge_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.65)
+	badge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	badge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	badge_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	badge_mat.no_depth_test = true
+	badge_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	badge_mat.render_priority = 19
+	joint_badge_pill.material_override = badge_mat
+	force_visualizer_root.add_child(joint_badge_pill)
 
 	# 3. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), F_fric (Pin Friction)
 	arrow_fy_data = _create_arrow_node("ArrowFy", Color(0.0, 0.44, 0.95))
@@ -2018,17 +2035,35 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 	lbl.font_size = 20
 	lbl.shaded = false
 	lbl.no_depth_test = true
-	lbl.render_priority = 15
+	lbl.render_priority = 16
 	lbl.modulate = col
 	lbl.outline_size = 8
-	lbl.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
+	lbl.outline_modulate = Color(0.02, 0.03, 0.05, 0.95)
 	root.add_child(lbl)
+
+	# High-contrast semi-transparent dark backing pill behind 3D Label3D text (rgba(0, 0, 0, 0.65))
+	var pill := MeshInstance3D.new()
+	pill.name = "BackingPill"
+	var pill_mesh := QuadMesh.new()
+	pill_mesh.size = Vector2(0.24, 0.062)
+	pill.mesh = pill_mesh
+	var pill_mat := StandardMaterial3D.new()
+	pill_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.65)
+	pill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pill_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	pill_mat.no_depth_test = true
+	pill_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	pill_mat.render_priority = 15
+	pill.material_override = pill_mat
+	root.add_child(pill)
 
 	return {
 		"root": root,
 		"stem": stem,
 		"tip": tip,
 		"label": lbl,
+		"pill": pill,
 		"mat": mat,
 		"base_color": col
 	}
@@ -2036,13 +2071,14 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 
 func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vector3, visual_length: float, label_text: String, label_world_offset: Vector3 = Vector3.ZERO) -> void:
 	var root: Node3D = arrow_dict["root"]
-	if visual_length < 0.02 or dir_unit.length_squared() < 0.001 or label_text.is_empty():
+	if visual_length < 0.035 or dir_unit.length_squared() < 0.001 or label_text.is_empty():
 		root.visible = false
 		return
 	root.visible = true
 
-	var tip_len: float = 0.09
-	var stem_len: float = maxf(visual_length - tip_len, 0.01)
+	# Proportionate tip cone and shaft cylinder scaling (Requirement 1):
+	var tip_len: float = clampf(visual_length * 0.20, 0.025, 0.09)
+	var stem_len: float = maxf(visual_length - tip_len, 0.005)
 
 	var dir: Vector3 = dir_unit.normalized()
 	var up_ref := Vector3.UP if absf(dir.y) < 0.95 else Vector3.FORWARD
@@ -2052,19 +2088,35 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 
 	root.global_transform = Transform3D(basis, origin)
 
+	# Proportional arrow thickness (so small micro-forces have slender arrows, not bulky cones)
+	var thickness_scale: float = clampf(visual_length / 0.55, 0.45, 1.20)
+
 	var stem: MeshInstance3D = arrow_dict["stem"]
+	stem.scale = Vector3(thickness_scale, stem_len, thickness_scale)
 	stem.position = Vector3(0, stem_len * 0.5, 0)
-	stem.scale = Vector3(1.0, stem_len, 1.0)
 
 	var tip: MeshInstance3D = arrow_dict["tip"]
+	var tip_scale_y: float = tip_len / 0.09
+	tip.scale = Vector3(thickness_scale, tip_scale_y, thickness_scale)
 	tip.position = Vector3(0, stem_len + tip_len * 0.5, 0)
 
-	# Label placed at arrow tip with world radial angular offset to prevent text collisions (Point 3)
+	# Label placed at arrow tip with world offset (Requirement 2)
 	var lbl: Label3D = arrow_dict["label"]
 	var tip_world_pos: Vector3 = origin + dir * visual_length
-	lbl.global_position = tip_world_pos + label_world_offset
-	# Strict guarantee: NEVER display negative signs on 3D arrows (Point 1)
+	var final_label_pos: Vector3 = tip_world_pos + label_world_offset
+	lbl.global_position = final_label_pos
+	# Strict guarantee: NEVER display negative signs on 3D arrows
 	lbl.text = label_text.replace("= -", "= ").replace("=-", "= ").replace("-", "")
+
+	# High-contrast backing pill (rgba(0, 0, 0, 0.65))
+	var pill: MeshInstance3D = arrow_dict.get("pill", null)
+	if pill != null:
+		pill.visible = true
+		pill.global_position = final_label_pos
+		var qmesh: QuadMesh = pill.mesh as QuadMesh
+		if qmesh != null:
+			var estimated_width: float = maxf(lbl.text.length() * 0.016 + 0.05, 0.16)
+			qmesh.size = Vector2(estimated_width, 0.062)
 
 
 func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
@@ -2142,8 +2194,10 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			tau_fric = mu * R * r_pin
 			# Point 2 FIX: Coulomb friction opposes link displacement (tangential / opposite to link motion)
 			# During downward extension, left hinge travels inward (+X) and downward (-Y).
-			# Opposing friction points outward (-X) and upward (+Y):
-			dir_fric = Vector3(-cos(theta), sin(theta), 0.0).normalized() * motion_dir
+			# Opposing friction points outward (-X) and upward (+Y).
+			# Fan out by at least 35° so F_fric does not clip or overlap with horizontal Fx:
+			var fan_angle_l: float = maxf(theta, deg_to_rad(35.0))
+			dir_fric = Vector3(-cos(fan_angle_l), sin(fan_angle_l), 0.0).normalized() * motion_dir
 
 			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
@@ -2163,8 +2217,10 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			tau_fric = mu * R * r_pin
 			# Point 2 FIX: Coulomb friction opposes link displacement (tangential / opposite to link motion)
 			# During downward extension, right hinge travels inward (-X) and downward (-Y).
-			# Opposing friction points outward (+X) and upward (+Y):
-			dir_fric = Vector3(cos(theta), sin(theta), 0.0).normalized() * motion_dir
+			# Opposing friction points outward (+X) and upward (+Y).
+			# Fan out by at least 35° so F_fric does not clip or overlap with horizontal Fx:
+			var fan_angle_r: float = maxf(theta, deg_to_rad(35.0))
+			dir_fric = Vector3(cos(fan_angle_r), sin(fan_angle_r), 0.0).normalized() * motion_dir
 
 			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
@@ -2203,16 +2259,15 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 				desc = "Intermediate coupling pivot transferring vertical load between consecutive scissor stages."
 
-	# Sublinear Square-Root scaling with 0.15N threshold (Point 1 & Point 2)
-	var min_arrow_len: float = 0.22
-	var max_arrow_len: float = 1.15
-	var force_threshold: float = 0.15
-	var k_scale: float = 0.34
+	# 1. STRICT LINEAR SCALING WITHOUT FAKE MINIMUMS:
+	const FORCE_SCALE: float = 0.35 # meters per Newton
+	const FORCE_THRESHOLD: float = 0.10 # Hide if force_mag < 0.1 N
+	const MAX_ARROW_LEN: float = 1.40
 
-	var len_fy: float = clampf(sqrt(absf(F_y)) * k_scale, min_arrow_len, max_arrow_len) if absf(F_y) >= force_threshold else 0.0
-	var len_fx: float = clampf(sqrt(absf(F_x)) * k_scale, min_arrow_len, max_arrow_len) if absf(F_x) >= force_threshold else 0.0
-	var len_res: float = clampf(sqrt(absf(R)) * k_scale, min_arrow_len, max_arrow_len) if absf(R) >= force_threshold else 0.0
-	var len_fric: float = clampf(sqrt(absf(F_fric)) * k_scale, min_arrow_len, max_arrow_len) if absf(F_fric) >= force_threshold else 0.0
+	var len_fy: float = minf(absf(F_y) * FORCE_SCALE, MAX_ARROW_LEN) if absf(F_y) >= FORCE_THRESHOLD else 0.0
+	var len_fx: float = minf(absf(F_x) * FORCE_SCALE, MAX_ARROW_LEN) if absf(F_x) >= FORCE_THRESHOLD else 0.0
+	var len_res: float = minf(absf(R) * FORCE_SCALE, MAX_ARROW_LEN) if absf(R) >= FORCE_THRESHOLD else 0.0
+	var len_fric: float = minf(absf(F_fric) * FORCE_SCALE, MAX_ARROW_LEN) if absf(F_fric) >= FORCE_THRESHOLD else 0.0
 
 	return {
 		"dir_fy": dir_fy,
@@ -2257,44 +2312,56 @@ func _update_force_visualizer() -> void:
 	filtered_fric = lerpf(filtered_fric, absf(data.F_fric), filter_alpha)
 	filtered_theta = lerpf(filtered_theta, data.theta_deg, filter_alpha)
 
-	# Sublinear Square-Root scaling (2: B) & Hard cutoff (3: A)
-	var min_arrow_len: float = 0.22
-	var max_arrow_len: float = 1.15
-	var force_threshold: float = 0.15
-	var k_scale: float = 0.34
+	# 1. STRICT LINEAR SCALING:
+	const FORCE_SCALE: float = 0.35 # meters per Newton
+	const FORCE_THRESHOLD: float = 0.10 # Hide if force_mag < 0.1 N
+	const MAX_ARROW_LEN: float = 1.40
 
-	var disp_len_fy: float = clampf(sqrt(filtered_fy) * k_scale, min_arrow_len, max_arrow_len) if filtered_fy >= force_threshold else 0.0
-	var disp_len_fx: float = clampf(sqrt(filtered_fx) * k_scale, min_arrow_len, max_arrow_len) if filtered_fx >= force_threshold else 0.0
-	var disp_len_res: float = clampf(sqrt(filtered_res) * k_scale, min_arrow_len, max_arrow_len) if filtered_res >= force_threshold else 0.0
-	var disp_len_fric: float = clampf(sqrt(filtered_fric) * k_scale, min_arrow_len, max_arrow_len) if filtered_fric >= force_threshold else 0.0
+	var disp_len_fy: float = minf(filtered_fy * FORCE_SCALE, MAX_ARROW_LEN) if filtered_fy >= FORCE_THRESHOLD else 0.0
+	var disp_len_fx: float = minf(filtered_fx * FORCE_SCALE, MAX_ARROW_LEN) if filtered_fx >= FORCE_THRESHOLD else 0.0
+	var disp_len_res: float = minf(filtered_res * FORCE_SCALE, MAX_ARROW_LEN) if filtered_res >= FORCE_THRESHOLD else 0.0
+	var disp_len_fric: float = minf(filtered_fric * FORCE_SCALE, MAX_ARROW_LEN) if filtered_fric >= FORCE_THRESHOLD else 0.0
 
-	# Strict non-negative label strings (Point 1)
-	var lbl_fy_str := "Fy = %.2f N" % absf(filtered_fy)
-	var lbl_fx_str := "Fx = %.2f N" % absf(filtered_fx)
-	var lbl_res_str := "R = %.2f N" % absf(filtered_res)
-	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if filtered_fric >= force_threshold else ""
+	# Strict non-negative label strings
+	var lbl_fy_str := ("Fy = %.2f N" % absf(filtered_fy)) if filtered_fy >= FORCE_THRESHOLD else ""
+	var lbl_fx_str := ("Fx = %.2f N" % absf(filtered_fx)) if filtered_fx >= FORCE_THRESHOLD else ""
+	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_THRESHOLD else ""
+	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if filtered_fric >= FORCE_THRESHOLD else ""
 
-	# Point 3 FIX: Radial angular offsets around the pin to eliminate collisions
-	# Fx label placed at arrow tip with Vector3(0.15, 0.05, 0)
-	# Fy label placed at arrow tip with Vector3(0.05, -0.15, 0)
-	# R label placed at arrow tip with Vector3(0.15, -0.15, 0)
-	# F_fric label placed with clear clearance Vector3(-0.16, 0.14, 0.04)
-	_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, Vector3(0.05, -0.15, 0.0))
-	_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.15, 0.05, 0.0))
-	_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, Vector3(0.15, -0.15, 0.0))
+	# 2. PREVENT VECTOR & LABEL STACKING (Fx vs F_fric):
+	# Fy origin at pin center, slight Z recess:
+	var fy_origin: Vector3 = pin_pos + Vector3(0.0, 0.0, -0.015)
+	var lbl_fy_offset := Vector3(-0.06, -0.08, 0.0) if data.dir_fy.y < 0.0 else Vector3(-0.06, 0.08, 0.0)
+	_update_arrow_vector(arrow_fy_data, fy_origin, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
 
-	# F_fric originates on the front washer face of the pin (+0.065m Z) - hidden if static gantry pin or micro-force
-	var fric_origin: Vector3 = pin_pos + Vector3(0, 0, 0.065)
+	# Fx origin: separated vertically (+0.012m Y) and slightly forward (+0.015m Z)
+	var fx_origin: Vector3 = pin_pos + Vector3(0.0, 0.012, 0.015)
+	# Place Fx text strictly above the red tip: tip_pos + Vector3(0.0, 0.08, 0.0)
+	_update_arrow_vector(arrow_fx_data, fx_origin, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.0, 0.08, 0.0))
+
+	# Resultant R origin: pin center
+	var res_origin: Vector3 = pin_pos + Vector3(0.0, 0.0, -0.005)
+	var lbl_res_offset := Vector3(0.14, -0.06, 0.0) if data.dir_res.y < 0.0 else Vector3(0.14, 0.06, 0.0)
+	_update_arrow_vector(arrow_res_data, res_origin, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
+
+	# F_fric origin: separated vertically (-0.018m Y) and offset along Z (+0.075m Z) on front pin face
+	var fric_origin: Vector3 = pin_pos + Vector3(0.0, -0.018, 0.075)
 	if data.len_fric > 0.01 and not lbl_fric_str.is_empty():
-		_update_arrow_vector(arrow_fric_data, fric_origin, data.dir_fric, disp_len_fric, lbl_fric_str, Vector3(-0.16, 0.14, 0.04))
+		# Place F_fric text strictly below its tip: tip_pos + Vector3(0.0, -0.08, 0.0)
+		_update_arrow_vector(arrow_fric_data, fric_origin, data.dir_fric, disp_len_fric, lbl_fric_str, Vector3(0.0, -0.08, 0.0))
 	else:
 		arrow_fric_data["root"].visible = false
 
 	# 4: C - Consolidated floating billboard badge
 	if joint_billboard_badge != null:
 		joint_billboard_badge.visible = true
-		joint_billboard_badge.global_position = pin_pos + Vector3(0.26, 0.22, 0.04)
-		if filtered_fric >= force_threshold:
+		var badge_pos: Vector3 = pin_pos + Vector3(0.26, 0.22, 0.04)
+		joint_billboard_badge.global_position = badge_pos
+		if joint_badge_pill != null:
+			joint_badge_pill.visible = true
+			joint_badge_pill.global_position = badge_pos + Vector3(0.08, -0.04, -0.002)
+
+		if filtered_fric >= FORCE_THRESHOLD:
 			joint_billboard_badge.text = "Pin #%d Load Summary\n  R  : %.2f N\n  Fy : %.2f N\n  Fx : %.2f N\n  fk : %.2f N" % [
 				inspected_pin_idx,
 				absf(filtered_res),
@@ -2399,6 +2466,8 @@ func _deselect_pin() -> void:
 		force_visualizer_root.visible = false
 	if joint_billboard_badge != null:
 		joint_billboard_badge.visible = false
+	if joint_badge_pill != null:
+		joint_badge_pill.visible = false
 	if mobile_pin_card != null:
 		mobile_pin_card.visible = false
 	_sync_quick_pin_buttons(null, -1)
@@ -2627,18 +2696,14 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		mat_ring.emission_energy_multiplier = 2.5 if is_dark else 1.8
 
 	if joint_billboard_badge != null:
-		if is_dark:
-			joint_billboard_badge.modulate = Color(0.95, 0.96, 0.98)
-			joint_billboard_badge.outline_modulate = Color(0.04, 0.05, 0.08, 0.95)
-		else:
-			joint_billboard_badge.modulate = Color(0.08, 0.10, 0.14)
-			joint_billboard_badge.outline_modulate = Color(0.98, 0.98, 1.0, 0.95)
+		joint_billboard_badge.modulate = Color(0.95, 0.96, 0.98)
+		joint_billboard_badge.outline_modulate = Color(0.04, 0.05, 0.08, 0.95)
 
 	var arrows := [
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
 		{"data": arrow_fx_data, "col": Color(1.0, 0.35, 0.20) if is_dark else Color(0.95, 0.22, 0.22)},
 		{"data": arrow_res_data, "col": Color(0.25, 1.0, 0.50) if is_dark else Color(0.12, 0.75, 0.35)},
-		{"data": arrow_fric_data, "col": Color(1.0, 0.82, 0.15) if is_dark else Color(0.95, 0.65, 0.05)}
+		{"data": arrow_fric_data, "col": Color(1.0, 0.82, 0.15) if is_dark else Color(1.0, 0.78, 0.12)}
 	]
 
 	for a in arrows:
@@ -2653,7 +2718,7 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		mat.emission_energy_multiplier = 0.45 if is_dark else 0.0
 		var lbl: Label3D = dict["label"]
 		lbl.modulate = col
-		lbl.outline_modulate = Color(0.04, 0.05, 0.08, 0.95) if is_dark else Color(1.0, 1.0, 1.0, 0.98)
+		lbl.outline_modulate = Color(0.02, 0.03, 0.05, 0.95)
 
 
 func _show_right_tab(tab_idx: int) -> void:
