@@ -143,6 +143,8 @@ var efficiency_slider: HSlider
 var efficiency_val_label: Label
 var friction_slider: HSlider
 var friction_val_label: Label
+var btn_toggle_stiction: Button
+var is_stiction_enabled: bool = true
 var friction_preset_buttons: Array[Button] = []
 var gravity_slider: HSlider
 var gravity_val_label: Label
@@ -776,6 +778,13 @@ func _build_liquid_glass_ui() -> void:
 
 	friction_preset_buttons.clear()
 	friction_preset_buttons.append_array([btn_f_zero, btn_f_steel, btn_f_ptfe, btn_f_pla])
+
+	btn_toggle_stiction = _create_liquid_button("Static Friction (fs): ON", "lock")
+	btn_toggle_stiction.custom_minimum_size = Vector2(0, 26)
+	btn_toggle_stiction.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_toggle_stiction.add_theme_font_size_override("font_size", 10)
+	btn_toggle_stiction.pressed.connect(_on_toggle_stiction)
+	left_vbox.add_child(btn_toggle_stiction)
 
 	# 5. Gravity Variable (g) Slider & Presets
 	var g_hbox := HBoxContainer.new()
@@ -1913,6 +1922,28 @@ func _on_friction_slider_changed(val: float) -> void:
 		_update_force_visualizer()
 
 
+func _on_toggle_stiction() -> void:
+	is_stiction_enabled = not is_stiction_enabled
+	rig_a.set_stiction_enabled(is_stiction_enabled)
+	rig_c.set_stiction_enabled(is_stiction_enabled)
+	rig_b.set_stiction_enabled(is_stiction_enabled)
+	_update_stiction_button_ui()
+	if inspected_rig != null and is_instance_valid(inspected_rig):
+		_update_force_visualizer()
+
+
+func _update_stiction_button_ui() -> void:
+	if btn_toggle_stiction == null:
+		return
+	var text_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+	if is_stiction_enabled:
+		btn_toggle_stiction.text = "Static Friction (fs): ON"
+		btn_toggle_stiction.icon = _get_svg_icon("lock", text_col)
+	else:
+		btn_toggle_stiction.text = "Static Friction (fs): OFF (Ideal Glide)"
+		btn_toggle_stiction.icon = _get_svg_icon("unlock", text_col)
+
+
 func _on_gravity_slider_changed(val: float) -> void:
 	var desc := ""
 	if is_equal_approx(val, 0.0):
@@ -2096,6 +2127,10 @@ func _get_svg_template(name: String) -> String:
 			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><line x1='3' y1='8' x2='13' y2='8' stroke='%COLOR%' stroke-width='2.2' stroke-linecap='round'/></svg>"
 		"mass":
 			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M6 3.5a2 2 0 1 1 4 0v1h1.5l1.5 8.5H3L4.5 4.5H6v-1z' stroke='%COLOR%' stroke-width='1.4' fill='none'/><circle cx='8' cy='8.5' r='1.5' fill='%COLOR%'/></svg>"
+		"lock":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='3' y='7' width='10' height='7' rx='1.5' fill='%COLOR%'/><path d='M5 7V4.5a3 3 0 0 1 6 0V7' stroke='%COLOR%' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>"
+		"unlock":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='3' y='7' width='10' height='7' rx='1.5' fill='%COLOR%'/><path d='M5 7V4.5a3 3 0 0 1 6 0V3' stroke='%COLOR%' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>"
 		_:
 			return ""
 
@@ -2570,8 +2605,12 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_fric = Vector3.ZERO
 			else:
 				var tangent_unit := Vector3(-sin(theta_clamped), cos(theta_clamped), 0.0).normalized()
-				F_s = mu * R
-				dir_fs = tangent_unit * static_tendency_dir
+				if is_stiction_enabled:
+					F_s = mu * R
+					dir_fs = tangent_unit * static_tendency_dir
+				else:
+					F_s = 0.0
+					dir_fs = Vector3.ZERO
 				if is_moving:
 					F_k = mu * R * vel_norm
 					dir_fk = tangent_unit * motion_dir
@@ -2615,8 +2654,12 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_fric = Vector3.ZERO
 			else:
 				var tangent_unit := Vector3(sin(theta_clamped), cos(theta_clamped), 0.0).normalized()
-				F_s = mu * R
-				dir_fs = tangent_unit * static_tendency_dir
+				if is_stiction_enabled:
+					F_s = mu * R
+					dir_fs = tangent_unit * static_tendency_dir
+				else:
+					F_s = 0.0
+					dir_fs = Vector3.ZERO
 				if is_moving:
 					F_k = mu * R * vel_norm
 					dir_fk = tangent_unit * motion_dir
@@ -2673,11 +2716,16 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_fs = Vector3.ZERO
 				dir_fric = Vector3.ZERO
 			else:
-				F_s = mu * R
-				dir_fs = Vector3(0, 1.0, 0) * static_tendency_dir
+				var tangent_unit := Vector3(0, 1.0, 0)
+				if is_stiction_enabled:
+					F_s = mu * R
+					dir_fs = tangent_unit * static_tendency_dir
+				else:
+					F_s = 0.0
+					dir_fs = Vector3.ZERO
 				if is_moving:
 					F_k = mu * R * vel_norm
-					dir_fk = Vector3(0, 1.0, 0) * motion_dir
+					dir_fk = tangent_unit * motion_dir
 				else:
 					F_k = 0.0
 					dir_fk = Vector3.ZERO
@@ -2839,10 +2887,10 @@ func _update_force_visualizer() -> void:
 		elif arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
 	else:
-		# At rest: Show fs (Brown), Hide fk (Amber)
+		# At rest: Show fs (Brown) ONLY if is_stiction_enabled, Hide fk (Amber)
 		if arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
-		if disp_len_fs >= 0.012 and not lbl_fs_str.is_empty() and data.dir_fs.length_squared() > 0.01:
+		if is_stiction_enabled and disp_len_fs >= 0.012 and not lbl_fs_str.is_empty() and data.dir_fs.length_squared() > 0.01:
 			var lbl_fs_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fs.y >= 0.0 else Vector3(0.0, -0.08, 0.0)
 			_update_arrow_vector(arrow_fs_data, pin_pos, data.dir_fs, disp_len_fs, lbl_fs_str, lbl_fs_offset)
 		elif arrow_fs_data.has("root"):
@@ -2852,8 +2900,11 @@ func _update_force_visualizer() -> void:
 	if joint_val_fy != null:
 		joint_card_title.text = data.title
 		var stuck_desc: String = ""
-		if mu_val > 0.0001 and inspected_rig != null and ("is_stuck" in inspected_rig) and inspected_rig.is_stuck:
-			stuck_desc = " · [STICTION ACTIVE: Joint pin friction holds mechanism in static balance]"
+		if mu_val > 0.0001:
+			if not is_stiction_enabled:
+				stuck_desc = " · [STATIC FRICTION OFF: Stiction bypassed, seeking ideal equilibrium H0]"
+			elif inspected_rig != null and ("is_stuck" in inspected_rig) and inspected_rig.is_stuck:
+				stuck_desc = " · [STICTION ACTIVE: Joint pin friction holds mechanism in static balance]"
 		joint_card_desc.text = data.desc + stuck_desc
 
 		var fy_tag: String = "[Upper Support]" if is_upper_force_reaction else "[Lower Load]"
@@ -2869,23 +2920,26 @@ func _update_force_visualizer() -> void:
 			if joint_val_fric != null:
 				joint_val_fric.text = "0.00 N (Zero Friction)"
 		else:
-			var is_stuck: bool = inspected_rig.is_stuck if (inspected_rig != null and "is_stuck" in inspected_rig) else (not is_moving)
-			var deadband_l_mm: float = (inspected_rig.stiction_deadband_H * 1000.0 * float(inspected_rig.n_stages)) if (inspected_rig != null and "stiction_deadband_H" in inspected_rig) else 0.0
+			var is_stuck: bool = (inspected_rig.is_stuck and is_stiction_enabled) if (inspected_rig != null and "is_stuck" in inspected_rig) else false
+			var deadband_l_mm: float = (inspected_rig.stiction_deadband_H * 1000.0 * float(inspected_rig.n_stages)) if (inspected_rig != null and "stiction_deadband_H" in inspected_rig and is_stiction_enabled) else 0.0
 			if is_moving:
 				if joint_val_fk != null:
 					joint_val_fk.text = "%.2f N  [Dynamic Drag]" % absf(filtered_fk)
 				if joint_val_fs != null:
-					joint_val_fs.text = "%.2f N  [Slip Limit]" % absf(filtered_fs)
+					joint_val_fs.text = "%.2f N  [Slip Limit]" % absf(filtered_fs) if is_stiction_enabled else "0.00 N  [Disabled]"
 				if joint_val_fric != null:
 					joint_val_fric.text = "%.2f N  [Dynamic Drag]" % absf(filtered_fk)
 			else:
 				if joint_val_fk != null:
 					joint_val_fk.text = "0.00 N  [At Rest]"
 				if joint_val_fs != null:
-					var st_tag: String = "[Stiction Lock: ±%.1f mm]" % deadband_l_mm if is_stuck else "[Static Hold]"
-					joint_val_fs.text = "%.2f N  %s" % [absf(filtered_fs), st_tag]
+					if not is_stiction_enabled:
+						joint_val_fs.text = "0.00 N  [Disabled / Pure Glide]"
+					else:
+						var st_tag: String = "[Stiction Lock: ±%.1f mm]" % deadband_l_mm if is_stuck else "[Static Hold]"
+						joint_val_fs.text = "%.2f N  %s" % [absf(filtered_fs), st_tag]
 				if joint_val_fric != null:
-					joint_val_fric.text = "%.2f N  [Static Hold]" % absf(filtered_fs)
+					joint_val_fric.text = "%.2f N  [Static Hold]" % absf(filtered_fs) if is_stiction_enabled else "0.00 N"
 
 		joint_val_theta.text = "%.1f°" % filtered_theta
 
@@ -3250,6 +3304,7 @@ func _refresh_all_button_icons(is_dark: bool) -> void:
 			var sz := Vector2i(14, 14) if btn.text.is_empty() else Vector2i(11, 11)
 			btn.icon = _get_svg_icon(iname, c, sz)
 			btn.expand_icon = false
+	_update_stiction_button_ui()
 
 
 func _apply_visualizer_theme(is_dark: bool) -> void:
@@ -3625,6 +3680,11 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 			btn.add_theme_font_size_override("font_size", int(12 * S))
 			_scale_button_stylebox(btn, int(10 * S))
 
+	if btn_toggle_stiction != null:
+		btn_toggle_stiction.custom_minimum_size = Vector2(0, 36.0 * S)
+		btn_toggle_stiction.add_theme_font_size_override("font_size", int(12 * S))
+		_scale_button_stylebox(btn_toggle_stiction, int(10 * S))
+
 	if planet_grid_ref != null:
 		planet_grid_ref.columns = 2
 
@@ -3724,6 +3784,11 @@ func _restore_desktop_ui_scale() -> void:
 			btn.custom_minimum_size = Vector2(62, 24)
 			btn.add_theme_font_size_override("font_size", 10)
 			_scale_button_stylebox(btn, 14)
+
+	if btn_toggle_stiction != null:
+		btn_toggle_stiction.custom_minimum_size = Vector2(0, 26)
+		btn_toggle_stiction.add_theme_font_size_override("font_size", 10)
+		_scale_button_stylebox(btn_toggle_stiction, 14)
 
 	if planet_grid_ref != null:
 		planet_grid_ref.columns = 3

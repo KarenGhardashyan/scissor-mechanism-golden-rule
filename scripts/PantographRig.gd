@@ -31,6 +31,7 @@ signal pin_clicked(rig: PantographRig, pin_index: int, pin_pos: Vector3)
 @export var oscillations_enabled: bool = true  # Toggle harmonic oscillation / smooth glide
 @export var damping_ratio_zeta: float = 0.25   # Damping ratio [0.00 - 1.50]
 @export var natural_frequency_omega: float = 20.0 # Nominal frequency [4.0 - 75.0 rad/s]
+@export var stiction_enabled: bool = true        # Toggle static friction / stiction deadband
 
 var current_H: float = 0.075
 var is_stuck: bool = false
@@ -520,13 +521,14 @@ func _update_kinematics(delta: float) -> void:
 		var normal_load_factor: float = clampf(effective_load_P / 5.0, 0.40, 2.5)
 		# Calibrated Coulomb deceleration producing realistic 3-10mm stiction deadband
 		a_coulomb = (friction_mu / 0.20) * 0.40 * normal_load_factor
-		stiction_deadband_H = a_coulomb / maxf(omega * omega, 1.0)
+		if stiction_enabled:
+			stiction_deadband_H = a_coulomb / maxf(omega * omega, 1.0)
 
 	if not oscillations_enabled:
 		# Smooth glide mode with Coulomb deadband holding
 		var smooth_speed: float = 14.0
 		var static_target_H: float = target_H
-		if friction_mu > 0.0001:
+		if friction_mu > 0.0001 and stiction_enabled:
 			if current_H < target_H - stiction_deadband_H:
 				static_target_H = target_H - stiction_deadband_H
 			elif current_H > target_H + stiction_deadband_H:
@@ -536,7 +538,7 @@ func _update_kinematics(delta: float) -> void:
 		current_H = lerpf(current_H, static_target_H, clampf(dt * smooth_speed, 0.0, 1.0))
 		velocity_H = 0.0
 		acceleration_H = 0.0
-		is_stuck = (friction_mu > 0.0001 and absf(current_H - target_H) <= stiction_deadband_H + 0.0005)
+		is_stuck = (friction_mu > 0.0001 and stiction_enabled and absf(current_H - target_H) <= stiction_deadband_H + 0.0005)
 	else:
 		# Sub-stepped Velocity Verlet integrator with Coulomb Stiction Deadband
 		var damping_c: float = 2.0 * omega * damping_ratio_zeta
@@ -555,7 +557,7 @@ func _update_kinematics(delta: float) -> void:
 			# Coulomb friction logic (Stiction vs Kinetic sliding):
 			var a_fric: float = 0.0
 			if a_coulomb > 0.0001:
-				if absf(velocity_H) < v_stick_thresh and absf(a_restoring) <= a_coulomb:
+				if stiction_enabled and absf(velocity_H) < v_stick_thresh and absf(a_restoring) <= a_coulomb:
 					# Stiction condition met: static friction exactly cancels restoring force!
 					# Mechanism is locked in static equilibrium at this position!
 					stiction_engaged = true
@@ -578,7 +580,7 @@ func _update_kinematics(delta: float) -> void:
 			var a_fric_next: float = 0.0
 
 			if a_coulomb > 0.0001:
-				if absf(v_half) < v_stick_thresh and absf(a_restoring_next) <= a_coulomb:
+				if stiction_enabled and absf(v_half) < v_stick_thresh and absf(a_restoring_next) <= a_coulomb:
 					stiction_engaged = true
 					velocity_H = 0.0
 					acceleration_H = 0.0
@@ -910,6 +912,13 @@ func set_efficiency(val: float) -> void:
 
 func set_friction_mu(val: float) -> void:
 	friction_mu = clampf(val, 0.0, 0.60)
+
+
+func set_stiction_enabled(val: bool) -> void:
+	stiction_enabled = val
+	if not stiction_enabled:
+		is_stuck = false
+		stiction_deadband_H = 0.0
 
 
 func set_gravity(val: float) -> void:
