@@ -518,10 +518,9 @@ func _update_kinematics(delta: float) -> void:
 		var omega: float = TAU * f_n
 
 		# Damping profile: analytical viscous damping + Coulomb dry friction
-		var damping_c: float = 2.0 * omega * maxf(damping_ratio_zeta, 0.06)
-		var a_coulomb: float = 0.20 # m/s² dry friction deceleration
-		var v_stick: float = 0.0035 # m/s stiction velocity threshold
-		var h_deadband: float = 0.0012 # m displacement deadband
+		# When damping_ratio_zeta is 0.0, damping is strictly 0 for true perpetual harmonic oscillation
+		var damping_c: float = 2.0 * omega * damping_ratio_zeta
+		var a_coulomb: float = 0.04 * clampf(damping_ratio_zeta / 0.20, 0.0, 1.0)
 
 		# Sub-stepped Velocity Verlet integrator (400 Hz physics sub-step)
 		var target_sub_dt: float = 0.0025 # 400 Hz physics sub-step

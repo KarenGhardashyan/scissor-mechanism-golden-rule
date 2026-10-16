@@ -514,9 +514,9 @@ func _build_liquid_glass_ui() -> void:
 	header_margin.add_child(header_box)
 
 	header_logo = TextureRect.new()
-	header_logo.custom_minimum_size = Vector2(36, 36)
+	header_logo.custom_minimum_size = Vector2(18, 18)
 	header_logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	header_logo.texture = _get_svg_icon("logo", Color.WHITE, Vector2i(36, 36))
+	header_logo.texture = _get_svg_icon("logo", Color.WHITE, Vector2i(18, 18))
 	header_box.add_child(header_logo)
 
 	var title_vbox := VBoxContainer.new()
@@ -1702,8 +1702,8 @@ func _build_mobile_ui(root: Control) -> void:
 	zoom_vbox.add_theme_constant_override("separation", 4)
 	zoom_margin.add_child(zoom_vbox)
 
-	btn_mob_zoom_in = _create_liquid_button("+", "plus")
-	btn_mob_zoom_in.custom_minimum_size = Vector2(38, 32)
+	btn_mob_zoom_in = _create_liquid_button("", "plus")
+	btn_mob_zoom_in.custom_minimum_size = Vector2(38, 36)
 	btn_mob_zoom_in.pressed.connect(func(): if camera: camera.zoom_in(0.6))
 	zoom_vbox.add_child(btn_mob_zoom_in)
 
@@ -1714,46 +1714,46 @@ func _build_mobile_ui(root: Control) -> void:
 	lbl_mob_zoom_dist.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
 	zoom_vbox.add_child(lbl_mob_zoom_dist)
 
-	btn_mob_zoom_out = _create_liquid_button("-", "minus")
-	btn_mob_zoom_out.custom_minimum_size = Vector2(38, 32)
+	btn_mob_zoom_out = _create_liquid_button("", "minus")
+	btn_mob_zoom_out.custom_minimum_size = Vector2(38, 36)
 	btn_mob_zoom_out.pressed.connect(func(): if camera: camera.zoom_out(0.6))
 	zoom_vbox.add_child(btn_mob_zoom_out)
 
-	# 6. Mobile Main Tab Mass Quick Adjust Controller
-	mobile_mass_panel = _create_liquid_glass_panel(Vector2.ZERO, Vector2(320, 46), 22, 0.92)
+	# 6. Mobile Main Tab Mass Quick Adjust Controller (Finger-friendly thick bar & large knob)
+	mobile_mass_panel = _create_liquid_glass_panel(Vector2.ZERO, Vector2(340, 58), 24, 0.94)
 	mobile_mass_panel.name = "MobileMassPanel"
 	mobile_mass_panel.anchor_left = 0.5
 	mobile_mass_panel.anchor_right = 0.5
 	mobile_mass_panel.anchor_top = 1.0
 	mobile_mass_panel.anchor_bottom = 1.0
-	mobile_mass_panel.offset_left = -160.0
-	mobile_mass_panel.offset_right = 160.0
-	mobile_mass_panel.offset_top = -60.0
+	mobile_mass_panel.offset_left = -170.0
+	mobile_mass_panel.offset_right = 170.0
+	mobile_mass_panel.offset_top = -76.0
 	mobile_mass_panel.offset_bottom = -14.0
 	mobile_mass_panel.visible = false
 	root.add_child(mobile_mass_panel)
 
 	var mass_margin := MarginContainer.new()
 	mass_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	mass_margin.add_theme_constant_override("margin_left", 10)
-	mass_margin.add_theme_constant_override("margin_right", 10)
-	mass_margin.add_theme_constant_override("margin_top", 4)
-	mass_margin.add_theme_constant_override("margin_bottom", 4)
+	mass_margin.add_theme_constant_override("margin_left", 12)
+	mass_margin.add_theme_constant_override("margin_right", 12)
+	mass_margin.add_theme_constant_override("margin_top", 6)
+	mass_margin.add_theme_constant_override("margin_bottom", 6)
 	mobile_mass_panel.add_child(mass_margin)
 
 	var mass_hbox_mob := HBoxContainer.new()
 	mass_hbox_mob.alignment = BoxContainer.ALIGNMENT_CENTER
-	mass_hbox_mob.add_theme_constant_override("separation", 6)
+	mass_hbox_mob.add_theme_constant_override("separation", 8)
 	mass_margin.add_child(mass_hbox_mob)
 
 	lbl_mob_mass_title = Label.new()
 	lbl_mob_mass_title.text = "Mass:"
-	lbl_mob_mass_title.add_theme_font_size_override("font_size", 11)
+	lbl_mob_mass_title.add_theme_font_size_override("font_size", 12)
 	theme_labels_primary.append(lbl_mob_mass_title)
 	mass_hbox_mob.add_child(lbl_mob_mass_title)
 
-	btn_mob_mass_dec = _create_liquid_button("-", "minus")
-	btn_mob_mass_dec.custom_minimum_size = Vector2(30, 28)
+	btn_mob_mass_dec = _create_liquid_button("", "minus")
+	btn_mob_mass_dec.custom_minimum_size = Vector2(38, 38)
 	btn_mob_mass_dec.pressed.connect(func():
 		var nv: float = clampf(mass_slider.value - 0.05, 0.0, 1.5)
 		mass_slider.value = nv
@@ -1767,16 +1767,17 @@ func _build_mobile_ui(root: Control) -> void:
 	slider_mob_mass.step = 0.01
 	slider_mob_mass.value = mass_slider.value
 	slider_mob_mass.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider_mob_mass.custom_minimum_size = Vector2(0, 44)
 	slider_mob_mass.value_changed.connect(func(val: float):
 		if absf(mass_slider.value - val) > 0.005:
 			mass_slider.value = val
 			_on_mass_slider_changed(val)
 	)
-	_style_tech_slider(slider_mob_mass)
+	_style_mobile_mass_slider(slider_mob_mass)
 	mass_hbox_mob.add_child(slider_mob_mass)
 
-	btn_mob_mass_inc = _create_liquid_button("+", "plus")
-	btn_mob_mass_inc.custom_minimum_size = Vector2(30, 28)
+	btn_mob_mass_inc = _create_liquid_button("", "plus")
+	btn_mob_mass_inc.custom_minimum_size = Vector2(38, 38)
 	btn_mob_mass_inc.pressed.connect(func():
 		var nv: float = clampf(mass_slider.value + 0.05, 0.0, 1.5)
 		mass_slider.value = nv
@@ -1786,8 +1787,8 @@ func _build_mobile_ui(root: Control) -> void:
 
 	lbl_mob_mass_val = Label.new()
 	lbl_mob_mass_val.text = "%.2f kg" % mass_slider.value
-	lbl_mob_mass_val.custom_minimum_size = Vector2(48, 0)
-	lbl_mob_mass_val.add_theme_font_size_override("font_size", 11)
+	lbl_mob_mass_val.custom_minimum_size = Vector2(56, 0)
+	lbl_mob_mass_val.add_theme_font_size_override("font_size", 12)
 	lbl_mob_mass_val.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
 	mass_hbox_mob.add_child(lbl_mob_mass_val)
 
@@ -1937,7 +1938,7 @@ func _create_liquid_glass_panel(pos: Vector2, size: Vector2, radius: int = 22, b
 
 var _icon_cache: Dictionary = {}
 
-func _get_svg_icon(name: String, color: Color = Color.WHITE, size: Vector2i = Vector2i(16, 16)) -> ImageTexture:
+func _get_svg_icon(name: String, color: Color = Color.WHITE, size: Vector2i = Vector2i(11, 11)) -> ImageTexture:
 	var key := "%s_%s_%dx%d" % [name, color.to_html(false), size.x, size.y]
 	if _icon_cache.has(key):
 		return _icon_cache[key]
@@ -1946,7 +1947,9 @@ func _get_svg_icon(name: String, color: Color = Color.WHITE, size: Vector2i = Ve
 	if svg.is_empty():
 		return null
 	var img := Image.new()
-	var err := img.load_svg_from_buffer(svg.to_utf8_buffer(), float(size.x) / 16.0)
+	var base_w: float = 36.0 if name == "logo" else (28.0 if name == "slider_knob" else 16.0)
+	var scale_factor: float = float(size.x) / base_w
+	var err := img.load_svg_from_buffer(svg.to_utf8_buffer(), scale_factor)
 	if err == OK:
 		var tex := ImageTexture.create_from_image(img)
 		_icon_cache[key] = tex
@@ -1955,6 +1958,8 @@ func _get_svg_icon(name: String, color: Color = Color.WHITE, size: Vector2i = Ve
 
 func _get_svg_template(name: String) -> String:
 	match name:
+		"slider_knob":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><circle cx='14' cy='14' r='13' fill='#FFFFFF' stroke='#0071E3' stroke-width='2.5'/><circle cx='14' cy='14' r='5' fill='#0071E3'/></svg>"
 		"logo":
 			return "<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><rect width='36' height='36' rx='8' fill='#1e222e'/><path d='M9 10 L27 26 M27 10 L9 26' stroke='#0071E3' stroke-width='3' stroke-linecap='round'/><circle cx='9' cy='10' r='2.5' fill='#FF9500'/><circle cx='27' cy='10' r='2.5' fill='#FF9500'/><circle cx='18' cy='18' r='3.2' fill='#FFFFFF'/><circle cx='9' cy='26' r='2.5' fill='#30D158'/><circle cx='27' cy='26' r='2.5' fill='#30D158'/><path d='M18 18 L18 31' stroke='#0071E3' stroke-width='2' stroke-dasharray='2,2'/><circle cx='18' cy='31' r='2.2' fill='#FF9500'/></svg>"
 		"formulas":
@@ -2021,12 +2026,15 @@ func _create_liquid_button(text: String, icon_name: String = "") -> Button:
 
 	if not icon_name.is_empty():
 		btn.set_meta("icon_name", icon_name)
-		var icon_tex := _get_svg_icon(icon_name, text_col, Vector2i(15, 15))
+		var icon_sz := Vector2i(14, 14) if text.is_empty() else Vector2i(11, 11)
+		var icon_tex := _get_svg_icon(icon_name, text_col, icon_sz)
 		if icon_tex != null:
 			btn.icon = icon_tex
-			btn.expand_icon = true
-			btn.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			btn.expand_icon = false
+			btn.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT if not text.is_empty() else HORIZONTAL_ALIGNMENT_CENTER
 			btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+			if not text.is_empty():
+				btn.add_theme_constant_override("h_separation", 5)
 
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color(0.12, 0.14, 0.20, 0.80) if is_dark else Color(1.0, 1.0, 1.0, 0.65)
