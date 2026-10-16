@@ -2,5 +2,6 @@
 .godot/
 /android/
 build/
+Media_laboratory/
 *.import
 *.tmp
