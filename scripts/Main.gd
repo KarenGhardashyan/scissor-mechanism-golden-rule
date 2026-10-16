@@ -209,6 +209,12 @@ var joint_val_sf: Label
 var joint_val_tau_fric: Label
 var is_advanced_stress_expanded: bool = false
 
+# Vector Visualization & Free-Body Diagram Controls
+var btn_toggle_vector_mode: Button
+var btn_toggle_force_dir: Button
+var is_upper_force_reaction: bool = false
+var is_resultant_only_mode: bool = false
+
 
 func _ready() -> void:
 	_setup_pure_light_studio()
@@ -1047,6 +1053,26 @@ func _build_liquid_glass_ui() -> void:
 	joint_card_desc.add_theme_font_size_override("font_size", 10)
 	theme_labels_secondary.append(joint_card_desc)
 	joint_view.add_child(joint_card_desc)
+
+	# --- Vector Mode & Force Direction Controls ---
+	var btn_row_modes := HBoxContainer.new()
+	btn_row_modes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_row_modes.add_theme_constant_override("separation", 6)
+	joint_view.add_child(btn_row_modes)
+
+	btn_toggle_vector_mode = _create_liquid_button("📐 All Vectors")
+	btn_toggle_vector_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_toggle_vector_mode.custom_minimum_size = Vector2(0, 26)
+	btn_toggle_vector_mode.add_theme_font_size_override("font_size", 10)
+	btn_toggle_vector_mode.pressed.connect(_on_toggle_vector_mode)
+	btn_row_modes.add_child(btn_toggle_vector_mode)
+
+	btn_toggle_force_dir = _create_liquid_button("↓ Down Load (Action)")
+	btn_toggle_force_dir.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_toggle_force_dir.custom_minimum_size = Vector2(0, 26)
+	btn_toggle_force_dir.add_theme_font_size_override("font_size", 10)
+	btn_toggle_force_dir.pressed.connect(_on_toggle_force_dir)
+	btn_row_modes.add_child(btn_toggle_force_dir)
 
 	var sep_j1 := HSeparator.new()
 	joint_view.add_child(sep_j1)
@@ -2069,12 +2095,11 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var mu: float = 0.20 # Coulomb pin friction coefficient
 	var r_pin: float = 0.026 # Pin contact radius in meters
 
-	# Motion direction from numerical integrator:
-	# vel_H > 0: extending downward; vel_H < 0: contracting upward
+	# Motion state from numerical integrator:
+	# Only dynamic motion produces kinetic friction fk = mu * R
 	var vel_h: float = rig.velocity_H
-	var motion_dir: float = signf(vel_h)
-	if absf(vel_h) < 0.0005:
-		motion_dir = 1.0 # Incipient extension under gravity
+	var is_moving: bool = absf(vel_h) >= 0.003
+	var motion_dir: float = signf(vel_h) if is_moving else 0.0
 
 	var F_y: float = 0.0
 	var F_x: float = 0.0
@@ -2095,11 +2120,18 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		# Central Vertical Axis: Left and right scissor links exert equal and opposite forces -> Sum(Fx) = 0
 		var p_tot: float = m * g + float(n) * link_m * g
 		F_y = p_tot
-		dir_fy = Vector3(0, 1, 0) # Upward support reaction strictly vertical
 		F_x = 0.0
 		dir_fx = Vector3.ZERO
 		R = F_y
-		dir_res = Vector3(0, 1, 0)
+
+		if is_upper_force_reaction:
+			dir_fy = Vector3(0, 1, 0) # Upward support reaction strictly vertical
+			dir_res = Vector3(0, 1, 0)
+			desc = "Ceiling support reaction balancing total suspended mass + mechanism weight (Upper Reaction ↑)."
+		else:
+			dir_fy = Vector3(0, -1, 0) # Downward load pulling on ceiling anchor
+			dir_res = Vector3(0, -1, 0)
+			desc = "Total suspended weight pulling down on the ceiling anchor (Transmitted Load ↓)."
 
 		# Static ceiling gantry pins have zero linear displacement
 		F_fric = 0.0
@@ -2107,7 +2139,6 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		dir_fric = Vector3.ZERO
 
 		title = "%s · Top Gantry Pivot [Pin #0]" % rig.rig_name
-		desc = "Ceiling support reaction balancing total suspended mass + mechanism weight."
 	else:
 		var s: int = (pin_idx - 1) / 3
 		var type: int = (pin_idx - 1) % 3
@@ -2118,42 +2149,66 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		if type == 0:
 			# Left Lateral Hinge
 			F_y = p_stage * 0.5
-			dir_fy = Vector3(0, -1, 0) # Downward load transmission
-
 			F_x = p_stage / (2.0 * tan_theta)
-			dir_fx = Vector3(-1, 0, 0) # Outward lateral thrust pointing left
 
-			var raw_res := Vector3(-F_x, -F_y, 0.0)
-			R = raw_res.length()
-			dir_res = raw_res.normalized()
-			F_fric = mu * R
-			tau_fric = mu * R * r_pin
-			# Coulomb friction opposes link displacement tangentially
-			var fan_angle_l: float = maxf(theta, deg_to_rad(35.0))
-			dir_fric = Vector3(-cos(fan_angle_l), sin(fan_angle_l), 0.0).normalized() * motion_dir
+			if is_upper_force_reaction:
+				dir_fy = Vector3(0, 1, 0) # Upper link supporting joint upward
+				dir_fx = Vector3(1, 0, 0) # Inward reaction from upper scissor arm
+				var raw_res := Vector3(F_x, F_y, 0.0)
+				R = raw_res.length()
+				dir_res = raw_res.normalized()
+				desc = "Upper link reaction supporting joint against gravity and lateral thrust (Upper Reaction ↑)."
+			else:
+				dir_fy = Vector3(0, -1, 0) # Downward load transmission
+				dir_fx = Vector3(-1, 0, 0) # Outward lateral thrust pointing left
+				var raw_res := Vector3(-F_x, -F_y, 0.0)
+				R = raw_res.length()
+				dir_res = raw_res.normalized()
+				desc = "Lateral scissor hinge experiencing outward thrust Fx and downward load transmission Fy (Transmitted Load ↓)."
+
+			if is_moving:
+				F_fric = mu * R
+				tau_fric = mu * R * r_pin
+				var fan_angle_l: float = maxf(theta, deg_to_rad(35.0))
+				dir_fric = Vector3(-cos(fan_angle_l), sin(fan_angle_l), 0.0).normalized() * motion_dir
+			else:
+				F_fric = 0.0
+				tau_fric = 0.0
+				dir_fric = Vector3.ZERO
 
 			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
-			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
 
 		elif type == 1:
 			# Right Lateral Hinge
 			F_y = p_stage * 0.5
-			dir_fy = Vector3(0, -1, 0) # Downward load transmission
-
 			F_x = p_stage / (2.0 * tan_theta)
-			dir_fx = Vector3(1, 0, 0) # Outward lateral thrust pointing right
 
-			var raw_res := Vector3(F_x, -F_y, 0.0)
-			R = raw_res.length()
-			dir_res = raw_res.normalized()
-			F_fric = mu * R
-			tau_fric = mu * R * r_pin
-			# Coulomb friction opposes link displacement tangentially
-			var fan_angle_r: float = maxf(theta, deg_to_rad(35.0))
-			dir_fric = Vector3(cos(fan_angle_r), sin(fan_angle_r), 0.0).normalized() * motion_dir
+			if is_upper_force_reaction:
+				dir_fy = Vector3(0, 1, 0) # Upper link supporting joint upward
+				dir_fx = Vector3(-1, 0, 0) # Inward reaction from upper scissor arm
+				var raw_res := Vector3(-F_x, F_y, 0.0)
+				R = raw_res.length()
+				dir_res = raw_res.normalized()
+				desc = "Upper link reaction supporting joint against gravity and lateral thrust (Upper Reaction ↑)."
+			else:
+				dir_fy = Vector3(0, -1, 0) # Downward load transmission
+				dir_fx = Vector3(1, 0, 0) # Outward lateral thrust pointing right
+				var raw_res := Vector3(F_x, -F_y, 0.0)
+				R = raw_res.length()
+				dir_res = raw_res.normalized()
+				desc = "Lateral scissor hinge experiencing outward thrust Fx and downward load transmission Fy (Transmitted Load ↓)."
+
+			if is_moving:
+				F_fric = mu * R
+				tau_fric = mu * R * r_pin
+				var fan_angle_r: float = maxf(theta, deg_to_rad(35.0))
+				dir_fric = Vector3(cos(fan_angle_r), sin(fan_angle_r), 0.0).normalized() * motion_dir
+			else:
+				F_fric = 0.0
+				tau_fric = 0.0
+				dir_fric = Vector3.ZERO
 
 			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
-			desc = "Lateral scissor hinge experiencing outward thrust Fx and vertical load transmission Fy."
 
 		else:
 			# Central Coupling Hinge on Vertical Centerline Axis (Horizontal symmetry: Sum(Fx) = 0)
@@ -2163,27 +2218,40 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			if s == n - 1:
 				# Bottommost pin supporting payload mass directly
 				F_y = m * g
-				dir_fy = Vector3(0, -1, 0)
 				R = F_y
-				dir_res = Vector3(0, -1, 0)
-				F_fric = mu * R
-				tau_fric = mu * R * r_pin
-				dir_fric = Vector3(0, 1.0, 0) * motion_dir
+				if is_upper_force_reaction:
+					dir_fy = Vector3(0, 1, 0) # Tension from bottom scissor links holding payload
+					dir_res = Vector3(0, 1, 0)
+					desc = "Scissor linkage upward tension holding payload against gravity (Upper Reaction ↑)."
+				else:
+					dir_fy = Vector3(0, -1, 0) # Payload weight pulling downward
+					dir_res = Vector3(0, -1, 0)
+					desc = "Payload gravity pulling directly downward from the bottom suspension pin (Transmitted Load ↓)."
 
 				title = "%s · Bottom Payload Suspension Pin [Pin #%d]" % [rig.rig_name, pin_idx]
-				desc = "Lowest pivot transmitting payload gravity directly into the bottom scissor stage."
 			else:
 				# Intermediate central coupling hinge
 				F_y = p_below
-				dir_fy = Vector3(0, -1, 0)
 				R = F_y
-				dir_res = Vector3(0, -1, 0)
+				if is_upper_force_reaction:
+					dir_fy = Vector3(0, 1, 0) # Upper scissor stage holding this joint
+					dir_res = Vector3(0, 1, 0)
+					desc = "Upper scissor stage reaction supporting this joint against gravity (Upper Reaction ↑)."
+				else:
+					dir_fy = Vector3(0, -1, 0) # Lower scissor stages + payload pulling downward
+					dir_res = Vector3(0, -1, 0)
+					desc = "Cumulative weight of lower stages and payload transmitted across joint (Transmitted Load ↓)."
+
+				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
+
+			if is_moving:
 				F_fric = mu * R
 				tau_fric = mu * R * r_pin
 				dir_fric = Vector3(0, 1.0, 0) * motion_dir
-
-				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
-				desc = "Intermediate coupling pivot transferring vertical load between consecutive scissor stages."
+			else:
+				F_fric = 0.0
+				tau_fric = 0.0
+				dir_fric = Vector3.ZERO
 
 	# 1. STRICT LINEAR SCALING: length = clamp(magnitude * 0.35, 0.1, 1.2)
 	const FORCE_SCALE: float = 0.35 # meters per Newton
@@ -2254,24 +2322,43 @@ func _update_force_visualizer() -> void:
 	var lbl_fy_str := ("Fy = %.2f N" % absf(filtered_fy)) if filtered_fy >= FORCE_THRESHOLD else ""
 	var lbl_fx_str := ("Fx = %.2f N" % absf(filtered_fx)) if filtered_fx >= FORCE_THRESHOLD else ""
 	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_THRESHOLD else ""
-	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if filtered_fric >= FORCE_THRESHOLD else ""
+	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if (filtered_fric >= FORCE_THRESHOLD and data.F_fric > 0.01) else ""
 
-	# 2. COMMON CONCURRENT ANCHOR: All force vectors share the exact pin center as tail origin
-	# Fy (Vertical Load / Reaction Reaction):
-	var lbl_fy_offset := Vector3(-0.06, 0.08, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.06, -0.08, 0.0)
-	_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
-
-	# Fx (Lateral Thrust): (Only drawn when Fx > 0, e.g. on lateral hinges)
-	if disp_len_fx >= 0.035 and not lbl_fx_str.is_empty():
-		_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.0, 0.08, 0.0))
-	else:
+	# 2. COMMON CONCURRENT ANCHOR & VECTOR MODE FILTERING
+	if is_resultant_only_mode:
+		# Mode: Resultant (R Only) - Render ONLY total vector sum R
+		arrow_fy_data["root"].visible = false
 		arrow_fx_data["root"].visible = false
+		if disp_len_res >= 0.035 and not lbl_res_str.is_empty():
+			var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if data.dir_res.y > 0.0 else Vector3(0.12, -0.06, 0.0)
+			_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
+		else:
+			arrow_res_data["root"].visible = false
+	else:
+		# Mode: All Vectors
+		# Fy (Vertical Load / Reaction Reaction):
+		if disp_len_fy >= 0.035 and not lbl_fy_str.is_empty():
+			var lbl_fy_offset := Vector3(-0.06, 0.08, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.06, -0.08, 0.0)
+			_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
+		else:
+			arrow_fy_data["root"].visible = false
 
-	# Resultant Contact R:
-	var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if data.dir_res.y > 0.0 else Vector3(0.12, -0.06, 0.0)
-	_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
+		# Fx (Lateral Thrust): (Only drawn when Fx > 0, e.g. on lateral hinges)
+		if disp_len_fx >= 0.035 and not lbl_fx_str.is_empty():
+			_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.0, 0.08, 0.0))
+			# On lateral pins, R is diagonal and visually distinct from Fy; render R too
+			if disp_len_res >= 0.035 and not lbl_res_str.is_empty():
+				var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if data.dir_res.y > 0.0 else Vector3(0.12, -0.06, 0.0)
+				_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
+			else:
+				arrow_res_data["root"].visible = false
+		else:
+			arrow_fx_data["root"].visible = false
+			# On central symmetric pins (Fx == 0), R is IDENTICAL to Fy.
+			# Hide redundant R arrow to strictly prevent double-arrow / label collision!
+			arrow_res_data["root"].visible = false
 
-	# F_fric (Coulomb Pin Friction):
+	# F_fric (Coulomb Pin Friction): Only rendered during active dynamic motion (zero in statics)
 	if data.len_fric >= 0.035 and not lbl_fric_str.is_empty():
 		var lbl_fric_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fric.y > 0.0 else Vector3(0.0, -0.08, 0.0)
 		_update_arrow_vector(arrow_fric_data, pin_pos, data.dir_fric, disp_len_fric, lbl_fric_str, lbl_fric_offset)
@@ -2282,10 +2369,14 @@ func _update_force_visualizer() -> void:
 	if joint_val_fy != null:
 		joint_card_title.text = data.title
 		joint_card_desc.text = data.desc
-		joint_val_fy.text = "%.2f N  (Vertical Load / Reaction)" % absf(filtered_fy)
+		var fy_tag: String = "(Upper Support ↑)" if is_upper_force_reaction else "(Lower Load ↓)"
+		joint_val_fy.text = "%.2f N  %s" % [absf(filtered_fy), fy_tag]
 		joint_val_fx.text = "%.2f N  (Lateral Scissor Thrust)" % absf(filtered_fx)
-		joint_val_res.text = "%.2f N  (Joint Resultant Contact R)" % absf(filtered_res)
-		joint_val_fric.text = "%.2f N  (Coulomb Hinge Friction fk)" % absf(filtered_fric)
+		joint_val_res.text = "%.2f N  (Contact Resultant R)" % absf(filtered_res)
+		if data.len_fric >= 0.035 and not lbl_fric_str.is_empty():
+			joint_val_fric.text = "%.2f N  (Dynamic Coulomb Friction)" % absf(filtered_fric)
+		else:
+			joint_val_fric.text = "0.00 N  (Static Equilibrium)"
 		joint_val_theta.text = "%.1f°  (Scissor Half-Angle θ)" % filtered_theta
 
 	# 11: C - Update Tier 2 Advanced Stress & Pin Analysis
@@ -2300,12 +2391,27 @@ func _update_force_visualizer() -> void:
 
 		var tau_yield_mpa: float = 35.0
 		var sf: float = clampf(tau_yield_mpa / maxf(tau_shear_mpa, 0.001), 1.0, 99.9)
-		var tau_fric_nm: float = 0.20 * filtered_res * r_pin
+		var tau_fric_nm: float = 0.20 * filtered_res * r_pin if data.len_fric >= 0.035 else 0.0
 
 		joint_val_tau_shear.text = "%.2f MPa  (Double Shear)" % tau_shear_mpa
 		joint_val_sigma_b.text = "%.2f MPa  (Bushing Contact)" % sigma_b_mpa
 		joint_val_sf.text = "%.1f  (Yield Margin)" % sf
 		joint_val_tau_fric.text = "%.4f N·m  (Pin Resistance)" % tau_fric_nm
+
+
+func _on_toggle_vector_mode() -> void:
+	is_resultant_only_mode = not is_resultant_only_mode
+	if btn_toggle_vector_mode != null:
+		btn_toggle_vector_mode.text = "⚡ Resultant (R Only)" if is_resultant_only_mode else "📐 All Vectors"
+	_update_force_visualizer()
+
+
+func _on_toggle_force_dir() -> void:
+	is_upper_force_reaction = not is_upper_force_reaction
+	if btn_toggle_force_dir != null:
+		btn_toggle_force_dir.text = "↑ Upper Support (Reaction)" if is_upper_force_reaction else "↓ Down Load (Action)"
+	_update_force_visualizer()
+
 
 
 func _sync_quick_pin_buttons(active_rig: PantographRig, active_pin: int) -> void:
