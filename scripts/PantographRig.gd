@@ -21,6 +21,7 @@ signal pin_clicked(rig: PantographRig, pin_index: int, pin_pos: Vector3)
 @export var suspended_mass: float = 0.5        # Mass in kg [0.0 - 1.5]
 @export var link_mass_per_stage: float = 0.05  # Self-weight PLA per rhombus: 0.05 kg
 @export var efficiency_eta: float = 1.0        # Mechanical efficiency η [0.50 - 1.00]
+@export var friction_mu: float = 0.20           # Coulomb joint pin friction coefficient μ [0.00 - 0.60]
 @export var gravity: float = 9.81              # m/s²
 @export var visual_scale: float = 4.4          # 3D units per physical meter
 @export var is_left_rig: bool = true
@@ -519,10 +520,13 @@ func _update_kinematics(delta: float) -> void:
 		var f_n: float = clampf(omega_phys / TAU, 1.2, 2.2)
 		var omega: float = TAU * f_n
 
-		# Damping profile: analytical viscous damping + Coulomb dry friction
-		# When damping_ratio_zeta is 0.0, damping is strictly 0 for true perpetual harmonic oscillation
+		# Damping profile: analytical viscous damping + physical Coulomb joint pin friction
+		# When damping_ratio_zeta is 0.0 and friction_mu is 0.0, damping is strictly 0 for true perpetual harmonic oscillation!
 		var damping_c: float = 2.0 * omega * damping_ratio_zeta
-		var a_coulomb: float = 0.04 * clampf(damping_ratio_zeta / 0.20, 0.0, 1.0)
+		var a_coulomb: float = 0.0
+		if friction_mu > 0.0001:
+			var normal_load_factor: float = clampf(effective_load_P / 5.0, 0.35, 3.0)
+			a_coulomb = (friction_mu / 0.20) * 0.045 * normal_load_factor
 
 		# Sub-stepped Velocity Verlet integrator (400 Hz physics sub-step)
 		var target_sub_dt: float = 0.0025 # 400 Hz physics sub-step
@@ -839,7 +843,8 @@ func _broadcast_telemetry() -> void:
 		"velocity_H": velocity_H,
 		"work_in_Joules": work_in,
 		"work_out_Joules": work_out,
-		"work_ratio_pct": efficiency_eta * 100.0
+		"work_ratio_pct": efficiency_eta * 100.0,
+		"friction_mu": friction_mu
 	}
 	telemetry_updated.emit(data)
 
@@ -854,6 +859,10 @@ func set_stiffness(val: float) -> void:
 
 func set_efficiency(val: float) -> void:
 	efficiency_eta = clampf(val, 0.50, 1.00)
+
+
+func set_friction_mu(val: float) -> void:
+	friction_mu = clampf(val, 0.0, 0.60)
 
 
 func set_gravity(val: float) -> void:

@@ -141,6 +141,9 @@ var stiffness_slider: HSlider
 var stiffness_val_label: Label
 var efficiency_slider: HSlider
 var efficiency_val_label: Label
+var friction_slider: HSlider
+var friction_val_label: Label
+var friction_preset_buttons: Array[Button] = []
 var gravity_slider: HSlider
 var gravity_val_label: Label
 var self_weight_check: CheckBox
@@ -705,7 +708,70 @@ func _build_liquid_glass_ui() -> void:
 	_style_tech_slider(efficiency_slider)
 	left_vbox.add_child(efficiency_slider)
 
-	# 4. Gravity Variable (g) Slider & Presets
+	# 4. Joint Pin Friction (μ) Slider & Material Presets
+	var mu_hbox := HBoxContainer.new()
+	var mu_title := _create_label_cell("Joint Pin Friction (μ)")
+	mu_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vbox_titles.append(mu_title)
+	mu_hbox.add_child(mu_title)
+
+	friction_val_label = Label.new()
+	friction_val_label.text = "0.20"
+	friction_val_label.add_theme_font_size_override("font_size", 12)
+	friction_val_label.add_theme_color_override("font_color", Color(0.95, 0.65, 0.05))
+	left_vbox_val_labels.append(friction_val_label)
+	mu_hbox.add_child(friction_val_label)
+	left_vbox.add_child(mu_hbox)
+
+	friction_slider = HSlider.new()
+	friction_slider.min_value = 0.00
+	friction_slider.max_value = 0.50
+	friction_slider.step = 0.01
+	friction_slider.value = 0.20
+	friction_slider.value_changed.connect(_on_friction_slider_changed)
+	_style_tech_slider(friction_slider)
+	left_vbox.add_child(friction_slider)
+
+	# Friction Material Presets bar
+	var f_grid := GridContainer.new()
+	f_grid.columns = 4
+	f_grid.add_theme_constant_override("h_separation", 4)
+	f_grid.add_theme_constant_override("v_separation", 4)
+	f_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vbox.add_child(f_grid)
+
+	var btn_f_zero := _create_liquid_button("Zero (0.0)")
+	btn_f_zero.custom_minimum_size = Vector2(62, 24)
+	btn_f_zero.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_f_zero.add_theme_font_size_override("font_size", 10)
+	btn_f_zero.pressed.connect(func(): friction_slider.value = 0.0)
+	f_grid.add_child(btn_f_zero)
+
+	var btn_f_steel := _create_liquid_button("Steel (0.08)")
+	btn_f_steel.custom_minimum_size = Vector2(62, 24)
+	btn_f_steel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_f_steel.add_theme_font_size_override("font_size", 10)
+	btn_f_steel.pressed.connect(func(): friction_slider.value = 0.08)
+	f_grid.add_child(btn_f_steel)
+
+	var btn_f_ptfe := _create_liquid_button("PTFE (0.15)")
+	btn_f_ptfe.custom_minimum_size = Vector2(62, 24)
+	btn_f_ptfe.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_f_ptfe.add_theme_font_size_override("font_size", 10)
+	btn_f_ptfe.pressed.connect(func(): friction_slider.value = 0.15)
+	f_grid.add_child(btn_f_ptfe)
+
+	var btn_f_pla := _create_liquid_button("PLA (0.35)")
+	btn_f_pla.custom_minimum_size = Vector2(62, 24)
+	btn_f_pla.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_f_pla.add_theme_font_size_override("font_size", 10)
+	btn_f_pla.pressed.connect(func(): friction_slider.value = 0.35)
+	f_grid.add_child(btn_f_pla)
+
+	friction_preset_buttons.clear()
+	friction_preset_buttons.append_array([btn_f_zero, btn_f_steel, btn_f_ptfe, btn_f_pla])
+
+	# 5. Gravity Variable (g) Slider & Presets
 	var g_hbox := HBoxContainer.new()
 	var g_title := _create_label_cell("Gravity Acceleration (g)")
 	g_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1825,6 +1891,18 @@ func _on_efficiency_slider_changed(val: float) -> void:
 		live_graph.set_efficiency(eta_norm)
 
 
+func _on_friction_slider_changed(val: float) -> void:
+	if is_equal_approx(val, 0.0):
+		friction_val_label.text = "0.00 (Zero)"
+	else:
+		friction_val_label.text = "%.2f" % val
+	rig_a.set_friction_mu(val)
+	rig_c.set_friction_mu(val)
+	rig_b.set_friction_mu(val)
+	if inspected_rig != null and is_instance_valid(inspected_rig):
+		_update_force_visualizer()
+
+
 func _on_gravity_slider_changed(val: float) -> void:
 	var desc := ""
 	if is_equal_approx(val, 0.0):
@@ -1846,11 +1924,13 @@ func _on_gravity_slider_changed(val: float) -> void:
 		live_graph.set_gravity(val)
 
 
-func _apply_preset(m: float, k: float, eta: float = 1.0, g: float = 9.81) -> void:
+func _apply_preset(m: float, k: float, eta: float = 1.0, g: float = 9.81, mu: float = 0.20) -> void:
 	mass_slider.value = m
 	stiffness_slider.value = k
 	efficiency_slider.value = eta * 100.0
 	gravity_slider.value = g
+	if friction_slider != null:
+		friction_slider.value = mu
 	if live_graph != null:
 		live_graph.set_mass(m)
 		live_graph.set_stiffness(k)
@@ -2383,16 +2463,14 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	# Epsilon clamping guard against division-by-zero singularities (theta >= 3° to 87°)
 	var theta_clamped: float = clampf(theta, deg_to_rad(3.0), deg_to_rad(87.0))
 	var tan_theta: float = tan(theta_clamped)
-	var mu: float = 0.20 # Coulomb pin friction coefficient
-	var r_pin: float = 0.026 # Pin contact radius in meters
+	var mu: float = rig.friction_mu if ("friction_mu" in rig) else 0.20
+	var r_pin: float = 0.003 # Pin contact radius in meters (3.0 mm)
 
-	# Continuous velocity scaling for Coulomb friction:
-	# Velocity v_h is sinusoidal: v(t) = A * omega * cos(omega * t)
-	# Friction magnitude smoothly scales with velocity: f_k = mu * R * clamp(|v| / 0.035, 0.0, 1.0)
-	# As v -> 0 at the turnaround peaks, f_k smoothly drops to 0.00 N (NULL)!
+	# Friction state: dynamic Coulomb friction during oscillation, static holding capacity at rest
 	var vel_h: float = rig.velocity_H
-	var vel_norm: float = clampf(absf(vel_h) / 0.035, 0.0, 1.0)
-	var motion_dir: float = signf(vel_h) if absf(vel_h) > 0.0005 else 0.0
+	var is_moving: bool = rig.oscillations_enabled and (absf(vel_h) > 0.0005)
+	var vel_norm: float = clampf(absf(vel_h) / 0.035, 0.0, 1.0) if is_moving else 1.0
+	var motion_dir: float = signf(vel_h) if is_moving else 1.0
 
 	var F_y: float = 0.0
 	var F_x: float = 0.0
@@ -2459,11 +2537,15 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_res = raw_res.normalized()
 				desc = "Lateral scissor hinge experiencing outward thrust Fx and downward load transmission Fy (Transmitted Load ↓)."
 
-			# Continuous friction scaling down to 0 at turning points
-			F_fric = mu * R * vel_norm
-			tau_fric = F_fric * r_pin
-			var fan_angle_l: float = maxf(theta, deg_to_rad(35.0))
-			dir_fric = Vector3(-cos(fan_angle_l), sin(fan_angle_l), 0.0).normalized() * motion_dir
+			# Joint pin friction: strictly 0 when mu == 0, dynamic during motion, static capacity at rest
+			if mu <= 0.0001:
+				F_fric = 0.0
+				tau_fric = 0.0
+				dir_fric = Vector3.ZERO
+			else:
+				F_fric = mu * R * (vel_norm if is_moving else 1.0)
+				tau_fric = F_fric * r_pin
+				dir_fric = Vector3(-sin(theta_clamped), cos(theta_clamped), 0.0).normalized() * motion_dir
 
 			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 
@@ -2487,11 +2569,15 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_res = raw_res.normalized()
 				desc = "Lateral scissor hinge experiencing outward thrust Fx and downward load transmission Fy (Transmitted Load ↓)."
 
-			# Continuous friction scaling down to 0 at turning points
-			F_fric = mu * R * vel_norm
-			tau_fric = F_fric * r_pin
-			var fan_angle_r: float = maxf(theta, deg_to_rad(35.0))
-			dir_fric = Vector3(cos(fan_angle_r), sin(fan_angle_r), 0.0).normalized() * motion_dir
+			# Joint pin friction: strictly 0 when mu == 0, dynamic during motion, static capacity at rest
+			if mu <= 0.0001:
+				F_fric = 0.0
+				tau_fric = 0.0
+				dir_fric = Vector3.ZERO
+			else:
+				F_fric = mu * R * (vel_norm if is_moving else 1.0)
+				tau_fric = F_fric * r_pin
+				dir_fric = Vector3(sin(theta_clamped), cos(theta_clamped), 0.0).normalized() * motion_dir
 
 			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 
@@ -2529,10 +2615,15 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 
 				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 
-			# Continuous friction scaling down to 0 at turning points
-			F_fric = mu * R * vel_norm
-			tau_fric = F_fric * r_pin
-			dir_fric = Vector3(0, 1.0, 0) * motion_dir
+			# Joint pin friction on vertical centerline
+			if mu <= 0.0001:
+				F_fric = 0.0
+				tau_fric = 0.0
+				dir_fric = Vector3.ZERO
+			else:
+				F_fric = mu * R * (vel_norm if is_moving else 1.0)
+				tau_fric = F_fric * r_pin
+				dir_fric = Vector3(0, 1.0, 0) * motion_dir
 
 	# STRICT LINEAR SCALING: Length scales continuously with force down to 0!
 	const FORCE_SCALE: float = 0.35 # meters per Newton
@@ -2542,7 +2633,11 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var len_fy: float = clampf(absf(F_y) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_y) >= FORCE_MIN_DISPLAY else 0.0
 	var len_fx: float = clampf(absf(F_x) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_x) >= FORCE_MIN_DISPLAY else 0.0
 	var len_res: float = clampf(absf(R) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(R) >= FORCE_MIN_DISPLAY else 0.0
-	var len_fric: float = clampf(absf(F_fric) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_fric) >= FORCE_MIN_DISPLAY else 0.0
+	var len_fric: float = clampf(absf(F_fric) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (absf(F_fric) >= FORCE_MIN_DISPLAY and mu > 0.0001) else 0.0
+
+	var lbl_fric: String = ""
+	if mu > 0.0001 and F_fric >= FORCE_MIN_DISPLAY:
+		lbl_fric = ("fk = %.2f N" % absf(F_fric)) if is_moving else ("fs = %.2f N" % absf(F_fric))
 
 	return {
 		"dir_fy": dir_fy,
@@ -2556,13 +2651,15 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"lbl_fy": "Fy = %.2f N" % absf(F_y),
 		"lbl_fx": "Fx = %.2f N" % absf(F_x),
 		"lbl_res": "R = %.2f N" % absf(R),
-		"lbl_fric": ("fk = %.2f N" % absf(F_fric)) if F_fric >= FORCE_MIN_DISPLAY else "",
+		"lbl_fric": lbl_fric,
 		"F_y": absf(F_y),
 		"F_x": absf(F_x),
 		"R": absf(R),
 		"F_fric": absf(F_fric),
 		"tau_fric": tau_fric,
 		"theta_deg": rad_to_deg(theta),
+		"friction_mu": mu,
+		"is_fric_static": not is_moving,
 		"title": title,
 		"desc": desc
 	}
@@ -2588,7 +2685,11 @@ func _update_force_visualizer() -> void:
 	filtered_fy = lerpf(filtered_fy, absf(data.F_y), filter_alpha)
 	filtered_fx = lerpf(filtered_fx, absf(data.F_x), filter_alpha)
 	filtered_res = lerpf(filtered_res, absf(data.R), filter_alpha)
-	filtered_fric = lerpf(filtered_fric, absf(data.F_fric), filter_alpha)
+	var mu_val: float = data.get("friction_mu", 0.20)
+	if mu_val <= 0.0001:
+		filtered_fric = 0.0
+	else:
+		filtered_fric = lerpf(filtered_fric, absf(data.F_fric), filter_alpha)
 	filtered_theta = lerpf(filtered_theta, data.theta_deg, filter_alpha)
 
 	# STRICT LINEAR SCALING: length scales continuously to 0
@@ -2599,13 +2700,15 @@ func _update_force_visualizer() -> void:
 	var disp_len_fy: float = clampf(filtered_fy * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fy >= FORCE_MIN_DISPLAY else 0.0
 	var disp_len_fx: float = clampf(filtered_fx * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fx >= FORCE_MIN_DISPLAY else 0.0
 	var disp_len_res: float = clampf(filtered_res * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_res >= FORCE_MIN_DISPLAY else 0.0
-	var disp_len_fric: float = clampf(filtered_fric * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fric >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_fric: float = clampf(filtered_fric * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (filtered_fric >= FORCE_MIN_DISPLAY and mu_val > 0.0001) else 0.0
 
 	# Strict non-negative label strings
 	var lbl_fy_str := ("Fy = %.2f N" % absf(filtered_fy)) if filtered_fy >= FORCE_MIN_DISPLAY else ""
 	var lbl_fx_str := ("Fx = %.2f N" % absf(filtered_fx)) if filtered_fx >= FORCE_MIN_DISPLAY else ""
 	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_MIN_DISPLAY else ""
-	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if (filtered_fric >= FORCE_MIN_DISPLAY and data.F_fric >= FORCE_MIN_DISPLAY) else ""
+	var is_moving: bool = inspected_rig.oscillations_enabled and (absf(inspected_rig.velocity_H) > 0.0005)
+	var fric_prefix: String = "fk" if is_moving else "fs"
+	var lbl_fric_str := ("%s = %.2f N" % [fric_prefix, absf(filtered_fric)]) if (disp_len_fric >= 0.012 and mu_val > 0.0001) else ""
 
 	# COMMON CONCURRENT ANCHOR & VECTOR MODE FILTERING
 	if is_resultant_only_mode:
@@ -2641,9 +2744,9 @@ func _update_force_visualizer() -> void:
 			# Hide redundant R arrow to strictly prevent double-arrow / label collision!
 			arrow_res_data["root"].visible = false
 
-	# F_fric (Coulomb Pin Friction): Smoothly scales with velocity, disappearing at turning points!
-	if disp_len_fric >= 0.012 and not lbl_fric_str.is_empty():
-		var lbl_fric_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fric.y > 0.0 else Vector3(0.0, -0.08, 0.0)
+	# F_fric (Coulomb Pin Friction): Smoothly scales with velocity, shows static limit at rest, hides when mu == 0!
+	if disp_len_fric >= 0.012 and not lbl_fric_str.is_empty() and data.dir_fric.length_squared() > 0.01 and mu_val > 0.0001:
+		var lbl_fric_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fric.y >= 0.0 else Vector3(0.0, -0.08, 0.0)
 		_update_arrow_vector(arrow_fric_data, pin_pos, data.dir_fric, disp_len_fric, lbl_fric_str, lbl_fric_offset)
 	else:
 		arrow_fric_data["root"].visible = false
@@ -2656,8 +2759,11 @@ func _update_force_visualizer() -> void:
 		joint_val_fy.text = "%.2f N  %s" % [absf(filtered_fy), fy_tag]
 		joint_val_fx.text = "%.2f N" % absf(filtered_fx)
 		joint_val_res.text = "%.2f N" % absf(filtered_res)
-		if filtered_fric >= FORCE_MIN_DISPLAY and data.F_fric >= FORCE_MIN_DISPLAY:
-			joint_val_fric.text = "%.2f N" % absf(filtered_fric)
+		if mu_val <= 0.0001:
+			joint_val_fric.text = "0.00 N (Zero Friction)"
+		elif filtered_fric >= FORCE_MIN_DISPLAY and data.F_fric >= FORCE_MIN_DISPLAY:
+			var dyn_tag: String = "[Dynamic]" if is_moving else "[Static]"
+			joint_val_fric.text = "%.2f N  %s" % [absf(filtered_fric), dyn_tag]
 		else:
 			joint_val_fric.text = "0.00 N (Null)"
 		joint_val_theta.text = "%.1f°" % filtered_theta
@@ -2674,7 +2780,7 @@ func _update_force_visualizer() -> void:
 
 		var tau_yield_mpa: float = 35.0
 		var sf: float = clampf(tau_yield_mpa / maxf(tau_shear_mpa, 0.001), 1.0, 99.9)
-		var tau_fric_nm: float = 0.20 * filtered_res * r_pin if data.len_fric >= 0.035 else 0.0
+		var tau_fric_nm: float = (mu_val * filtered_res * r_pin) if (mu_val > 0.0001 and filtered_fric >= FORCE_MIN_DISPLAY) else 0.0
 
 		joint_val_tau_shear.text = "%.2f MPa" % tau_shear_mpa
 		joint_val_sigma_b.text = "%.2f MPa" % sigma_b_mpa
@@ -3374,7 +3480,7 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 		if lbl != null:
 			lbl.add_theme_font_size_override("font_size", int(14 * S))
 
-	for slider in [mass_slider, stiffness_slider, efficiency_slider, gravity_slider, damping_slider]:
+	for slider in [mass_slider, stiffness_slider, efficiency_slider, friction_slider, gravity_slider, damping_slider]:
 		if slider != null:
 			slider.custom_minimum_size = Vector2(0, 44.0 * S)
 			var tr: StyleBoxFlat = slider.get_theme_stylebox("slider") as StyleBoxFlat
@@ -3385,6 +3491,12 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 				tr.corner_radius_top_right = int(4 * S)
 				tr.corner_radius_bottom_left = int(4 * S)
 				tr.corner_radius_bottom_right = int(4 * S)
+
+	for btn in friction_preset_buttons:
+		if btn != null:
+			btn.custom_minimum_size = Vector2(0, 36.0 * S)
+			btn.add_theme_font_size_override("font_size", int(12 * S))
+			_scale_button_stylebox(btn, int(10 * S))
 
 	if planet_grid_ref != null:
 		planet_grid_ref.columns = 2
@@ -3468,7 +3580,7 @@ func _restore_desktop_ui_scale() -> void:
 		if lbl != null:
 			lbl.add_theme_font_size_override("font_size", 12)
 
-	for slider in [mass_slider, stiffness_slider, efficiency_slider, gravity_slider, damping_slider]:
+	for slider in [mass_slider, stiffness_slider, efficiency_slider, friction_slider, gravity_slider, damping_slider]:
 		if slider != null:
 			slider.custom_minimum_size = Vector2(0, 20)
 			var tr: StyleBoxFlat = slider.get_theme_stylebox("slider") as StyleBoxFlat
@@ -3479,6 +3591,12 @@ func _restore_desktop_ui_scale() -> void:
 				tr.corner_radius_top_right = 3
 				tr.corner_radius_bottom_left = 3
 				tr.corner_radius_bottom_right = 3
+
+	for btn in friction_preset_buttons:
+		if btn != null:
+			btn.custom_minimum_size = Vector2(62, 24)
+			btn.add_theme_font_size_override("font_size", 10)
+			_scale_button_stylebox(btn, 14)
 
 	if planet_grid_ref != null:
 		planet_grid_ref.columns = 3
