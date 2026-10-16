@@ -2328,14 +2328,15 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 
 func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vector3, visual_length: float, label_text: String, label_world_offset: Vector3 = Vector3.ZERO) -> void:
 	var root: Node3D = arrow_dict["root"]
-	if visual_length < 0.035 or dir_unit.length_squared() < 0.001 or label_text.is_empty():
+	if visual_length < 0.012 or dir_unit.length_squared() < 0.001 or label_text.is_empty():
 		root.visible = false
 		return
 	root.visible = true
 
-	# Proportionate tip cone and shaft cylinder scaling
-	var tip_len: float = clampf(visual_length * 0.20, 0.025, 0.09)
-	var stem_len: float = maxf(visual_length - tip_len, 0.005)
+	# Proportionate tip cone and shaft cylinder scaling:
+	# Both tip and stem smoothly shrink to zero width and length as visual_length -> 0!
+	var tip_len: float = clampf(visual_length * 0.25, 0.006, 0.08)
+	var stem_len: float = maxf(visual_length - tip_len, 0.001)
 
 	var dir: Vector3 = dir_unit.normalized()
 	var up_ref := Vector3.UP if absf(dir.y) < 0.95 else Vector3.FORWARD
@@ -2345,15 +2346,15 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 
 	root.global_transform = Transform3D(basis, origin)
 
-	# Proportional arrow thickness
-	var thickness_scale: float = clampf(visual_length / 0.55, 0.45, 1.20)
+	# Proportional arrow thickness: scales down continuously as length approaches zero!
+	var thickness_scale: float = clampf(visual_length / 0.35, 0.04, 1.20)
+	var tip_scale_y: float = tip_len / 0.08
 
 	var stem: MeshInstance3D = arrow_dict["stem"]
 	stem.scale = Vector3(thickness_scale, stem_len, thickness_scale)
 	stem.position = Vector3(0, stem_len * 0.5, 0)
 
 	var tip: MeshInstance3D = arrow_dict["tip"]
-	var tip_scale_y: float = tip_len / 0.09
 	tip.scale = Vector3(thickness_scale, tip_scale_y, thickness_scale)
 	tip.position = Vector3(0, stem_len + tip_len * 0.5, 0)
 
@@ -2368,6 +2369,14 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var m: float = rig.suspended_mass
 	var g: float = rig.gravity
+
+	# Dynamic acceleration coupling:
+	# During oscillation, vertical inertial acceleration modifies effective load: g_eff = max(g - a_H, 0.05)
+	# When rebounding upward from bottom dip (a_H < 0), dynamic tension surges: g - a_H > g
+	# When falling from top apex (a_H > 0), dynamic tension dips: g - a_H < g
+	var a_y: float = rig.acceleration_H if ("acceleration_H" in rig) else 0.0
+	var g_eff: float = maxf(g - a_y, 0.05) if rig.oscillations_enabled else g
+
 	var n: int = rig.n_stages
 	var link_m: float = rig.link_mass_per_stage
 	var theta: float = rig.current_theta # radians relative to horizontal
@@ -2377,11 +2386,13 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var mu: float = 0.20 # Coulomb pin friction coefficient
 	var r_pin: float = 0.026 # Pin contact radius in meters
 
-	# Motion state from numerical integrator:
-	# Only dynamic motion produces kinetic friction fk = mu * R
+	# Continuous velocity scaling for Coulomb friction:
+	# Velocity v_h is sinusoidal: v(t) = A * omega * cos(omega * t)
+	# Friction magnitude smoothly scales with velocity: f_k = mu * R * clamp(|v| / 0.035, 0.0, 1.0)
+	# As v -> 0 at the turnaround peaks, f_k smoothly drops to 0.00 N (NULL)!
 	var vel_h: float = rig.velocity_H
-	var is_moving: bool = absf(vel_h) >= 0.003
-	var motion_dir: float = signf(vel_h) if is_moving else 0.0
+	var vel_norm: float = clampf(absf(vel_h) / 0.035, 0.0, 1.0)
+	var motion_dir: float = signf(vel_h) if absf(vel_h) > 0.0005 else 0.0
 
 	var F_y: float = 0.0
 	var F_x: float = 0.0
@@ -2400,7 +2411,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	if pin_idx == 0:
 		# Top Gantry Anchor (Static ceiling beam - zero linear sliding displacement)
 		# Central Vertical Axis: Left and right scissor links exert equal and opposite forces -> Sum(Fx) = 0
-		var p_tot: float = m * g + float(n) * link_m * g
+		var p_tot: float = m * g_eff + float(n) * link_m * g_eff
 		F_y = p_tot
 		F_x = 0.0
 		dir_fx = Vector3.ZERO
@@ -2425,8 +2436,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		var s: int = (pin_idx - 1) / 3
 		var type: int = (pin_idx - 1) % 3
 		var stages_below: float = float(n - 1 - s)
-		var p_below: float = m * g + stages_below * link_m * g
-		var p_stage: float = p_below + link_m * g * 0.5
+		var p_below: float = m * g_eff + stages_below * link_m * g_eff
+		var p_stage: float = p_below + link_m * g_eff * 0.5
 
 		if type == 0:
 			# Left Lateral Hinge
@@ -2448,15 +2459,11 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_res = raw_res.normalized()
 				desc = "Lateral scissor hinge experiencing outward thrust Fx and downward load transmission Fy (Transmitted Load ↓)."
 
-			if is_moving:
-				F_fric = mu * R
-				tau_fric = mu * R * r_pin
-				var fan_angle_l: float = maxf(theta, deg_to_rad(35.0))
-				dir_fric = Vector3(-cos(fan_angle_l), sin(fan_angle_l), 0.0).normalized() * motion_dir
-			else:
-				F_fric = 0.0
-				tau_fric = 0.0
-				dir_fric = Vector3.ZERO
+			# Continuous friction scaling down to 0 at turning points
+			F_fric = mu * R * vel_norm
+			tau_fric = F_fric * r_pin
+			var fan_angle_l: float = maxf(theta, deg_to_rad(35.0))
+			dir_fric = Vector3(-cos(fan_angle_l), sin(fan_angle_l), 0.0).normalized() * motion_dir
 
 			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 
@@ -2480,15 +2487,11 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_res = raw_res.normalized()
 				desc = "Lateral scissor hinge experiencing outward thrust Fx and downward load transmission Fy (Transmitted Load ↓)."
 
-			if is_moving:
-				F_fric = mu * R
-				tau_fric = mu * R * r_pin
-				var fan_angle_r: float = maxf(theta, deg_to_rad(35.0))
-				dir_fric = Vector3(cos(fan_angle_r), sin(fan_angle_r), 0.0).normalized() * motion_dir
-			else:
-				F_fric = 0.0
-				tau_fric = 0.0
-				dir_fric = Vector3.ZERO
+			# Continuous friction scaling down to 0 at turning points
+			F_fric = mu * R * vel_norm
+			tau_fric = F_fric * r_pin
+			var fan_angle_r: float = maxf(theta, deg_to_rad(35.0))
+			dir_fric = Vector3(cos(fan_angle_r), sin(fan_angle_r), 0.0).normalized() * motion_dir
 
 			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 
@@ -2499,7 +2502,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 
 			if s == n - 1:
 				# Bottommost pin supporting payload mass directly
-				F_y = m * g
+				F_y = m * g_eff
 				R = F_y
 				if is_upper_force_reaction:
 					dir_fy = Vector3(0, 1, 0) # Tension from bottom scissor links holding payload
@@ -2526,25 +2529,20 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 
 				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 
-			if is_moving:
-				F_fric = mu * R
-				tau_fric = mu * R * r_pin
-				dir_fric = Vector3(0, 1.0, 0) * motion_dir
-			else:
-				F_fric = 0.0
-				tau_fric = 0.0
-				dir_fric = Vector3.ZERO
+			# Continuous friction scaling down to 0 at turning points
+			F_fric = mu * R * vel_norm
+			tau_fric = F_fric * r_pin
+			dir_fric = Vector3(0, 1.0, 0) * motion_dir
 
-	# 1. STRICT LINEAR SCALING: length = clamp(magnitude * 0.35, 0.1, 1.2)
+	# STRICT LINEAR SCALING: Length scales continuously with force down to 0!
 	const FORCE_SCALE: float = 0.35 # meters per Newton
-	const FORCE_THRESHOLD: float = 0.10 # Hide if force_mag < 0.1 N
-	const MIN_ARROW_LEN: float = 0.10
+	const FORCE_MIN_DISPLAY: float = 0.015 # Hide only negligible micro-noise (< 0.015 N)
 	const MAX_ARROW_LEN: float = 1.20
 
-	var len_fy: float = clampf(absf(F_y) * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if absf(F_y) >= FORCE_THRESHOLD else 0.0
-	var len_fx: float = clampf(absf(F_x) * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if absf(F_x) >= FORCE_THRESHOLD else 0.0
-	var len_res: float = clampf(absf(R) * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if absf(R) >= FORCE_THRESHOLD else 0.0
-	var len_fric: float = clampf(absf(F_fric) * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if absf(F_fric) >= FORCE_THRESHOLD else 0.0
+	var len_fy: float = clampf(absf(F_y) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_y) >= FORCE_MIN_DISPLAY else 0.0
+	var len_fx: float = clampf(absf(F_x) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_x) >= FORCE_MIN_DISPLAY else 0.0
+	var len_res: float = clampf(absf(R) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(R) >= FORCE_MIN_DISPLAY else 0.0
+	var len_fric: float = clampf(absf(F_fric) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_fric) >= FORCE_MIN_DISPLAY else 0.0
 
 	return {
 		"dir_fy": dir_fy,
@@ -2558,7 +2556,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"lbl_fy": "Fy = %.2f N" % absf(F_y),
 		"lbl_fx": "Fx = %.2f N" % absf(F_x),
 		"lbl_res": "R = %.2f N" % absf(R),
-		"lbl_fric": ("fk = %.2f N" % absf(F_fric)) if F_fric > 0.01 else "",
+		"lbl_fric": ("fk = %.2f N" % absf(F_fric)) if F_fric >= FORCE_MIN_DISPLAY else "",
 		"F_y": absf(F_y),
 		"F_x": absf(F_x),
 		"R": absf(R),
@@ -2580,38 +2578,41 @@ func _update_force_visualizer() -> void:
 
 	var data: Dictionary = _calculate_joint_forces(inspected_rig, inspected_pin_idx)
 
-	# 12: A - Filtered instantaneous values via single-pole low-pass filter
+	# Dynamic instantaneous response:
+	# During oscillations, bypass low-pass lag so sinusoidal waveforms pass cleanly through 0 (null) without delay!
 	var dt: float = get_process_delta_time()
-	var filter_alpha: float = clampf(14.0 * dt, 0.0, 1.0)
+	var a_y: float = inspected_rig.acceleration_H if ("acceleration_H" in inspected_rig) else 0.0
+	var is_dynamic: bool = inspected_rig.oscillations_enabled and (absf(inspected_rig.velocity_H) > 0.001 or absf(a_y) > 0.02)
+	var filter_alpha: float = 1.0 if is_dynamic else clampf(14.0 * dt, 0.0, 1.0)
+
 	filtered_fy = lerpf(filtered_fy, absf(data.F_y), filter_alpha)
 	filtered_fx = lerpf(filtered_fx, absf(data.F_x), filter_alpha)
 	filtered_res = lerpf(filtered_res, absf(data.R), filter_alpha)
 	filtered_fric = lerpf(filtered_fric, absf(data.F_fric), filter_alpha)
 	filtered_theta = lerpf(filtered_theta, data.theta_deg, filter_alpha)
 
-	# 1. STRICT LINEAR SCALING: length = clamp(magnitude * 0.35, 0.1, 1.2)
+	# STRICT LINEAR SCALING: length scales continuously to 0
 	const FORCE_SCALE: float = 0.35 # meters per Newton
-	const FORCE_THRESHOLD: float = 0.10 # Hide if force_mag < 0.1 N
-	const MIN_ARROW_LEN: float = 0.10
+	const FORCE_MIN_DISPLAY: float = 0.015 # Hide only negligible micro-noise (< 0.015 N)
 	const MAX_ARROW_LEN: float = 1.20
 
-	var disp_len_fy: float = clampf(filtered_fy * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if filtered_fy >= FORCE_THRESHOLD else 0.0
-	var disp_len_fx: float = clampf(filtered_fx * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if filtered_fx >= FORCE_THRESHOLD else 0.0
-	var disp_len_res: float = clampf(filtered_res * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if filtered_res >= FORCE_THRESHOLD else 0.0
-	var disp_len_fric: float = clampf(filtered_fric * FORCE_SCALE, MIN_ARROW_LEN, MAX_ARROW_LEN) if filtered_fric >= FORCE_THRESHOLD else 0.0
+	var disp_len_fy: float = clampf(filtered_fy * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fy >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_fx: float = clampf(filtered_fx * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fx >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_res: float = clampf(filtered_res * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_res >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_fric: float = clampf(filtered_fric * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fric >= FORCE_MIN_DISPLAY else 0.0
 
 	# Strict non-negative label strings
-	var lbl_fy_str := ("Fy = %.2f N" % absf(filtered_fy)) if filtered_fy >= FORCE_THRESHOLD else ""
-	var lbl_fx_str := ("Fx = %.2f N" % absf(filtered_fx)) if filtered_fx >= FORCE_THRESHOLD else ""
-	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_THRESHOLD else ""
-	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if (filtered_fric >= FORCE_THRESHOLD and data.F_fric > 0.01) else ""
+	var lbl_fy_str := ("Fy = %.2f N" % absf(filtered_fy)) if filtered_fy >= FORCE_MIN_DISPLAY else ""
+	var lbl_fx_str := ("Fx = %.2f N" % absf(filtered_fx)) if filtered_fx >= FORCE_MIN_DISPLAY else ""
+	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_MIN_DISPLAY else ""
+	var lbl_fric_str := ("fk = %.2f N" % absf(filtered_fric)) if (filtered_fric >= FORCE_MIN_DISPLAY and data.F_fric >= FORCE_MIN_DISPLAY) else ""
 
-	# 2. COMMON CONCURRENT ANCHOR & VECTOR MODE FILTERING
+	# COMMON CONCURRENT ANCHOR & VECTOR MODE FILTERING
 	if is_resultant_only_mode:
 		# Mode: Resultant (R Only) - Render ONLY total vector sum R
 		arrow_fy_data["root"].visible = false
 		arrow_fx_data["root"].visible = false
-		if disp_len_res >= 0.035 and not lbl_res_str.is_empty():
+		if disp_len_res >= 0.012 and not lbl_res_str.is_empty():
 			var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if data.dir_res.y > 0.0 else Vector3(0.12, -0.06, 0.0)
 			_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
 		else:
@@ -2619,17 +2620,17 @@ func _update_force_visualizer() -> void:
 	else:
 		# Mode: All Vectors
 		# Fy (Vertical Load / Reaction Reaction):
-		if disp_len_fy >= 0.035 and not lbl_fy_str.is_empty():
+		if disp_len_fy >= 0.012 and not lbl_fy_str.is_empty():
 			var lbl_fy_offset := Vector3(-0.06, 0.08, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.06, -0.08, 0.0)
 			_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
 		else:
 			arrow_fy_data["root"].visible = false
 
 		# Fx (Lateral Thrust): (Only drawn when Fx > 0, e.g. on lateral hinges)
-		if disp_len_fx >= 0.035 and not lbl_fx_str.is_empty():
+		if disp_len_fx >= 0.012 and not lbl_fx_str.is_empty():
 			_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.0, 0.08, 0.0))
 			# On lateral pins, R is diagonal and visually distinct from Fy; render R too
-			if disp_len_res >= 0.035 and not lbl_res_str.is_empty():
+			if disp_len_res >= 0.012 and not lbl_res_str.is_empty():
 				var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if data.dir_res.y > 0.0 else Vector3(0.12, -0.06, 0.0)
 				_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
 			else:
@@ -2640,8 +2641,8 @@ func _update_force_visualizer() -> void:
 			# Hide redundant R arrow to strictly prevent double-arrow / label collision!
 			arrow_res_data["root"].visible = false
 
-	# F_fric (Coulomb Pin Friction): Only rendered during active dynamic motion (zero in statics)
-	if data.len_fric >= 0.035 and not lbl_fric_str.is_empty():
+	# F_fric (Coulomb Pin Friction): Smoothly scales with velocity, disappearing at turning points!
+	if disp_len_fric >= 0.012 and not lbl_fric_str.is_empty():
 		var lbl_fric_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fric.y > 0.0 else Vector3(0.0, -0.08, 0.0)
 		_update_arrow_vector(arrow_fric_data, pin_pos, data.dir_fric, disp_len_fric, lbl_fric_str, lbl_fric_offset)
 	else:
@@ -2655,10 +2656,10 @@ func _update_force_visualizer() -> void:
 		joint_val_fy.text = "%.2f N  %s" % [absf(filtered_fy), fy_tag]
 		joint_val_fx.text = "%.2f N" % absf(filtered_fx)
 		joint_val_res.text = "%.2f N" % absf(filtered_res)
-		if data.len_fric >= 0.035 and not lbl_fric_str.is_empty():
+		if filtered_fric >= FORCE_MIN_DISPLAY and data.F_fric >= FORCE_MIN_DISPLAY:
 			joint_val_fric.text = "%.2f N" % absf(filtered_fric)
 		else:
-			joint_val_fric.text = "0.00 N"
+			joint_val_fric.text = "0.00 N (Null)"
 		joint_val_theta.text = "%.1f°" % filtered_theta
 
 	# 11: C - Update Tier 2 Advanced Stress & Pin Analysis

@@ -33,6 +33,7 @@ signal pin_clicked(rig: PantographRig, pin_index: int, pin_pos: Vector3)
 
 var current_H: float = 0.075
 var velocity_H: float = 0.0
+var acceleration_H: float = 0.0
 var target_H: float = 0.075
 var current_W: float = 0.0
 var current_theta: float = 0.0
@@ -501,6 +502,7 @@ func _update_kinematics(delta: float) -> void:
 		var smooth_speed: float = 14.0
 		current_H = lerpf(current_H, target_H, clampf(dt * smooth_speed, 0.0, 1.0))
 		velocity_H = 0.0
+		acceleration_H = 0.0
 	else:
 		# 1. NATURAL OSCILLATION TUNING (Kill the Numeric Buzzing):
 		var effective_n: float = 6.0 if is_scaled_123 else float(n_stages)
@@ -541,6 +543,7 @@ func _update_kinematics(delta: float) -> void:
 			var sgn_v_half: float = tanh(v_half / 0.004)
 			var a1: float = omega * omega * err_next - damping_c * v_half - a_coulomb * sgn_v_half
 			velocity_H = v_half + 0.5 * a1 * sub_dt
+			acceleration_H = a1
 
 	var base_link_len: float = get_base_link_length()
 	current_H = clampf(current_H, 0.030, base_link_len * 2.0 * 0.96)
