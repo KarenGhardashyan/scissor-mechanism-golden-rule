@@ -2104,20 +2104,56 @@ func _create_liquid_button(text: String, icon_name: String = "") -> Button:
 func _style_tech_slider(slider: HSlider) -> void:
 	var track := StyleBoxFlat.new()
 	track.bg_color = Color(0.18, 0.20, 0.28) if is_dark_theme else Color(0.84, 0.85, 0.88)
-	track.corner_radius_top_left = 3
-	track.corner_radius_top_right = 3
-	track.corner_radius_bottom_left = 3
-	track.corner_radius_bottom_right = 3
-	track.content_margin_top = 3
-	track.content_margin_bottom = 3
+	track.corner_radius_top_left = 4
+	track.corner_radius_top_right = 4
+	track.corner_radius_bottom_left = 4
+	track.corner_radius_bottom_right = 4
+	track.content_margin_top = 4
+	track.content_margin_bottom = 4
 	slider.add_theme_stylebox_override("slider", track)
 
 	var active := StyleBoxFlat.new()
 	active.bg_color = Color(0.0, 0.443, 0.89)
-	active.corner_radius_top_left = 3
-	active.corner_radius_bottom_left = 3
+	active.corner_radius_top_left = 4
+	active.corner_radius_bottom_left = 4
+	active.content_margin_top = 4
+	active.content_margin_bottom = 4
 	slider.add_theme_stylebox_override("grabber_area", active)
 	slider.add_theme_stylebox_override("grabber_area_highlight", active)
+
+	var knob_tex := _get_svg_icon("slider_knob", Color.WHITE, Vector2i(16, 16))
+	if knob_tex != null:
+		slider.add_theme_icon_override("grabber", knob_tex)
+		slider.add_theme_icon_override("grabber_highlight", knob_tex)
+		slider.add_theme_icon_override("grabber_disabled", knob_tex)
+	theme_sliders.append(slider)
+
+
+func _style_mobile_mass_slider(slider: HSlider) -> void:
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(0.18, 0.22, 0.32, 0.90) if is_dark_theme else Color(0.80, 0.83, 0.90)
+	track.corner_radius_top_left = 6
+	track.corner_radius_top_right = 6
+	track.corner_radius_bottom_left = 6
+	track.corner_radius_bottom_right = 6
+	track.content_margin_top = 7
+	track.content_margin_bottom = 7
+	slider.add_theme_stylebox_override("slider", track)
+
+	var active := StyleBoxFlat.new()
+	active.bg_color = Color(0.0, 0.443, 0.89)
+	active.corner_radius_top_left = 6
+	active.corner_radius_bottom_left = 6
+	active.content_margin_top = 7
+	active.content_margin_bottom = 7
+	slider.add_theme_stylebox_override("grabber_area", active)
+	slider.add_theme_stylebox_override("grabber_area_highlight", active)
+
+	var knob_tex := _get_svg_icon("slider_knob", Color.WHITE, Vector2i(28, 28))
+	if knob_tex != null:
+		slider.add_theme_icon_override("grabber", knob_tex)
+		slider.add_theme_icon_override("grabber_highlight", knob_tex)
+		slider.add_theme_icon_override("grabber_disabled", knob_tex)
 	theme_sliders.append(slider)
 
 
@@ -2979,8 +3015,9 @@ func _refresh_all_button_icons(is_dark: bool) -> void:
 		if btn != null and is_instance_valid(btn) and btn.has_meta("icon_name"):
 			var iname: String = btn.get_meta("icon_name")
 			var c: Color = blue_accent if (btn == btn_formulas) else col
-			var sz := Vector2i(20, 20) if (btn == btn_mob_theme or btn == btn_mob_reset) else Vector2i(15, 15)
+			var sz := Vector2i(14, 14) if btn.text.is_empty() else Vector2i(11, 11)
 			btn.icon = _get_svg_icon(iname, c, sz)
+			btn.expand_icon = false
 
 
 func _apply_visualizer_theme(is_dark: bool) -> void:
@@ -3060,11 +3097,11 @@ func _update_mobile_bottom_positions() -> void:
 		return
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	var S: float = clampf(vp_size.x / 400.0, 1.0, 4.5)
-	var card_h: float = 46.0 * S
+	var card_h: float = 58.0 * S
 	var pin_card_active := (inspected_rig != null and not is_focus_mode and not (mobile_sidebar != null and mobile_sidebar.visible))
 	if pin_card_active:
-		mobile_mass_panel.offset_bottom = -14.0 * S - 52.0 * S
-		mobile_mass_panel.offset_top = -14.0 * S - 52.0 * S - card_h
+		mobile_mass_panel.offset_bottom = -14.0 * S - 56.0 * S
+		mobile_mass_panel.offset_top = -14.0 * S - 56.0 * S - card_h
 	else:
 		mobile_mass_panel.offset_bottom = -14.0 * S
 		mobile_mass_panel.offset_top = -14.0 * S - card_h
@@ -3190,12 +3227,10 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 
 		if btn_mob_theme != null:
 			btn_mob_theme.custom_minimum_size = Vector2(42.0 * S, btn_h)
-			btn_mob_theme.add_theme_font_size_override("font_size", int(18 * S))
 			_scale_button_stylebox(btn_mob_theme, btn_rad)
 
 		if btn_mob_reset != null:
 			btn_mob_reset.custom_minimum_size = Vector2(42.0 * S, btn_h)
-			btn_mob_reset.add_theme_font_size_override("font_size", int(20 * S))
 			_scale_button_stylebox(btn_mob_reset, btn_rad)
 
 	# 2. Sidebar Drawer (88% width, touch targets)
@@ -3293,23 +3328,21 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 		var zb_h: float = 38.0 * S
 		if btn_mob_zoom_in != null:
 			btn_mob_zoom_in.custom_minimum_size = Vector2(zoom_w - 8 * S, zb_h)
-			btn_mob_zoom_in.add_theme_font_size_override("font_size", int(18 * S))
 			_scale_button_stylebox(btn_mob_zoom_in, int(10 * S))
 		if btn_mob_zoom_out != null:
 			btn_mob_zoom_out.custom_minimum_size = Vector2(zoom_w - 8 * S, zb_h)
-			btn_mob_zoom_out.add_theme_font_size_override("font_size", int(18 * S))
 			_scale_button_stylebox(btn_mob_zoom_out, int(10 * S))
 		if lbl_mob_zoom_dist != null:
 			lbl_mob_zoom_dist.add_theme_font_size_override("font_size", int(11 * S))
 
 	# 5. Mobile Mass Panel (Main Tab Quick Adjust)
 	if mobile_mass_panel != null:
-		var mass_w: float = minf(vp_size.x - 24.0 * S, 330.0 * S)
+		var mass_w: float = minf(vp_size.x - 20.0 * S, 360.0 * S)
 		mobile_mass_panel.offset_left = -mass_w * 0.5
 		mobile_mass_panel.offset_right = mass_w * 0.5
 		var m_sb: StyleBoxFlat = mobile_mass_panel.get_theme_stylebox("panel") as StyleBoxFlat
 		if m_sb:
-			var m_rad: int = int(22 * S)
+			var m_rad: int = int(24 * S)
 			m_sb.corner_radius_top_left = m_rad
 			m_sb.corner_radius_top_right = m_rad
 			m_sb.corner_radius_bottom_left = m_rad
@@ -3319,16 +3352,16 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 			lbl_mob_mass_title.add_theme_font_size_override("font_size", int(12 * S))
 		if lbl_mob_mass_val != null:
 			lbl_mob_mass_val.add_theme_font_size_override("font_size", int(12 * S))
-		var step_w: float = 34.0 * S
-		var step_h: float = 30.0 * S
+			lbl_mob_mass_val.custom_minimum_size.x = 56.0 * S
+		if slider_mob_mass != null:
+			slider_mob_mass.custom_minimum_size.y = 44.0 * S
+		var step_sz: float = 38.0 * S
 		if btn_mob_mass_dec != null:
-			btn_mob_mass_dec.custom_minimum_size = Vector2(step_w, step_h)
-			btn_mob_mass_dec.add_theme_font_size_override("font_size", int(16 * S))
-			_scale_button_stylebox(btn_mob_mass_dec, int(10 * S))
+			btn_mob_mass_dec.custom_minimum_size = Vector2(step_sz, step_sz)
+			_scale_button_stylebox(btn_mob_mass_dec, int(12 * S))
 		if btn_mob_mass_inc != null:
-			btn_mob_mass_inc.custom_minimum_size = Vector2(step_w, step_h)
-			btn_mob_mass_inc.add_theme_font_size_override("font_size", int(16 * S))
-			_scale_button_stylebox(btn_mob_mass_inc, int(10 * S))
+			btn_mob_mass_inc.custom_minimum_size = Vector2(step_sz, step_sz)
+			_scale_button_stylebox(btn_mob_mass_inc, int(12 * S))
 	_update_mobile_bottom_positions()
 
 	# 4. Content inside Tab 0: Controls
