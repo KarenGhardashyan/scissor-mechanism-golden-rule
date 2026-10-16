@@ -6,8 +6,8 @@ extends Camera3D
 
 signal screen_tapped(screen_pos: Vector2)
 
-@export var target_point: Vector3 = Vector3(0.0, 1.75, 0.0)
-@export var default_distance: float = 6.85
+@export var target_point: Vector3 = Vector3(-0.20, 1.80, 0.0)
+@export var default_distance: float = 7.65
 @export var min_distance: float = 2.0
 @export var max_distance: float = 14.0
 @export var orbit_speed: float = 0.005
@@ -15,20 +15,22 @@ signal screen_tapped(screen_pos: Vector2)
 @export var pan_speed: float = 0.004
 @export var smooth_speed: float = 14.0
 
-var current_distance: float = 6.85
-var target_distance: float = 6.85
+var current_distance: float = 7.65
+var target_distance: float = 7.65
 
 var yaw: float = 0.0
 var pitch: float = deg_to_rad(-5.0)
 var target_yaw: float = 0.0
 var target_pitch: float = deg_to_rad(-5.0)
 
-var current_target: Vector3 = Vector3(0.0, 1.75, 0.0)
-var default_target: Vector3 = Vector3(0.0, 1.75, 0.0)
+var current_target: Vector3 = Vector3(-0.20, 1.80, 0.0)
+var default_target: Vector3 = Vector3(-0.20, 1.80, 0.0)
 
 var is_orbiting: bool = false
 var is_panning: bool = false
 var is_mobile_mode: bool = false
+var is_following_rig: bool = false
+var follow_target_node: Node3D = null
 
 # Mobile Multi-Touch State
 var touch_points: Dictionary = {}
@@ -127,6 +129,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	if is_following_rig and follow_target_node != null and is_instance_valid(follow_target_node):
+		var target_y: float = follow_target_node.global_position.y - 1.2
+		if follow_target_node.has_method("get_base_resting_H"):
+			var cur_l: float = follow_target_node.get("current_L")
+			var v_scale: float = follow_target_node.get("visual_scale")
+			target_y = follow_target_node.global_position.y - (cur_l * v_scale * 0.5)
+		current_target = Vector3(follow_target_node.global_position.x, target_y, 0.0)
+
 	var blend: float = 1.0 - exp(-smooth_speed * delta)
 	yaw = lerp_angle(yaw, target_yaw, blend)
 	pitch = lerpf(pitch, target_pitch, blend)
@@ -138,6 +148,13 @@ func _process(delta: float) -> void:
 
 	global_position = target_point + offset
 	look_at(target_point, Vector3.UP)
+
+
+func set_follow_rig(enabled: bool, rig: Node3D = null) -> void:
+	is_following_rig = enabled
+	follow_target_node = rig
+	if not enabled:
+		current_target = default_target
 
 
 func _update_transform_immediate() -> void:
@@ -190,17 +207,17 @@ func set_mobile_mode(is_mobile: bool) -> void:
 	if is_mobile:
 		keep_aspect = Camera3D.KEEP_WIDTH
 		fov = 52.0
-		default_distance = 7.10
-		target_distance = 7.10
-		default_target = Vector3(0.0, 2.05, 0.0)
+		default_distance = 7.90
+		target_distance = 7.90
+		default_target = Vector3(-0.20, 2.05, 0.0)
 		target_point = default_target
 		current_target = default_target
 	else:
 		keep_aspect = Camera3D.KEEP_HEIGHT
 		fov = 54.0
-		default_distance = 6.85
-		target_distance = 6.85
-		default_target = Vector3(0.0, 1.75, 0.0)
+		default_distance = 7.65
+		target_distance = 7.65
+		default_target = Vector3(-0.20, 1.80, 0.0)
 		target_point = default_target
 		current_target = default_target
 
@@ -212,20 +229,20 @@ func update_aspect_ratio_framing(vp_size: Vector2) -> void:
 	var aspect: float = vp_size.x / maxf(vp_size.y, 1.0)
 	if aspect < 1.18:
 		# Very narrow aspect ratio
-		default_distance = 7.6
-		default_target = Vector3(0.0, 1.65, 0.0)
+		default_distance = 8.4
+		default_target = Vector3(-0.20, 1.65, 0.0)
 	elif aspect < 1.45:
 		# 4:3 or square laptop/tablet display
-		default_distance = 7.3
-		default_target = Vector3(0.0, 1.75, 0.0)
+		default_distance = 8.1
+		default_target = Vector3(-0.20, 1.80, 0.0)
 	elif aspect < 1.70:
 		# 16:10 standard laptop display (e.g. 1440x900, 1680x1050, 1920x1200)
-		default_distance = 7.0
-		default_target = Vector3(0.0, 1.75, 0.0)
+		default_distance = 7.8
+		default_target = Vector3(-0.20, 1.80, 0.0)
 	else:
 		# 16:9 standard and Ultrawide displays
-		default_distance = 6.85
-		default_target = Vector3(0.0, 1.75, 0.0)
+		default_distance = 7.65
+		default_target = Vector3(-0.20, 1.80, 0.0)
 
 	# If currently close to default, gently adjust target distance to new framing
 	if absf(current_distance - target_distance) < 0.2:

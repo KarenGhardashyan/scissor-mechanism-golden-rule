@@ -42,6 +42,8 @@ var main_title: Label
 var sub_title: Label
 var btn_formulas: Button
 var btn_reset_cam: Button
+var btn_follow_cam: Button
+var is_follow_rig_cam: bool = false
 var btn_slowmo: Button
 var btn_lasers: Button
 var btn_theme_toggle: Button
@@ -177,11 +179,19 @@ var arrow_fy_data: Dictionary = {}
 var arrow_fx_data: Dictionary = {}
 var arrow_res_data: Dictionary = {}
 var arrow_fric_data: Dictionary = {}
+var joint_billboard_badge: Label3D
 
 var inspected_rig: PantographRig = null
 var inspected_pin_idx: int = -1
 
-# 2D Joint Telemetry Glass Card
+# Low-Pass Filtered Force Metrics for Display (12: A)
+var filtered_fy: float = 0.0
+var filtered_fx: float = 0.0
+var filtered_res: float = 0.0
+var filtered_fric: float = 0.0
+var filtered_theta: float = 0.0
+
+# 2D Joint Telemetry Glass Card (Two-Tier Architecture 11: C)
 var joint_card: PanelContainer
 var joint_card_title: Label
 var joint_card_desc: Label
@@ -192,6 +202,14 @@ var joint_val_fric: Label
 var joint_val_tau: Label
 var joint_val_theta: Label
 
+var btn_toggle_advanced_stress: Button
+var advanced_stress_container: VBoxContainer
+var joint_val_tau_shear: Label
+var joint_val_sigma_b: Label
+var joint_val_sf: Label
+var joint_val_tau_fric: Label
+var is_advanced_stress_expanded: bool = false
+
 
 func _ready() -> void:
 	_setup_pure_light_studio()
@@ -200,7 +218,10 @@ func _ready() -> void:
 	_build_force_visualizer()
 	_build_liquid_glass_ui()
 	_apply_preset(0.5, 1000.0, 1.0, 9.81)
-	_apply_theme(false)
+	var os_dark: bool = false
+	if DisplayServer.has_method("is_dark_mode"):
+		os_dark = DisplayServer.is_dark_mode()
+	_apply_theme(os_dark)
 	get_viewport().size_changed.connect(_check_responsive_layout)
 	call_deferred("_check_responsive_layout")
 
@@ -411,15 +432,15 @@ func _setup_rigs() -> void:
 	if camera == null:
 		camera = OrbitCamera.new()
 		camera.name = "OrbitCamera"
-		camera.target_point = Vector3(0.0, 1.80, 0.0)
-		camera.default_distance = 6.85
+		camera.target_point = Vector3(-0.20, 1.80, 0.0)
+		camera.default_distance = 7.65
 		camera.fov = 54.0
 		camera.target_pitch = deg_to_rad(-5.0)
 		camera.pitch = deg_to_rad(-5.0)
 		add_child(camera)
 	else:
-		camera.target_point = Vector3(0.0, 1.80, 0.0)
-		camera.default_distance = 6.85
+		camera.target_point = Vector3(-0.20, 1.80, 0.0)
+		camera.default_distance = 7.65
 		camera.fov = 54.0
 		camera.target_pitch = deg_to_rad(-5.0)
 		camera.pitch = deg_to_rad(-5.0)
@@ -503,6 +524,17 @@ func _build_liquid_glass_ui() -> void:
 	btn_reset_cam.custom_minimum_size = Vector2(92, 30)
 	btn_reset_cam.pressed.connect(func(): camera.reset_camera())
 	header_box.add_child(btn_reset_cam)
+
+	btn_follow_cam = _create_liquid_button("🎯 Follow Rig")
+	btn_follow_cam.custom_minimum_size = Vector2(98, 30)
+	btn_follow_cam.toggle_mode = true
+	btn_follow_cam.toggled.connect(func(toggled_on: bool):
+		is_follow_rig_cam = toggled_on
+		var target_rig = inspected_rig if (inspected_rig != null and is_instance_valid(inspected_rig)) else rig_c
+		camera.set_follow_rig(is_follow_rig_cam, target_rig)
+		btn_follow_cam.text = "🎯 Lock Rig" if is_follow_rig_cam else "🎯 Follow Rig"
+	)
+	header_box.add_child(btn_follow_cam)
 
 	btn_slowmo = _create_liquid_button("Slow Motion")
 	btn_slowmo.custom_minimum_size = Vector2(92, 30)
@@ -1042,9 +1074,7 @@ func _build_liquid_glass_ui() -> void:
 	joint_val_fric = _create_value_cell("0.0 N", Color(0.95, 0.65, 0.05))
 	jgrid.add_child(joint_val_fric)
 
-	jgrid.add_child(_create_body_label("Friction Torque τ:"))
-	joint_val_tau = _create_value_cell("0.000 N·m", Color(1.0, 0.75, 0.20))
-	jgrid.add_child(joint_val_tau)
+
 
 	jgrid.add_child(_create_body_label("Scissor Half-Angle θ:"))
 	joint_val_theta = _create_value_cell("0.0°")
@@ -1054,6 +1084,50 @@ func _build_liquid_glass_ui() -> void:
 	for child in jgrid.get_children():
 		if child is Label:
 			joint_view_labels.append(child)
+
+	# Two-Tier Display: Expandable Accordion for Advanced Stress & Pin Analysis (11: C)
+	btn_toggle_advanced_stress = _create_liquid_button("▼ Advanced Stress & Pin Analysis")
+	btn_toggle_advanced_stress.custom_minimum_size = Vector2(0, 26)
+	btn_toggle_advanced_stress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_toggle_advanced_stress.add_theme_font_size_override("font_size", 10)
+	joint_view.add_child(btn_toggle_advanced_stress)
+
+	advanced_stress_container = VBoxContainer.new()
+	advanced_stress_container.visible = false
+	advanced_stress_container.add_theme_constant_override("separation", 6)
+	joint_view.add_child(advanced_stress_container)
+
+	var stress_grid := GridContainer.new()
+	stress_grid.columns = 2
+	stress_grid.add_theme_constant_override("h_separation", 10)
+	stress_grid.add_theme_constant_override("v_separation", 5)
+	advanced_stress_container.add_child(stress_grid)
+
+	stress_grid.add_child(_create_body_label("Pin Shear Stress τ:"))
+	joint_val_tau_shear = _create_value_cell("0.00 MPa", Color(0.95, 0.45, 0.20))
+	stress_grid.add_child(joint_val_tau_shear)
+
+	stress_grid.add_child(_create_body_label("Bushing Pressure σb:"))
+	joint_val_sigma_b = _create_value_cell("0.00 MPa", Color(0.90, 0.60, 0.25))
+	stress_grid.add_child(joint_val_sigma_b)
+
+	stress_grid.add_child(_create_body_label("Yield Safety Factor SF:"))
+	joint_val_sf = _create_value_cell("99.9", Color(0.20, 0.85, 0.45))
+	stress_grid.add_child(joint_val_sf)
+
+	stress_grid.add_child(_create_body_label("Friction Torque τ_fric:"))
+	joint_val_tau_fric = _create_value_cell("0.0000 N·m", Color(1.0, 0.75, 0.20))
+	stress_grid.add_child(joint_val_tau_fric)
+
+	for child in stress_grid.get_children():
+		if child is Label:
+			joint_view_labels.append(child)
+
+	btn_toggle_advanced_stress.pressed.connect(func():
+		is_advanced_stress_expanded = not is_advanced_stress_expanded
+		advanced_stress_container.visible = is_advanced_stress_expanded
+		btn_toggle_advanced_stress.text = "▲ Collapse Stress Analysis" if is_advanced_stress_expanded else "▼ Advanced Stress & Pin Analysis"
+	)
 
 	var sep_j2 := HSeparator.new()
 	joint_view.add_child(sep_j2)
@@ -1100,6 +1174,8 @@ func _build_liquid_glass_ui() -> void:
 		btn_qp.custom_minimum_size = Vector2(0, 26)
 		btn_qp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn_qp.add_theme_font_size_override("font_size", 9)
+		btn_qp.set_meta("get_rig", qp["get_rig"])
+		btn_qp.set_meta("idx", qp["idx"])
 		quick_pin_buttons.append(btn_qp)
 		var qp_copy: Dictionary = qp
 		btn_qp.pressed.connect(func():
@@ -1852,7 +1928,7 @@ func _build_force_visualizer() -> void:
 	force_visualizer_root.visible = false
 	add_child(force_visualizer_root)
 
-	# 1. Glowing Pin Highlight Ring
+	# 1. Luminous Pin Highlight Halo (10: A)
 	pin_highlight_ring = MeshInstance3D.new()
 	pin_highlight_ring.name = "PinHighlightRing"
 	var ring_mesh := TorusMesh.new()
@@ -1863,14 +1939,33 @@ func _build_force_visualizer() -> void:
 	pin_highlight_ring.mesh = ring_mesh
 	pin_highlight_ring.rotation.x = deg_to_rad(90)
 	mat_ring = StandardMaterial3D.new()
-	mat_ring.albedo_color = Color(1.0, 0.65, 0.15)
-	mat_ring.emission_enabled = false
-	mat_ring.roughness = 0.25
-	mat_ring.metallic = 0.70
+	mat_ring.albedo_color = Color(1.0, 0.72, 0.18)
+	mat_ring.emission_enabled = true
+	mat_ring.emission = Color(1.0, 0.65, 0.15)
+	mat_ring.emission_energy_multiplier = 2.5
+	mat_ring.roughness = 0.20
+	mat_ring.metallic = 0.85
+	mat_ring.no_depth_test = true
+	mat_ring.render_priority = 16
 	pin_highlight_ring.material_override = mat_ring
 	force_visualizer_root.add_child(pin_highlight_ring)
 
-	# 2. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), F_fric (Pin Friction)
+	# 2. Consolidated Floating 3D Billboard Badge (4: C)
+	joint_billboard_badge = Label3D.new()
+	joint_billboard_badge.name = "JointBillboardBadge"
+	joint_billboard_badge.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	joint_billboard_badge.pixel_size = 0.0030
+	joint_billboard_badge.font_size = 18
+	joint_billboard_badge.shaded = false
+	joint_billboard_badge.no_depth_test = true
+	joint_billboard_badge.render_priority = 20
+	joint_billboard_badge.outline_size = 6
+	joint_billboard_badge.outline_modulate = Color(0.04, 0.05, 0.08, 0.95)
+	joint_billboard_badge.modulate = Color(1.0, 1.0, 1.0)
+	joint_billboard_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	force_visualizer_root.add_child(joint_billboard_badge)
+
+	# 3. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), F_fric (Pin Friction)
 	arrow_fy_data = _create_arrow_node("ArrowFy", Color(0.0, 0.44, 0.95))
 	arrow_fx_data = _create_arrow_node("ArrowFx", Color(0.95, 0.22, 0.22))
 	arrow_res_data = _create_arrow_node("ArrowResultant", Color(0.12, 0.75, 0.35))
@@ -1884,6 +1979,9 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = col
+	mat.emission_enabled = true
+	mat.emission = col * 0.45
+	mat.emission_energy_multiplier = 1.0
 	mat.roughness = 0.25
 	mat.metallic = 0.30
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -1936,9 +2034,9 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 	}
 
 
-func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vector3, visual_length: float, label_text: String) -> void:
+func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vector3, visual_length: float, label_text: String, label_side_offset: float = 0.0) -> void:
 	var root: Node3D = arrow_dict["root"]
-	if visual_length < 0.05 or dir_unit.length_squared() < 0.001:
+	if visual_length < 0.02 or dir_unit.length_squared() < 0.001:
 		root.visible = false
 		return
 	root.visible = true
@@ -1961,8 +2059,9 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 	var tip: MeshInstance3D = arrow_dict["tip"]
 	tip.position = Vector3(0, stem_len + tip_len * 0.5, 0)
 
+	# Label offset radially along the arrow head to prevent text collisions
 	var lbl: Label3D = arrow_dict["label"]
-	lbl.position = Vector3(0, stem_len + tip_len + 0.07, 0)
+	lbl.position = Vector3(label_side_offset, stem_len + tip_len + 0.07, 0)
 	lbl.text = label_text
 
 
@@ -2097,12 +2196,17 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
 				desc = "Intermediate coupling pivot transferring vertical load between consecutive scissor stages."
 
-	# Visual lengths with guaranteed readability:
-	# Even if force is small (e.g. 0.81 N), vis_len >= 0.38m!
-	var len_fy: float = clampf(0.38 + absf(F_y) * 0.034, 0.38, 1.05) if absf(F_y) > 0.01 else 0.0
-	var len_fx: float = clampf(0.38 + absf(F_x) * 0.034, 0.38, 1.05) if absf(F_x) > 0.01 else 0.0
-	var len_res: float = clampf(0.42 + R * 0.034, 0.42, 1.15) if R > 0.01 else 0.0
-	var len_fric: float = clampf(0.38 + F_fric * 0.055, 0.38, 0.85) if F_fric > 0.01 else 0.0
+	# 2: B - Sublinear Square-Root scaling: length = clamp(sqrt(|F|) * k_scale, min_len, max_len)
+	# 3: A - Hard cutoff: Completely hide vector arrow when |F| < 0.15 N
+	var min_arrow_len: float = 0.22
+	var max_arrow_len: float = 1.15
+	var force_threshold: float = 0.15
+	var k_scale: float = 0.34
+
+	var len_fy: float = clampf(sqrt(absf(F_y)) * k_scale, min_arrow_len, max_arrow_len) if absf(F_y) >= force_threshold else 0.0
+	var len_fx: float = clampf(sqrt(absf(F_x)) * k_scale, min_arrow_len, max_arrow_len) if absf(F_x) >= force_threshold else 0.0
+	var len_res: float = clampf(sqrt(R) * k_scale, min_arrow_len, max_arrow_len) if R >= force_threshold else 0.0
+	var len_fric: float = clampf(sqrt(F_fric) * k_scale, min_arrow_len, max_arrow_len) if F_fric >= force_threshold else 0.0
 
 	return {
 		"dir_fy": dir_fy,
@@ -2113,10 +2217,10 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"len_res": len_res,
 		"dir_fric": dir_fric,
 		"len_fric": len_fric,
-		"lbl_fy": "Fy = %+.2f N" % F_y,
-		"lbl_fx": "Fx = %+.2f N" % F_x,
+		"lbl_fy": "Fy = %.2f N" % absf(F_y),
+		"lbl_fx": "Fx = %.2f N" % absf(F_x),
 		"lbl_res": "R = %.2f N" % R,
-		"lbl_fric": "F_fric = %.2f N (μ=%.2f)" % [F_fric, mu],
+		"lbl_fric": "fk = %.2f N" % F_fric,
 		"F_y": F_y,
 		"F_x": F_x,
 		"R": R,
@@ -2138,25 +2242,98 @@ func _update_force_visualizer() -> void:
 
 	var data: Dictionary = _calculate_joint_forces(inspected_rig, inspected_pin_idx)
 
-	# Fy, Fx, R originate at pin center
-	_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, data.len_fy, data.lbl_fy)
-	_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, data.len_fx, data.lbl_fx)
-	_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, data.len_res, data.lbl_res)
+	# 12: A - Filtered instantaneous values via single-pole low-pass filter
+	var dt: float = get_process_delta_time()
+	var filter_alpha: float = clampf(14.0 * dt, 0.0, 1.0)
+	filtered_fy = lerpf(filtered_fy, absf(data.F_y), filter_alpha)
+	filtered_fx = lerpf(filtered_fx, absf(data.F_x), filter_alpha)
+	filtered_res = lerpf(filtered_res, data.R, filter_alpha)
+	filtered_fric = lerpf(filtered_fric, data.F_fric, filter_alpha)
+	filtered_theta = lerpf(filtered_theta, data.theta_deg, filter_alpha)
 
-	# F_fric originates on the front washer face of the pin (+0.065m Z) so it NEVER clips or collides with other arrows
+	# Sublinear Square-Root scaling (2: B) & Hard cutoff (3: A)
+	var min_arrow_len: float = 0.22
+	var max_arrow_len: float = 1.15
+	var force_threshold: float = 0.15
+	var k_scale: float = 0.34
+
+	var disp_len_fy: float = clampf(sqrt(filtered_fy) * k_scale, min_arrow_len, max_arrow_len) if filtered_fy >= force_threshold else 0.0
+	var disp_len_fx: float = clampf(sqrt(filtered_fx) * k_scale, min_arrow_len, max_arrow_len) if filtered_fx >= force_threshold else 0.0
+	var disp_len_res: float = clampf(sqrt(filtered_res) * k_scale, min_arrow_len, max_arrow_len) if filtered_res >= force_threshold else 0.0
+	var disp_len_fric: float = clampf(sqrt(filtered_fric) * k_scale, min_arrow_len, max_arrow_len) if filtered_fric >= force_threshold else 0.0
+
+	var lbl_fy_str := "Fy = %.2f N" % filtered_fy
+	var lbl_fx_str := "Fx = %.2f N" % filtered_fx
+	var lbl_res_str := "R = %.2f N" % filtered_res
+	var lbl_fric_str := "fk = %.2f N" % filtered_fric
+
+	# Fy, Fx, R originate at pin center — each with unique radial offset to prevent label collisions
+	_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, 0.06)
+	_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, -0.06)
+	_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, 0.12)
+
+	# F_fric originates on the front washer face of the pin (+0.065m Z)
 	var fric_origin: Vector3 = pin_pos + Vector3(0, 0, 0.065)
-	_update_arrow_vector(arrow_fric_data, fric_origin, data.dir_fric, data.len_fric, data.lbl_fric)
+	_update_arrow_vector(arrow_fric_data, fric_origin, data.dir_fric, disp_len_fric, lbl_fric_str, -0.08)
 
+	# 4: C - Consolidated floating billboard badge
+	if joint_billboard_badge != null:
+		joint_billboard_badge.visible = true
+		joint_billboard_badge.global_position = pin_pos + Vector3(0.24, 0.22, 0.04)
+		joint_billboard_badge.text = "Pin #%d Load Summary\n  R  : %.2f N\n  Fy : %.2f N\n  Fx : %.2f N\n  fk : %.2f N" % [
+			inspected_pin_idx,
+			filtered_res,
+			filtered_fy,
+			filtered_fx,
+			filtered_fric
+		]
+
+	# 11: C - Update Tier 1 Core Statics
 	if joint_val_fy != null:
 		joint_card_title.text = data.title
 		joint_card_desc.text = data.desc
-		joint_val_fy.text = "%+.2f N  (Vertical Load / Reaction)" % data.F_y
-		joint_val_fx.text = "%+.2f N  (Lateral Scissor Thrust)" % data.F_x
-		joint_val_res.text = "%.2f N  (Joint Resultant Contact R)" % data.R
-		joint_val_fric.text = "%.2f N  (Coulomb Hinge Friction f_k)" % data.F_fric
-		if joint_val_tau != null:
-			joint_val_tau.text = "%.3f N·m  (Pin Resistance Torque τ)" % data.tau_fric
-		joint_val_theta.text = "%.1f°  (Scissor Half-Angle θ)" % data.theta_deg
+		joint_val_fy.text = "%.2f N  (Vertical Load / Reaction)" % filtered_fy
+		joint_val_fx.text = "%.2f N  (Lateral Scissor Thrust)" % filtered_fx
+		joint_val_res.text = "%.2f N  (Joint Resultant Contact R)" % filtered_res
+		joint_val_fric.text = "%.2f N  (Coulomb Hinge Friction fk)" % filtered_fric
+		joint_val_theta.text = "%.1f°  (Scissor Half-Angle θ)" % filtered_theta
+
+	# 11: C - Update Tier 2 Advanced Stress & Pin Analysis
+	if is_advanced_stress_expanded and joint_val_tau_shear != null:
+		var r_pin: float = 0.003
+		var a_pin: float = PI * r_pin * r_pin
+		var tau_shear_mpa: float = (filtered_res / maxf(2.0 * a_pin, 1e-7)) * 1e-6
+
+		var t_link: float = 0.004
+		var a_bearing: float = (2.0 * r_pin) * t_link
+		var sigma_b_mpa: float = (filtered_res / maxf(a_bearing, 1e-7)) * 1e-6
+
+		var tau_yield_mpa: float = 35.0
+		var sf: float = clampf(tau_yield_mpa / maxf(tau_shear_mpa, 0.001), 1.0, 99.9)
+		var tau_fric_nm: float = 0.20 * filtered_res * r_pin
+
+		joint_val_tau_shear.text = "%.2f MPa  (Double Shear)" % tau_shear_mpa
+		joint_val_sigma_b.text = "%.2f MPa  (Bushing Contact)" % sigma_b_mpa
+		joint_val_sf.text = "%.1f  (Yield Margin)" % sf
+		joint_val_tau_fric.text = "%.4f N·m  (Pin Resistance)" % tau_fric_nm
+
+
+func _sync_quick_pin_buttons(active_rig: PantographRig, active_pin: int) -> void:
+	for btn in quick_pin_buttons:
+		if not btn.has_meta("get_rig") or not btn.has_meta("idx"):
+			continue
+		var r_getter: Callable = btn.get_meta("get_rig")
+		var r: PantographRig = r_getter.call()
+		var idx: int = btn.get_meta("idx")
+		var is_active: bool = (r == active_rig and idx == active_pin)
+		if is_active:
+			btn.add_theme_color_override("font_color", Color(1.0, 0.72, 0.20))
+			btn.add_theme_color_override("font_hover_color", Color(1.0, 0.85, 0.35))
+			btn.add_theme_color_override("font_pressed_color", Color(1.0, 0.72, 0.20))
+		else:
+			btn.remove_theme_color_override("font_color")
+			btn.remove_theme_color_override("font_hover_color")
+			btn.remove_theme_color_override("font_pressed_color")
 
 
 func _on_pin_clicked(rig: PantographRig, pin_idx: int, _pos: Vector3) -> void:
@@ -2166,12 +2343,24 @@ func _on_pin_clicked(rig: PantographRig, pin_idx: int, _pos: Vector3) -> void:
 		inspected_rig = rig
 		inspected_pin_idx = pin_idx
 		force_visualizer_root.visible = true
+
+		var data: Dictionary = _calculate_joint_forces(rig, pin_idx)
+		filtered_fy = absf(data.F_y)
+		filtered_fx = absf(data.F_x)
+		filtered_res = data.R
+		filtered_fric = data.F_fric
+		filtered_theta = data.theta_deg
+
+		_sync_quick_pin_buttons(rig, pin_idx)
+
+		if is_follow_rig_cam and camera != null:
+			camera.set_follow_rig(true, rig)
+
 		if is_mobile_layout:
 			if mobile_sidebar != null and mobile_sidebar.visible:
 				_show_mobile_tab(2)
 			elif mobile_pin_card != null and not is_focus_mode:
 				mobile_pin_card.visible = true
-				var data: Dictionary = _calculate_joint_forces(rig, pin_idx)
 				if lbl_mob_pin_summary != null:
 					lbl_mob_pin_summary.text = "%s [Pin #%d] · R=%.1fN, Fx=%.1fN" % [rig.rig_name, pin_idx, data.R, data.F_x]
 		else:
@@ -2184,8 +2373,11 @@ func _deselect_pin() -> void:
 	inspected_pin_idx = -1
 	if force_visualizer_root != null:
 		force_visualizer_root.visible = false
+	if joint_billboard_badge != null:
+		joint_billboard_badge.visible = false
 	if mobile_pin_card != null:
 		mobile_pin_card.visible = false
+	_sync_quick_pin_buttons(null, -1)
 	if not is_mobile_layout:
 		_show_right_tab(0)
 
@@ -2367,9 +2559,17 @@ func _apply_theme(is_dark: bool) -> void:
 
 func _apply_visualizer_theme(is_dark: bool) -> void:
 	if mat_ring != null:
-		mat_ring.emission_enabled = is_dark
-		mat_ring.emission = Color(1.0, 0.65, 0.15) * 0.40 if is_dark else Color.BLACK
-		mat_ring.emission_energy_multiplier = 0.50 if is_dark else 0.0
+		mat_ring.emission_enabled = true
+		mat_ring.emission = Color(1.0, 0.72, 0.20) if is_dark else Color(1.0, 0.55, 0.12)
+		mat_ring.emission_energy_multiplier = 2.5 if is_dark else 1.8
+
+	if joint_billboard_badge != null:
+		if is_dark:
+			joint_billboard_badge.modulate = Color(0.95, 0.96, 0.98)
+			joint_billboard_badge.outline_modulate = Color(0.04, 0.05, 0.08, 0.95)
+		else:
+			joint_billboard_badge.modulate = Color(0.08, 0.10, 0.14)
+			joint_billboard_badge.outline_modulate = Color(0.98, 0.98, 1.0, 0.95)
 
 	var arrows := [
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
@@ -2957,3 +3157,13 @@ func _adjust_desktop_sizes(vp_size: Vector2) -> void:
 		bottom_panel.offset_right = 460.0
 		bottom_panel.offset_top = -490.0 if is_graph_maximized else -278.0
 		bottom_panel.offset_bottom = -16.0
+
+	# Q14: Auto-scale 3D force vector label sizing based on viewport aspect ratio
+	var vp_scale: float = clampf(vp_size.x / 1920.0, 0.7, 1.3)
+	var label_pixel: float = lerpf(0.0036, 0.0030, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0))
+	var label_font: int = int(lerpf(22.0, 20.0, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0)))
+	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fric_data]:
+		if arrow_data.has("label"):
+			var lbl: Label3D = arrow_data["label"]
+			lbl.pixel_size = label_pixel
+			lbl.font_size = label_font

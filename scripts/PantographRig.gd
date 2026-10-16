@@ -502,25 +502,48 @@ func _update_kinematics(delta: float) -> void:
 		current_H = lerpf(current_H, target_H, clampf(dt * smooth_speed, 0.0, 1.0))
 		velocity_H = 0.0
 	else:
-		# Physical natural frequency from compliance: omega_n = sqrt(k_eff / m_eff)
+		# 5: A - Lumped equivalent payload mass + fixed equivalent link mass lumped at joint pivots
 		var effective_n: float = 6.0 if is_scaled_123 else float(n_stages)
 		var struct_weight_factor: float = 3.0 if is_scaled_123 else (float(n_stages) * 0.5)
-		var total_m: float = maxf(suspended_mass + struct_weight_factor * link_mass_per_stage, 0.05)
-		var m_eff_spring: float = total_m / maxf(effective_n * effective_n * 0.15, 1.0)
-		var omega_phys: float = sqrt(spring_k / m_eff_spring)
-		var omega: float = clampf(omega_phys, 4.0, 75.0)
-		var damping: float = 2.0 * omega * damping_ratio_zeta
+		var lumped_joint_mass: float = struct_weight_factor * link_mass_per_stage * 0.35
+		var m_eff: float = maxf(suspended_mass + lumped_joint_mass, 0.05)
+		var k_eff: float = spring_k / maxf(effective_n * effective_n, 1.0)
+		var omega_phys: float = sqrt(k_eff / m_eff)
 
-		# Sub-stepped Symplectic Euler loop for strict energy conservation under high k and zero damping
-		var target_sub_dt: float = 0.0025 # 400 Hz physics tick
+		# 6: B - Snappy mechanical response clamped to 1.8 - 2.5 Hz natural frequency
+		var f_n: float = clampf(omega_phys / TAU, 1.8, 2.5)
+		var omega: float = TAU * f_n
+
+		# 7: C - Hybrid Viscous + Coulomb Friction model
+		var damping_c: float = 2.0 * omega * damping_ratio_zeta
+		var a_coulomb: float = 0.28 # m/s² dry friction deceleration
+		var v_stick: float = 0.0025 # m/s stiction velocity threshold
+		var h_deadband: float = 0.0008 # m displacement deadband
+
+		# 8: B - Sub-stepped Velocity Verlet integrator with analytical Rayleigh damping
+		var target_sub_dt: float = 0.0025 # 400 Hz physics sub-step
 		var sub_steps: int = clampi(int(ceil(dt / target_sub_dt)), 4, 16)
 		var sub_dt: float = dt / float(sub_steps)
 
 		for step in range(sub_steps):
-			var error: float = target_H - current_H
-			var accel: float = omega * omega * error - damping * velocity_H
-			velocity_H += accel * sub_dt
-			current_H += velocity_H * sub_dt
+			var err: float = target_H - current_H
+			var sgn_v: float = signf(velocity_H) if absf(velocity_H) > 0.0005 else 0.0
+			var a0: float = omega * omega * err - damping_c * velocity_H - a_coulomb * sgn_v
+
+			# Velocity Verlet half-step & position update
+			var v_half: float = velocity_H + 0.5 * a0 * sub_dt
+			current_H += v_half * sub_dt
+
+			var err_next: float = target_H - current_H
+			var sgn_v_half: float = signf(v_half) if absf(v_half) > 0.0005 else 0.0
+			var a1: float = omega * omega * err_next - damping_c * v_half - a_coulomb * sgn_v_half
+			velocity_H = v_half + 0.5 * a1 * sub_dt
+
+			# Coulomb stick-slip engagement: lock into equilibrium when kinetic energy is below stick limit
+			if absf(velocity_H) < v_stick and absf(target_H - current_H) < h_deadband:
+				velocity_H = 0.0
+				current_H = target_H
+				break
 
 	var base_link_len: float = get_base_link_length()
 	current_H = clampf(current_H, 0.030, base_link_len * 2.0 * 0.96)
