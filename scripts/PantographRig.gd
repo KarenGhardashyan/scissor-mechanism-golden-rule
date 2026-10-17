@@ -424,12 +424,12 @@ func _build_rig_hierarchy() -> void:
 	mass_label = Label3D.new()
 	mass_label.name = "MassLabel"
 	mass_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	mass_label.pixel_size = 0.0032
-	mass_label.font_size = 20
+	mass_label.pixel_size = 0.0035
+	mass_label.font_size = 24
 	mass_label.shaded = false
-	mass_label.modulate = Color(0.12, 0.13, 0.16)
-	mass_label.outline_size = 6
-	mass_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
+	mass_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
+	mass_label.outline_size = 8
+	mass_label.outline_modulate = Color(0.06, 0.07, 0.10, 0.98)
 	mass_assembly.add_child(mass_label)
 
 	# Overhead Rig Header Label
