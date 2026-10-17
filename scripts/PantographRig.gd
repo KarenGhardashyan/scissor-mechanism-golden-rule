@@ -123,89 +123,153 @@ func _init_materials() -> void:
 
 	var theme: String = rig_color_theme.to_lower()
 	if theme == "green" or is_scaled_123:
-		# RIG C (Mechanism 3): Matte Emerald Engineering Polymer
-		mat_arm_body.albedo_color = Color(0.20, 0.72, 0.40)
-		mat_arm_body.emission_enabled = false
-		mat_arm_body.metallic = 0.06
-		mat_arm_body.roughness = 0.68
+		# RIG C (Mechanism 3): Emerald Green / Neon Jade
+		if dark_theme:
+			mat_arm_body.albedo_color = Color(0.12, 0.95, 0.42)
+			mat_arm_body.emission_enabled = true
+			mat_arm_body.emission = Color(0.08, 0.65, 0.28)
+			mat_arm_body.emission_energy_multiplier = 0.35
+			mat_arm_body.metallic = 0.70
+			mat_arm_body.roughness = 0.20
 
-		mat_arm_chamfer.albedo_color = Color(0.12, 0.46, 0.25)
-		mat_arm_chamfer.emission_enabled = false
-		mat_arm_chamfer.metallic = 0.12
-		mat_arm_chamfer.roughness = 0.62
+			mat_arm_chamfer.albedo_color = Color(0.04, 0.25, 0.10)
+			mat_arm_chamfer.metallic = 0.90
+			mat_arm_chamfer.roughness = 0.15
 
-		mat_pin_accent.albedo_color = Color(0.35, 0.88, 0.60)
-		mat_pin_accent.emission_enabled = false
-		mat_pin_accent.metallic = 0.20
-		mat_pin_accent.roughness = 0.55
+			mat_pin_accent.albedo_color = Color(0.20, 1.0, 0.65)
+			mat_pin_accent.emission_enabled = true
+			mat_pin_accent.emission = Color(0.20, 1.0, 0.65)
+			mat_pin_accent.emission_energy_multiplier = 0.5
+			mat_pin_accent.metallic = 0.95
+			mat_pin_accent.roughness = 0.12
 
-		mat_mass_metal.albedo_color = Color(0.32, 0.35, 0.38) # Matte Slate Gray
-		mat_mass_metal.emission_enabled = false
-		mat_mass_metal.metallic = 0.22
-		mat_mass_metal.roughness = 0.65
-		mat_laser.albedo_color = Color(0.20, 0.85, 0.45, 0.85)
+			mat_mass_metal.albedo_color = Color(0.85, 0.92, 0.88)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.15
+			mat_laser.albedo_color = Color(0.25, 1.0, 0.48, 0.95)
+		else:
+			mat_arm_body.albedo_color = Color(0.19, 0.82, 0.35)
+			mat_arm_body.emission_enabled = false
+			mat_arm_body.metallic = 0.58
+			mat_arm_body.roughness = 0.26
 
+			mat_arm_chamfer.albedo_color = Color(0.08, 0.39, 0.16)
+			mat_arm_chamfer.metallic = 0.85
+			mat_arm_chamfer.roughness = 0.22
+
+			mat_pin_accent.albedo_color = Color(0.39, 0.90, 0.75)
+			mat_pin_accent.emission_enabled = false
+			mat_pin_accent.metallic = 0.90
+			mat_pin_accent.roughness = 0.16
+
+			mat_mass_metal.albedo_color = Color(0.85, 0.86, 0.88)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.18
+			mat_laser.albedo_color = Color(0.19, 0.82, 0.35, 0.85)
 	elif theme == "orange" or (not is_left_rig and not is_scaled_123):
-		# RIG B (Mechanism 2): Matte Ultra Orange Polymer
-		mat_arm_body.albedo_color = Color(0.92, 0.48, 0.12)
-		mat_arm_body.emission_enabled = false
-		mat_arm_body.metallic = 0.06
-		mat_arm_body.roughness = 0.68
+		# RIG B (Mechanism 2): Ultra Orange / Cyber Amber
+		if dark_theme:
+			mat_arm_body.albedo_color = Color(1.0, 0.46, 0.05)
+			mat_arm_body.emission_enabled = true
+			mat_arm_body.emission = Color(0.85, 0.32, 0.02)
+			mat_arm_body.emission_energy_multiplier = 0.40
+			mat_arm_body.metallic = 0.70
+			mat_arm_body.roughness = 0.20
 
-		mat_arm_chamfer.albedo_color = Color(0.58, 0.24, 0.05)
-		mat_arm_chamfer.emission_enabled = false
-		mat_arm_chamfer.metallic = 0.12
-		mat_arm_chamfer.roughness = 0.62
+			mat_arm_chamfer.albedo_color = Color(0.40, 0.12, 0.01)
+			mat_arm_chamfer.metallic = 0.90
+			mat_arm_chamfer.roughness = 0.15
 
-		mat_pin_accent.albedo_color = Color(1.0, 0.68, 0.25)
-		mat_pin_accent.emission_enabled = false
-		mat_pin_accent.metallic = 0.20
-		mat_pin_accent.roughness = 0.55
+			mat_pin_accent.albedo_color = Color(1.0, 0.80, 0.20)
+			mat_pin_accent.emission_enabled = true
+			mat_pin_accent.emission = Color(1.0, 0.75, 0.15)
+			mat_pin_accent.emission_energy_multiplier = 0.5
+			mat_pin_accent.metallic = 0.95
+			mat_pin_accent.roughness = 0.12
 
-		mat_mass_metal.albedo_color = Color(0.32, 0.35, 0.38) # Matte Slate Gray
-		mat_mass_metal.emission_enabled = false
-		mat_mass_metal.metallic = 0.22
-		mat_mass_metal.roughness = 0.65
-		mat_laser.albedo_color = Color(1.0, 0.50, 0.10, 0.85)
+			mat_mass_metal.albedo_color = Color(0.95, 0.82, 0.52)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.15
+			mat_laser.albedo_color = Color(1.0, 0.52, 0.10, 0.95)
+		else:
+			mat_arm_body.albedo_color = Color(1.0, 0.42, 0.05)
+			mat_arm_body.emission_enabled = false
+			mat_arm_body.metallic = 0.58
+			mat_arm_body.roughness = 0.26
 
+			mat_arm_chamfer.albedo_color = Color(0.65, 0.22, 0.02)
+			mat_arm_chamfer.metallic = 0.85
+			mat_arm_chamfer.roughness = 0.22
+
+			mat_pin_accent.albedo_color = Color(1.0, 0.72, 0.15)
+			mat_pin_accent.emission_enabled = false
+			mat_pin_accent.metallic = 0.92
+			mat_pin_accent.roughness = 0.16
+
+			mat_mass_metal.albedo_color = Color(0.92, 0.78, 0.46)
+			mat_mass_metal.metallic = 0.94
+			mat_mass_metal.roughness = 0.16
+			mat_laser.albedo_color = Color(1.0, 0.45, 0.0, 0.85)
 	else:
-		# RIG A (Mechanism 1): Matte Electric Tech-Blue Polymer
-		mat_arm_body.albedo_color = Color(0.18, 0.52, 0.90)
-		mat_arm_body.emission_enabled = false
-		mat_arm_body.metallic = 0.06
-		mat_arm_body.roughness = 0.68
+		# RIG A (Mechanism 1): Electric Tech-Blue / Neon Cyan
+		if dark_theme:
+			mat_arm_body.albedo_color = Color(0.08, 0.55, 1.0)
+			mat_arm_body.emission_enabled = true
+			mat_arm_body.emission = Color(0.04, 0.38, 0.85)
+			mat_arm_body.emission_energy_multiplier = 0.38
+			mat_arm_body.metallic = 0.70
+			mat_arm_body.roughness = 0.20
 
-		mat_arm_chamfer.albedo_color = Color(0.08, 0.28, 0.55)
-		mat_arm_chamfer.emission_enabled = false
-		mat_arm_chamfer.metallic = 0.12
-		mat_arm_chamfer.roughness = 0.62
+			mat_arm_chamfer.albedo_color = Color(0.02, 0.14, 0.36)
+			mat_arm_chamfer.metallic = 0.90
+			mat_arm_chamfer.roughness = 0.15
 
-		mat_pin_accent.albedo_color = Color(0.35, 0.75, 1.0)
-		mat_pin_accent.emission_enabled = false
-		mat_pin_accent.metallic = 0.20
-		mat_pin_accent.roughness = 0.55
+			mat_pin_accent.albedo_color = Color(0.35, 0.88, 1.0)
+			mat_pin_accent.emission_enabled = true
+			mat_pin_accent.emission = Color(0.35, 0.88, 1.0)
+			mat_pin_accent.emission_energy_multiplier = 0.5
+			mat_pin_accent.metallic = 0.95
+			mat_pin_accent.roughness = 0.12
 
-		mat_mass_metal.albedo_color = Color(0.32, 0.35, 0.38) # Matte Slate Gray
-		mat_mass_metal.emission_enabled = false
-		mat_mass_metal.metallic = 0.22
-		mat_mass_metal.roughness = 0.65
-		mat_laser.albedo_color = Color(0.15, 0.60, 1.0, 0.85)
+			mat_mass_metal.albedo_color = Color(0.88, 0.92, 0.98)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.15
+			mat_laser.albedo_color = Color(0.18, 0.72, 1.0, 0.95)
+		else:
+			mat_arm_body.albedo_color = Color(0.06, 0.45, 0.92)
+			mat_arm_body.emission_enabled = false
+			mat_arm_body.metallic = 0.58
+			mat_arm_body.roughness = 0.26
 
-	# Shared hardware materials (Matte finish - zero low-quality specular artifacts)
+			mat_arm_chamfer.albedo_color = Color(0.03, 0.22, 0.54)
+			mat_arm_chamfer.metallic = 0.85
+			mat_arm_chamfer.roughness = 0.22
+
+			mat_pin_accent.albedo_color = Color(0.30, 0.80, 1.0)
+			mat_pin_accent.emission_enabled = false
+			mat_pin_accent.metallic = 0.90
+			mat_pin_accent.roughness = 0.16
+
+			mat_mass_metal.albedo_color = Color(0.86, 0.88, 0.92)
+			mat_mass_metal.metallic = 0.95
+			mat_mass_metal.roughness = 0.18
+			mat_laser.albedo_color = Color(0.0, 0.443, 0.89, 0.85)
+
+	# Shared hardware materials
 	mat_pin_steel = StandardMaterial3D.new()
-	mat_pin_steel.albedo_color = Color(0.38, 0.40, 0.44)
-	mat_pin_steel.metallic = 0.30
-	mat_pin_steel.roughness = 0.55
+	mat_pin_steel.albedo_color = Color(0.32, 0.34, 0.38)
+	mat_pin_steel.metallic = 0.98
+	mat_pin_steel.roughness = 0.15
 
 	mat_joint_brass = StandardMaterial3D.new()
-	mat_joint_brass.albedo_color = Color(0.75, 0.65, 0.38)
-	mat_joint_brass.metallic = 0.30
-	mat_joint_brass.roughness = 0.52
+	mat_joint_brass.albedo_color = Color(0.92, 0.76, 0.38)
+	mat_joint_brass.metallic = 0.90
+	mat_joint_brass.roughness = 0.22
 
 	mat_spring_chrome = StandardMaterial3D.new()
-	mat_spring_chrome.albedo_color = Color(0.46, 0.48, 0.52) # Matte Industrial Spring Steel
-	mat_spring_chrome.metallic = 0.28
-	mat_spring_chrome.roughness = 0.58
+	mat_spring_chrome.albedo_color = Color(0.95, 0.96, 0.98)
+	mat_spring_chrome.metallic = 0.98
+	mat_spring_chrome.roughness = 0.12
 
 
 func _build_rig_hierarchy() -> void:
