@@ -44,7 +44,11 @@ var btn_formulas: Button
 var btn_reset_cam: Button
 var btn_follow_cam: Button
 var is_follow_rig_cam: bool = false
-var btn_slowmo: Button
+var btn_play_pause: Button
+var slider_speed: HSlider
+var lbl_speed_val: Label
+var is_sim_paused: bool = false
+var current_sim_speed: float = 1.0
 var btn_lasers: Button
 var btn_theme_toggle: Button
 var btn_focus_toggle: Button
@@ -187,7 +191,6 @@ var ratio_bar_b: ProgressBar
 var telemetry_a: Dictionary = {}
 var telemetry_c: Dictionary = {}
 var telemetry_b: Dictionary = {}
-var is_slow_motion: bool = false
 var lasers_enabled: bool = true
 var ui_timer: float = 0.0
 
@@ -265,6 +268,33 @@ func _process(delta: float) -> void:
 		_update_ui_telemetry()
 	if inspected_rig != null and is_instance_valid(inspected_rig):
 		_update_force_visualizer()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var k := event as InputEventKey
+		if k.pressed and not k.echo and k.keycode == KEY_SPACE:
+			_toggle_sim_pause()
+			get_viewport().set_input_as_handled()
+
+
+func _toggle_sim_pause() -> void:
+	is_sim_paused = not is_sim_paused
+	var text_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+	if is_sim_paused:
+		Engine.time_scale = 0.0
+		if btn_play_pause != null:
+			btn_play_pause.set_meta("icon_name", "play")
+			btn_play_pause.icon = _get_svg_icon("play", text_col, Vector2i(14, 14))
+		if lbl_speed_val != null:
+			lbl_speed_val.text = "⏸ Paused"
+	else:
+		Engine.time_scale = current_sim_speed
+		if btn_play_pause != null:
+			btn_play_pause.set_meta("icon_name", "pause")
+			btn_play_pause.icon = _get_svg_icon("pause", text_col, Vector2i(14, 14))
+		if lbl_speed_val != null:
+			lbl_speed_val.text = "%.2f×" % current_sim_speed
 
 
 func _setup_pure_light_studio() -> void:
@@ -556,15 +586,51 @@ func _build_liquid_glass_ui() -> void:
 	)
 	header_box.add_child(btn_follow_cam)
 
-	btn_slowmo = _create_liquid_button("Slow Motion", "slowmo")
-	btn_slowmo.custom_minimum_size = Vector2(92, 30)
-	btn_slowmo.toggle_mode = true
-	btn_slowmo.toggled.connect(func(toggled_on: bool):
-		is_slow_motion = toggled_on
-		Engine.time_scale = 0.3 if is_slow_motion else 1.0
-		btn_slowmo.text = "Normal Speed" if is_slow_motion else "Slow Motion"
+	# Compact Speed & Pause Control Capsule (Variant B)
+	var speed_box := HBoxContainer.new()
+	speed_box.name = "SpeedControlCapsule"
+	speed_box.add_theme_constant_override("separation", 6)
+	speed_box.alignment = BoxContainer.ALIGNMENT_CENTER
+
+	btn_play_pause = _create_liquid_button("", "pause")
+	btn_play_pause.custom_minimum_size = Vector2(34, 30)
+	btn_play_pause.tooltip_text = "Pause / Resume Simulation (Space)"
+	btn_play_pause.pressed.connect(func():
+		_toggle_sim_pause()
 	)
-	header_box.add_child(btn_slowmo)
+	speed_box.add_child(btn_play_pause)
+
+	slider_speed = HSlider.new()
+	slider_speed.custom_minimum_size = Vector2(75, 18)
+	slider_speed.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	slider_speed.min_value = 0.05
+	slider_speed.max_value = 2.00
+	slider_speed.step = 0.05
+	slider_speed.value = 1.00
+	slider_speed.tooltip_text = "Simulation Speed (0.05× - 2.00×)"
+	slider_speed.value_changed.connect(func(val: float):
+		current_sim_speed = val
+		if not is_sim_paused:
+			Engine.time_scale = current_sim_speed
+			lbl_speed_val.text = "%.2f×" % current_sim_speed
+		else:
+			lbl_speed_val.text = "⏸ %.2f×" % current_sim_speed
+	)
+	_style_tech_slider(slider_speed)
+	speed_box.add_child(slider_speed)
+
+	lbl_speed_val = Label.new()
+	lbl_speed_val.text = "1.00×"
+	lbl_speed_val.add_theme_font_size_override("font_size", 11)
+	lbl_speed_val.custom_minimum_size = Vector2(38, 30)
+	lbl_speed_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	lbl_speed_val.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var text_col_val: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+	lbl_speed_val.add_theme_color_override("font_color", text_col_val)
+	theme_labels_primary.append(lbl_speed_val)
+	speed_box.add_child(lbl_speed_val)
+
+	header_box.add_child(speed_box)
 
 	btn_lasers = _create_liquid_button("Hide Lasers", "lasers")
 	btn_lasers.custom_minimum_size = Vector2(92, 30)
@@ -2080,6 +2146,10 @@ func _get_svg_template(name: String) -> String:
 			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='8' cy='8' r='5' stroke='%COLOR%' stroke-width='1.5' fill='none'/><circle cx='8' cy='8' r='2' fill='%COLOR%'/><line x1='8' y1='1' x2='8' y2='4' stroke='%COLOR%' stroke-width='1.5'/><line x1='8' y1='12' x2='8' y2='15' stroke='%COLOR%' stroke-width='1.5'/><line x1='1' y1='8' x2='4' y2='8' stroke='%COLOR%' stroke-width='1.5'/><line x1='12' y1='8' x2='15' y2='8' stroke='%COLOR%' stroke-width='1.5'/></svg>"
 		"slowmo":
 			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' stroke='%COLOR%' stroke-width='1.5' fill='none'/><polyline points='8,4.5 8,8 10.5,9.5' stroke='%COLOR%' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>"
+		"pause":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><rect x='3.5' y='2.5' width='3.2' height='11' rx='1' fill='%COLOR%'/><rect x='9.3' y='2.5' width='3.2' height='11' rx='1' fill='%COLOR%'/></svg>"
+		"play":
+			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polygon points='4.5,2.5 13.5,8 4.5,13.5' fill='%COLOR%'/></svg>"
 		"lasers":
 			return "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><line x1='2' y1='8' x2='14' y2='8' stroke='%COLOR%' stroke-width='2' stroke-dasharray='3,1.5'/><circle cx='2' cy='8' r='2' fill='%COLOR%'/><circle cx='14' cy='8' r='2' fill='%COLOR%'/></svg>"
 		"moon":
@@ -3277,7 +3347,7 @@ func _refresh_all_button_icons(is_dark: bool) -> void:
 	var col: Color = Color(0.92, 0.94, 0.98) if is_dark else Color(0.114, 0.114, 0.122)
 	var blue_accent := Color(0.0, 0.443, 0.89)
 	var all_btns: Array = [
-		btn_formulas, btn_reset_cam, btn_follow_cam, btn_slowmo, btn_lasers,
+		btn_formulas, btn_reset_cam, btn_follow_cam, btn_play_pause, btn_lasers,
 		btn_theme_toggle, btn_focus_toggle, btn_restore_ui, btn_tab_telemetry,
 		btn_tab_joint, btn_deselect_pin_ref, btn_toggle_vector_mode,
 		btn_toggle_force_dir, btn_toggle_advanced_stress, btn_graph_expand,
