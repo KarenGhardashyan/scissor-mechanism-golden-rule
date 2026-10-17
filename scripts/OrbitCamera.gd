@@ -39,7 +39,6 @@ var touch_start_pos: Vector2 = Vector2.ZERO
 var touch_start_time: int = 0
 var prev_pinch_dist: float = 0.0
 var prev_touch_mid: Vector2 = Vector2.ZERO
-var prev_touch_angle: float = 0.0
 var touch_dragged: bool = false
 var touch_blocked_top_y: float = 0.0
 var touch_blocked_bottom_y: float = 0.0
@@ -77,11 +76,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				touch_dragged = false
 			elif touch_points.size() == 2:
 				var keys = touch_points.keys()
-				var p0: Vector2 = touch_points[keys[0]]
-				var p1: Vector2 = touch_points[keys[1]]
+				var k0: int = mini(int(keys[0]), int(keys[1]))
+				var k1: int = maxi(int(keys[0]), int(keys[1]))
+				var p0: Vector2 = touch_points[k0]
+				var p1: Vector2 = touch_points[k1]
 				prev_pinch_dist = p0.distance_to(p1)
 				prev_touch_mid = (p0 + p1) * 0.5
-				prev_touch_angle = (p1 - p0).angle()
+				touch_dragged = true
 		else:
 			if touch_points.has(st.index):
 				if st.index == 0 and touch_points.size() == 1 and not touch_dragged:
@@ -124,39 +125,27 @@ func _unhandled_input(event: InputEvent) -> void:
 			target_pitch = clampf(target_pitch - sd.relative.y * sens, deg_to_rad(-40.0), deg_to_rad(60.0))
 		elif touch_points.size() >= 2:
 			var keys = touch_points.keys()
-			var p0: Vector2 = touch_points[keys[0]]
-			var p1: Vector2 = touch_points[keys[1]]
+			var k0: int = mini(int(keys[0]), int(keys[1]))
+			var k1: int = maxi(int(keys[0]), int(keys[1]))
+			var p0: Vector2 = touch_points[k0]
+			var p1: Vector2 = touch_points[k1]
 			var curr_dist: float = p0.distance_to(p1)
 			var curr_mid: Vector2 = (p0 + p1) * 0.5
-			var curr_angle: float = (p1 - p0).angle()
 
-			# 2.1. Pinch-to-Zoom (delta distance between 2 fingers)
+			# 2.1. Pinch-to-Zoom (smooth distance delta between 2 fingers)
 			if prev_pinch_dist > 5.0 and curr_dist > 5.0:
 				var pinch_delta: float = curr_dist - prev_pinch_dist
-				target_distance = clampf(target_distance - pinch_delta * 0.015, min_distance, max_distance)
+				target_distance = clampf(target_distance - pinch_delta * 0.010, min_distance, max_distance)
 
-			# 2.2. Two-Finger Pan (delta midpoint of 2 fingers)
+			# 2.2. Two-Finger Smooth Orbit (changing perspective with two fingers)
 			if prev_touch_mid != Vector2.ZERO:
 				var mid_delta: Vector2 = curr_mid - prev_touch_mid
-				var right_vec := global_transform.basis.x
-				var up_vec := global_transform.basis.y
-				current_target -= right_vec * (mid_delta.x * pan_speed * 0.70)
-				current_target += up_vec * (mid_delta.y * pan_speed * 0.70)
-
-			# 2.3. Two-Finger Twist Rotation (Yaw angle between fingers)
-			if prev_pinch_dist > 15.0:
-				var angle_diff: float = wrapf(curr_angle - prev_touch_angle, -PI, PI)
-				if absf(angle_diff) > 0.008:
-					target_yaw -= angle_diff * 0.85
-
-			# 2.4. Hard Safety Bounds Clamp: camera target can NEVER derail or leave rigs
-			current_target.x = clampf(current_target.x, -2.5, 2.5)
-			current_target.y = clampf(current_target.y, 0.8, 3.2)
-			current_target.z = 0.0
+				var sens2: float = orbit_speed * 0.85
+				target_yaw -= mid_delta.x * sens2
+				target_pitch = clampf(target_pitch - mid_delta.y * sens2, deg_to_rad(-40.0), deg_to_rad(60.0))
 
 			prev_pinch_dist = curr_dist
 			prev_touch_mid = curr_mid
-			prev_touch_angle = curr_angle
 
 	# 3. Desktop Mouse Button Events
 	elif event is InputEventMouseButton:
@@ -232,8 +221,8 @@ func reset_camera() -> void:
 	target_yaw = 0.0
 	target_pitch = deg_to_rad(-5.0)
 	if is_mobile_mode:
-		target_distance = 1.85
-		current_target = Vector3(-1.65, 1.55, 0.0)
+		target_distance = 3.60
+		current_target = Vector3(-1.65, 1.85, 0.0)
 	else:
 		target_distance = default_distance
 		current_target = default_target
@@ -256,23 +245,23 @@ func get_current_distance() -> float:
 func focus_rig(rig_id: String) -> void:
 	match rig_id.to_upper():
 		"A":
-			current_target = Vector3(-1.65, 1.55, 0.0) if is_mobile_mode else Vector3(-1.65, 2.05, 0.0)
-			target_distance = 1.85 if is_mobile_mode else 3.6
+			current_target = Vector3(-1.65, 1.85, 0.0) if is_mobile_mode else Vector3(-1.65, 2.05, 0.0)
+			target_distance = 3.60 if is_mobile_mode else 3.60
 			target_yaw = deg_to_rad(3.0)
 			target_pitch = deg_to_rad(-4.0)
 		"C":
-			current_target = Vector3(0.0, 1.48, 0.0) if is_mobile_mode else Vector3(0.0, 1.95, 0.0)
-			target_distance = 1.95 if is_mobile_mode else 3.6
+			current_target = Vector3(0.0, 1.80, 0.0) if is_mobile_mode else Vector3(0.0, 1.95, 0.0)
+			target_distance = 3.60 if is_mobile_mode else 3.60
 			target_yaw = 0.0
 			target_pitch = deg_to_rad(-4.0)
 		"B":
-			current_target = Vector3(1.65, 1.40, 0.0) if is_mobile_mode else Vector3(1.65, 1.85, 0.0)
-			target_distance = 2.15 if is_mobile_mode else 3.8
+			current_target = Vector3(1.65, 1.70, 0.0) if is_mobile_mode else Vector3(1.65, 1.85, 0.0)
+			target_distance = 3.80 if is_mobile_mode else 3.80
 			target_yaw = deg_to_rad(-3.0)
 			target_pitch = deg_to_rad(-4.0)
 		_: # "ALL"
-			current_target = Vector3(0.0, 1.55, 0.0) if is_mobile_mode else default_target
-			target_distance = 5.20 if is_mobile_mode else default_distance
+			current_target = Vector3(-0.20, 1.65, 0.0) if is_mobile_mode else default_target
+			target_distance = 7.80 if is_mobile_mode else default_distance
 			target_yaw = 0.0
 			target_pitch = deg_to_rad(-5.0)
 
@@ -281,14 +270,14 @@ func set_mobile_mode(is_mobile: bool) -> void:
 	is_mobile_mode = is_mobile
 	if is_mobile:
 		keep_aspect = Camera3D.KEEP_HEIGHT
-		fov = 46.0
-		default_distance = 5.20
-		target_distance = 1.85
-		default_target = Vector3(0.0, 1.55, 0.0)
-		target_point = Vector3(-1.65, 1.55, 0.0)
-		current_target = Vector3(-1.65, 1.55, 0.0)
-		min_distance = 0.75
-		max_distance = 7.5
+		fov = 54.0
+		default_distance = 7.80
+		target_distance = 3.60
+		default_target = Vector3(-0.20, 1.65, 0.0)
+		target_point = Vector3(-1.65, 1.85, 0.0)
+		current_target = Vector3(-1.65, 1.85, 0.0)
+		min_distance = 1.8
+		max_distance = 12.0
 	else:
 		keep_aspect = Camera3D.KEEP_HEIGHT
 		fov = 54.0

@@ -3438,9 +3438,9 @@ func _refresh_all_button_icons(is_dark: bool) -> void:
 			var sz := Vector2i(14, 14) if btn.text.is_empty() else Vector2i(11, 11)
 			if is_mobile_layout:
 				if btn in mob_icon_only_btns:
-					sz = Vector2i(28, 28)
+					sz = Vector2i(20, 20)
 				elif btn in mob_text_btns:
-					sz = Vector2i(22, 22)
+					sz = Vector2i(16, 16)
 			btn.icon = _get_svg_icon(iname, c, sz)
 			btn.expand_icon = false
 	_update_stiction_button_ui()
@@ -3545,12 +3545,12 @@ func _update_mobile_rig_carousel_styles() -> void:
 func _get_sheet_height_for_state(state: MobileSheetState, vp_h: float) -> float:
 	match state:
 		MobileSheetState.FULL:
-			return clampf(vp_h - 84.0, 560.0, 1100.0)
+			return clampf(vp_h - 68.0, 480.0, 940.0)
 		MobileSheetState.HALF:
-			return clampf(vp_h * 0.65, 520.0, 850.0)
+			return clampf(vp_h * 0.52, 380.0, 620.0)
 		_: # PEEK
-			var pin_h: float = 56.0 if (mob_pin_chip != null and mob_pin_chip.visible) else 0.0
-			return 124.0 + pin_h
+			var pin_h: float = 42.0 if (mob_pin_chip != null and mob_pin_chip.visible) else 0.0
+			return 92.0 + pin_h
 
 
 func _set_mobile_sheet_state(state: MobileSheetState, animate: bool = true) -> void:
@@ -3676,16 +3676,14 @@ func _scale_button_stylebox(btn: Button, radius: int) -> void:
 			sb.corner_radius_bottom_right = radius
 
 
-func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
+func _apply_mobile_ui_scale(_scale: float, vp_size: Vector2) -> void:
 	# 1. Top Bar
 	if mobile_top_bar != null:
-		var top_bar_h: float = 70.0 * S
-		var top_bar_pad_x: float = 8.0 * S
-		var top_bar_pad_y: float = 8.0 * S
-		mobile_top_bar.offset_left = top_bar_pad_x
-		mobile_top_bar.offset_right = -top_bar_pad_x
-		mobile_top_bar.offset_top = top_bar_pad_y
-		mobile_top_bar.offset_bottom = top_bar_pad_y + top_bar_h
+		var top_bar_h: float = 54.0
+		mobile_top_bar.offset_left = 8.0
+		mobile_top_bar.offset_right = -8.0
+		mobile_top_bar.offset_top = 8.0
+		mobile_top_bar.offset_bottom = 8.0 + top_bar_h
 
 		var sb_top: StyleBoxFlat = mobile_top_bar.get_theme_stylebox("panel") as StyleBoxFlat
 		if sb_top:
@@ -3696,104 +3694,105 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 			sb_top.corner_radius_bottom_right = rad
 
 		if top_margin_ref != null:
-			top_margin_ref.add_theme_constant_override("margin_left", int(6 * S))
-			top_margin_ref.add_theme_constant_override("margin_right", int(6 * S))
-			top_margin_ref.add_theme_constant_override("margin_top", int(4 * S))
-			top_margin_ref.add_theme_constant_override("margin_bottom", int(4 * S))
+			top_margin_ref.add_theme_constant_override("margin_left", 6)
+			top_margin_ref.add_theme_constant_override("margin_right", 6)
+			top_margin_ref.add_theme_constant_override("margin_top", 4)
+			top_margin_ref.add_theme_constant_override("margin_bottom", 4)
 
 		if top_hbox_ref != null:
-			top_hbox_ref.add_theme_constant_override("separation", int(4 * S))
+			top_hbox_ref.add_theme_constant_override("separation", 4)
 
-		var btn_h: float = 56.0 * S
-		var btn_rad: int = int(16 * S)
+		var btn_h: float = 44.0
+		var btn_rad: int = 12
 
 		if btn_focus_all != null:
 			btn_focus_all.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			btn_focus_all.custom_minimum_size = Vector2(46.0 * S, btn_h)
-			btn_focus_all.add_theme_font_size_override("font_size", int(16 * S))
+			btn_focus_all.custom_minimum_size = Vector2(0, btn_h)
+			btn_focus_all.add_theme_font_size_override("font_size", 13)
 			_scale_button_stylebox(btn_focus_all, btn_rad)
 
 		for b in [btn_focus_a, btn_focus_c, btn_focus_b]:
 			if b != null:
 				b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				b.custom_minimum_size = Vector2(56.0 * S, btn_h)
-				b.add_theme_font_size_override("font_size", int(17 * S))
+				b.custom_minimum_size = Vector2(0, btn_h)
+				b.add_theme_font_size_override("font_size", 13)
 				_scale_button_stylebox(b, btn_rad)
 
 		for b in [btn_mob_formulas, btn_mob_theme, btn_mob_reset]:
 			if b != null:
 				b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-				b.custom_minimum_size = Vector2(50.0 * S, btn_h)
+				b.custom_minimum_size = Vector2(40.0, btn_h)
 				_scale_button_stylebox(b, btn_rad)
 
 	# 2. Interactive Bottom Sheet
 	if mobile_bottom_sheet != null:
-		var pad_x: float = 8.0 * S
+		var pad_x: float = 8.0
 		mobile_bottom_sheet.offset_left = pad_x
 		mobile_bottom_sheet.offset_right = -pad_x
-		mobile_bottom_sheet.offset_bottom = -8.0 * S
+		mobile_bottom_sheet.offset_bottom = -8.0
 		var sheet_h: float = _get_sheet_height_for_state(current_sheet_state, vp_size.y)
 		mobile_bottom_sheet.offset_top = -sheet_h
 
 		var sb_sheet: StyleBoxFlat = mobile_bottom_sheet.get_theme_stylebox("panel") as StyleBoxFlat
 		if sb_sheet:
-			var s_rad: int = int(24 * S)
+			var s_rad: int = 20
 			sb_sheet.corner_radius_top_left = s_rad
 			sb_sheet.corner_radius_top_right = s_rad
 			sb_sheet.corner_radius_bottom_left = s_rad
 			sb_sheet.corner_radius_bottom_right = s_rad
 
-		var peek_btn_h: float = 56.0 * S
-		var peek_rad: int = int(16 * S)
+		var peek_btn_h: float = 46.0
+		var peek_rad: int = 12
 
 		if sheet_handle_btn != null:
-			sheet_handle_btn.custom_minimum_size = Vector2(0, 20.0 * S)
+			sheet_handle_btn.custom_minimum_size = Vector2(0, 16.0)
 		if sheet_handle_pill != null:
-			sheet_handle_pill.custom_minimum_size = Vector2(64.0 * S, 7.0 * S)
+			sheet_handle_pill.custom_minimum_size = Vector2(48.0, 5.0)
 
 		if btn_mob_play_pause != null:
-			btn_mob_play_pause.custom_minimum_size = Vector2(56.0 * S, peek_btn_h)
+			btn_mob_play_pause.custom_minimum_size = Vector2(46.0, peek_btn_h)
 			_scale_button_stylebox(btn_mob_play_pause, peek_rad)
 
 		if btn_mob_speed != null:
-			btn_mob_speed.custom_minimum_size = Vector2(74.0 * S, peek_btn_h)
-			btn_mob_speed.add_theme_font_size_override("font_size", int(16 * S))
+			btn_mob_speed.custom_minimum_size = Vector2(60.0, peek_btn_h)
+			btn_mob_speed.add_theme_font_size_override("font_size", 13)
 			_scale_button_stylebox(btn_mob_speed, peek_rad)
 
 		if btn_mob_mass_dec != null:
-			btn_mob_mass_dec.custom_minimum_size = Vector2(54.0 * S, peek_btn_h)
+			btn_mob_mass_dec.custom_minimum_size = Vector2(44.0, peek_btn_h)
 			_scale_button_stylebox(btn_mob_mass_dec, peek_rad)
 
 		if btn_mob_mass_inc != null:
-			btn_mob_mass_inc.custom_minimum_size = Vector2(54.0 * S, peek_btn_h)
+			btn_mob_mass_inc.custom_minimum_size = Vector2(44.0, peek_btn_h)
 			_scale_button_stylebox(btn_mob_mass_inc, peek_rad)
 
 		if lbl_mob_mass_val != null:
-			lbl_mob_mass_val.add_theme_font_size_override("font_size", int(18 * S))
-			lbl_mob_mass_val.custom_minimum_size = Vector2(84.0 * S, peek_btn_h)
+			lbl_mob_mass_val.add_theme_font_size_override("font_size", 14)
+			lbl_mob_mass_val.custom_minimum_size = Vector2(64.0, peek_btn_h)
 
 		if btn_mob_expand != null:
-			btn_mob_expand.custom_minimum_size = Vector2(54.0 * S, peek_btn_h)
+			btn_mob_expand.custom_minimum_size = Vector2(44.0, peek_btn_h)
 			_scale_button_stylebox(btn_mob_expand, peek_rad)
 
 		if lbl_mob_pin_summary != null:
-			lbl_mob_pin_summary.add_theme_font_size_override("font_size", int(16 * S))
+			lbl_mob_pin_summary.add_theme_font_size_override("font_size", 13)
 
 		if btn_mob_pin_inspect != null:
-			btn_mob_pin_inspect.custom_minimum_size = Vector2(104.0 * S, 44.0 * S)
-			btn_mob_pin_inspect.add_theme_font_size_override("font_size", int(14 * S))
-			_scale_button_stylebox(btn_mob_pin_inspect, int(13 * S))
+			btn_mob_pin_inspect.custom_minimum_size = Vector2(86.0, 36.0)
+			btn_mob_pin_inspect.add_theme_font_size_override("font_size", 12)
+			_scale_button_stylebox(btn_mob_pin_inspect, 12)
 
 		if btn_mob_pin_close != null:
-			btn_mob_pin_close.custom_minimum_size = Vector2(44.0 * S, 44.0 * S)
-			_scale_button_stylebox(btn_mob_pin_close, int(13 * S))
+			btn_mob_pin_close.custom_minimum_size = Vector2(36.0, 36.0)
+			_scale_button_stylebox(btn_mob_pin_close, 12)
 
-		var tab_h: float = 54.0 * S
+		var tab_h: float = 44.0
 		for tab_btn in [btn_mob_tab_0, btn_mob_tab_1, btn_mob_tab_2, btn_mob_tab_3]:
 			if tab_btn != null:
+				tab_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				tab_btn.custom_minimum_size = Vector2(0, tab_h)
-				tab_btn.add_theme_font_size_override("font_size", int(16 * S))
-				_scale_button_stylebox(tab_btn, int(14 * S))
+				tab_btn.add_theme_font_size_override("font_size", 13)
+				_scale_button_stylebox(tab_btn, 12)
 
 	# 3. Mobile Screen Zoom Controller - hidden on mobile to avoid blocking scissor mechanism
 	if mobile_zoom_controls != null:
@@ -3802,117 +3801,117 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 	# 4. Content inside Tab 0: Controls
 	for lbl in left_vbox_titles:
 		if lbl != null:
-			lbl.add_theme_font_size_override("font_size", int(19 * S))
+			lbl.add_theme_font_size_override("font_size", 15)
 
 	for lbl in left_vbox_val_labels:
 		if lbl != null:
-			lbl.add_theme_font_size_override("font_size", int(18 * S))
+			lbl.add_theme_font_size_override("font_size", 14)
 
-	var knob_large := _get_svg_icon("slider_knob", Color.WHITE, Vector2i(int(34 * S), int(34 * S)))
+	var knob_icon := _get_svg_icon("slider_knob", Color.WHITE, Vector2i(24, 24))
 
 	for slider in [mass_slider, stiffness_slider, efficiency_slider, friction_slider, gravity_slider, damping_slider]:
 		if slider != null:
-			slider.custom_minimum_size = Vector2(0, 60.0 * S)
+			slider.custom_minimum_size = Vector2(0, 44.0)
 			var tr: StyleBoxFlat = slider.get_theme_stylebox("slider") as StyleBoxFlat
 			if tr:
-				tr.content_margin_top = int(8 * S)
-				tr.content_margin_bottom = int(8 * S)
-				tr.corner_radius_top_left = int(7 * S)
-				tr.corner_radius_top_right = int(7 * S)
-				tr.corner_radius_bottom_left = int(7 * S)
-				tr.corner_radius_bottom_right = int(7 * S)
+				tr.content_margin_top = 5
+				tr.content_margin_bottom = 5
+				tr.corner_radius_top_left = 5
+				tr.corner_radius_top_right = 5
+				tr.corner_radius_bottom_left = 5
+				tr.corner_radius_bottom_right = 5
 			var ga: StyleBoxFlat = slider.get_theme_stylebox("grabber_area") as StyleBoxFlat
 			if ga:
-				ga.content_margin_top = int(8 * S)
-				ga.content_margin_bottom = int(8 * S)
-				ga.corner_radius_top_left = int(7 * S)
-				ga.corner_radius_bottom_left = int(7 * S)
-			if knob_large != null:
-				slider.add_theme_icon_override("grabber", knob_large)
-				slider.add_theme_icon_override("grabber_highlight", knob_large)
-				slider.add_theme_icon_override("grabber_disabled", knob_large)
+				ga.content_margin_top = 5
+				ga.content_margin_bottom = 5
+				ga.corner_radius_top_left = 5
+				ga.corner_radius_bottom_left = 5
+			if knob_icon != null:
+				slider.add_theme_icon_override("grabber", knob_icon)
+				slider.add_theme_icon_override("grabber_highlight", knob_icon)
+				slider.add_theme_icon_override("grabber_disabled", knob_icon)
 
 	for btn in friction_preset_buttons:
 		if btn != null:
-			btn.custom_minimum_size = Vector2(0, 52.0 * S)
-			btn.add_theme_font_size_override("font_size", int(15 * S))
-			_scale_button_stylebox(btn, int(13 * S))
+			btn.custom_minimum_size = Vector2(0, 42.0)
+			btn.add_theme_font_size_override("font_size", 13)
+			_scale_button_stylebox(btn, 12)
 
 	if btn_toggle_stiction != null:
-		btn_toggle_stiction.custom_minimum_size = Vector2(0, 52.0 * S)
-		btn_toggle_stiction.add_theme_font_size_override("font_size", int(15 * S))
-		_scale_button_stylebox(btn_toggle_stiction, int(13 * S))
+		btn_toggle_stiction.custom_minimum_size = Vector2(0, 42.0)
+		btn_toggle_stiction.add_theme_font_size_override("font_size", 13)
+		_scale_button_stylebox(btn_toggle_stiction, 12)
 
 	if planet_grid_ref != null:
 		planet_grid_ref.columns = 2
 
 	for btn in planet_preset_buttons:
 		if btn != null:
-			btn.custom_minimum_size = Vector2(0, 52.0 * S)
-			btn.add_theme_font_size_override("font_size", int(15 * S))
-			_scale_button_stylebox(btn, int(13 * S))
+			btn.custom_minimum_size = Vector2(0, 42.0)
+			btn.add_theme_font_size_override("font_size", 13)
+			_scale_button_stylebox(btn, 12)
 
 	for chk in theme_checkboxes:
 		if chk != null:
-			chk.add_theme_font_size_override("font_size", int(16 * S))
+			chk.add_theme_font_size_override("font_size", 13)
 
 	if btn_dynamic_jolt != null:
-		btn_dynamic_jolt.custom_minimum_size = Vector2(0, 58.0 * S)
-		btn_dynamic_jolt.add_theme_font_size_override("font_size", int(18 * S))
-		_scale_button_stylebox(btn_dynamic_jolt, int(15 * S))
+		btn_dynamic_jolt.custom_minimum_size = Vector2(0, 46.0)
+		btn_dynamic_jolt.add_theme_font_size_override("font_size", 14)
+		_scale_button_stylebox(btn_dynamic_jolt, 12)
 
 	# 5. Content inside Tab 1: Telemetry
 	for lbl in telem_table_labels:
 		if lbl != null:
-			lbl.add_theme_font_size_override("font_size", int(16 * S))
+			lbl.add_theme_font_size_override("font_size", 13)
 
 	for lbl in telem_bar_labels:
 		if lbl != null:
-			lbl.add_theme_font_size_override("font_size", int(15 * S))
+			lbl.add_theme_font_size_override("font_size", 12)
 
 	for pbar in [ratio_bar_a, ratio_bar_c, ratio_bar_b]:
 		if pbar != null:
-			pbar.custom_minimum_size = Vector2(0, 36.0 * S)
-			pbar.add_theme_font_size_override("font_size", int(15 * S))
+			pbar.custom_minimum_size = Vector2(0, 28.0)
+			pbar.add_theme_font_size_override("font_size", 12)
 
 	# 6. Content inside Tab 2: Joint Inspector
 	if joint_card_title != null:
-		joint_card_title.add_theme_font_size_override("font_size", int(20 * S))
+		joint_card_title.add_theme_font_size_override("font_size", 16)
 	if joint_card_desc != null:
-		joint_card_desc.add_theme_font_size_override("font_size", int(15 * S))
+		joint_card_desc.add_theme_font_size_override("font_size", 13)
 	if btn_deselect_pin_ref != null:
-		btn_deselect_pin_ref.custom_minimum_size = Vector2(104.0 * S, 48.0 * S)
-		btn_deselect_pin_ref.add_theme_font_size_override("font_size", int(15 * S))
-		_scale_button_stylebox(btn_deselect_pin_ref, int(13 * S))
+		btn_deselect_pin_ref.custom_minimum_size = Vector2(90.0, 40.0)
+		btn_deselect_pin_ref.add_theme_font_size_override("font_size", 13)
+		_scale_button_stylebox(btn_deselect_pin_ref, 12)
 
 	for lbl in joint_view_labels:
 		if lbl != null:
-			lbl.add_theme_font_size_override("font_size", int(16 * S))
+			lbl.add_theme_font_size_override("font_size", 13)
 
 	if joint_note_lbl_ref != null:
-		joint_note_lbl_ref.add_theme_font_size_override("font_size", int(14 * S))
+		joint_note_lbl_ref.add_theme_font_size_override("font_size", 12)
 	if quick_pins_title_lbl_ref != null:
-		quick_pins_title_lbl_ref.add_theme_font_size_override("font_size", int(15 * S))
+		quick_pins_title_lbl_ref.add_theme_font_size_override("font_size", 13)
 
 	for btn in quick_pin_buttons:
 		if btn != null:
-			btn.custom_minimum_size = Vector2(0, 50.0 * S)
-			btn.add_theme_font_size_override("font_size", int(15 * S))
-			_scale_button_stylebox(btn, int(13 * S))
+			btn.custom_minimum_size = Vector2(0, 42.0)
+			btn.add_theme_font_size_override("font_size", 12)
+			_scale_button_stylebox(btn, 12)
 
 	# 7. Content inside Tab 3: Live Graph
 	if graph_card_title_ref != null:
-		graph_card_title_ref.add_theme_font_size_override("font_size", int(17 * S))
+		graph_card_title_ref.add_theme_font_size_override("font_size", 15)
 	if btn_graph_theme != null:
-		btn_graph_theme.custom_minimum_size = Vector2(126.0 * S, 48.0 * S)
-		btn_graph_theme.add_theme_font_size_override("font_size", int(15 * S))
-		_scale_button_stylebox(btn_graph_theme, int(13 * S))
+		btn_graph_theme.custom_minimum_size = Vector2(110.0, 40.0)
+		btn_graph_theme.add_theme_font_size_override("font_size", 13)
+		_scale_button_stylebox(btn_graph_theme, 12)
 	if btn_graph_expand != null:
 		btn_graph_expand.visible = false
 
 	if live_graph != null:
-		live_graph.custom_minimum_size = Vector2(0, 390.0 * S)
-		live_graph.set_ui_scale(S)
+		live_graph.custom_minimum_size = Vector2(0, 340.0)
+		live_graph.set_ui_scale(1.0)
 
 
 func _restore_desktop_ui_scale() -> void:
