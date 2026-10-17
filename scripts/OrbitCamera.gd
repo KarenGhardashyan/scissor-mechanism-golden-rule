@@ -231,8 +231,12 @@ func _update_transform_immediate() -> void:
 func reset_camera() -> void:
 	target_yaw = 0.0
 	target_pitch = deg_to_rad(-5.0)
-	target_distance = default_distance
-	current_target = default_target
+	if is_mobile_mode:
+		target_distance = 1.85
+		current_target = Vector3(-1.65, 1.55, 0.0)
+	else:
+		target_distance = default_distance
+		current_target = default_target
 
 
 func zoom_in(amount: float = 0.6) -> void:
@@ -252,23 +256,23 @@ func get_current_distance() -> float:
 func focus_rig(rig_id: String) -> void:
 	match rig_id.to_upper():
 		"A":
-			current_target = Vector3(-1.65, 1.62, 0.0) if is_mobile_mode else Vector3(-1.65, 2.05, 0.0)
-			target_distance = 2.25 if is_mobile_mode else 3.6
+			current_target = Vector3(-1.65, 1.55, 0.0) if is_mobile_mode else Vector3(-1.65, 2.05, 0.0)
+			target_distance = 1.85 if is_mobile_mode else 3.6
 			target_yaw = deg_to_rad(3.0)
 			target_pitch = deg_to_rad(-4.0)
 		"C":
-			current_target = Vector3(0.0, 1.55, 0.0) if is_mobile_mode else Vector3(0.0, 1.95, 0.0)
-			target_distance = 2.40 if is_mobile_mode else 3.6
+			current_target = Vector3(0.0, 1.48, 0.0) if is_mobile_mode else Vector3(0.0, 1.95, 0.0)
+			target_distance = 1.95 if is_mobile_mode else 3.6
 			target_yaw = 0.0
 			target_pitch = deg_to_rad(-4.0)
 		"B":
-			current_target = Vector3(1.65, 1.48, 0.0) if is_mobile_mode else Vector3(1.65, 1.85, 0.0)
-			target_distance = 2.55 if is_mobile_mode else 3.8
+			current_target = Vector3(1.65, 1.40, 0.0) if is_mobile_mode else Vector3(1.65, 1.85, 0.0)
+			target_distance = 2.15 if is_mobile_mode else 3.8
 			target_yaw = deg_to_rad(-3.0)
 			target_pitch = deg_to_rad(-4.0)
 		_: # "ALL"
-			current_target = Vector3(0.0, 1.60, 0.0) if is_mobile_mode else default_target
-			target_distance = 5.80 if is_mobile_mode else default_distance
+			current_target = Vector3(0.0, 1.55, 0.0) if is_mobile_mode else default_target
+			target_distance = 5.20 if is_mobile_mode else default_distance
 			target_yaw = 0.0
 			target_pitch = deg_to_rad(-5.0)
 
@@ -277,14 +281,14 @@ func set_mobile_mode(is_mobile: bool) -> void:
 	is_mobile_mode = is_mobile
 	if is_mobile:
 		keep_aspect = Camera3D.KEEP_HEIGHT
-		fov = 48.0
-		default_distance = 5.80
-		target_distance = 2.25
-		default_target = Vector3(0.0, 1.60, 0.0)
-		target_point = Vector3(-1.65, 1.62, 0.0)
-		current_target = Vector3(-1.65, 1.62, 0.0)
-		min_distance = 1.0
-		max_distance = 8.5
+		fov = 46.0
+		default_distance = 5.20
+		target_distance = 1.85
+		default_target = Vector3(0.0, 1.55, 0.0)
+		target_point = Vector3(-1.65, 1.55, 0.0)
+		current_target = Vector3(-1.65, 1.55, 0.0)
+		min_distance = 0.75
+		max_distance = 7.5
 	else:
 		keep_aspect = Camera3D.KEEP_HEIGHT
 		fov = 54.0
