@@ -63,57 +63,61 @@ var btn_tab_joint: Button
 var telemetry_view: VBoxContainer
 var joint_view: VBoxContainer
 
-# Mobile Native Top Bar & Slide-Out Sidebar Architecture
+# Mobile Native Carousel & Interactive Bottom Sheet Architecture (Option 2)
+enum MobileSheetState { PEEK, HALF, FULL }
 var is_mobile_layout: bool = false
+var current_mobile_rig_id: String = "ALL"
+var current_sheet_state: MobileSheetState = MobileSheetState.PEEK
+
 var mobile_top_bar: PanelContainer
-var btn_mobile_menu: Button
 var btn_focus_all: Button
 var btn_focus_a: Button
 var btn_focus_c: Button
 var btn_focus_b: Button
+var btn_mob_formulas: Button
 var btn_mob_theme: Button
 var btn_mob_reset: Button
 
 var backdrop_scrim: ColorRect
-var mobile_sidebar: PanelContainer
-var btn_close_sidebar: Button
+var mobile_bottom_sheet: PanelContainer
+var sheet_handle_btn: Button
+var sheet_handle_pill: Panel
+var sheet_peek_bar: HBoxContainer
+var btn_mob_play_pause: Button
+var btn_mob_speed: Button
+var btn_mob_mass_dec: Button
+var lbl_mob_mass_val: Label
+var btn_mob_mass_inc: Button
+var btn_mob_expand: Button
+
+var mob_pin_chip: HBoxContainer
+var lbl_mob_pin_summary: Label
+var btn_mob_pin_inspect: Button
+var btn_mob_pin_close: Button
+
+var sheet_tabs_bar: HBoxContainer
 var btn_mob_tab_0: Button
 var btn_mob_tab_1: Button
 var btn_mob_tab_2: Button
 var btn_mob_tab_3: Button
+var sheet_content_area: Control
 var mob_scroll_controls: ScrollContainer
 var mob_scroll_telem: ScrollContainer
 var mob_scroll_joint: ScrollContainer
 var mob_scroll_graph: ScrollContainer
 var current_mobile_tab: int = 0
 
-var mobile_pin_card: PanelContainer
-var lbl_mob_pin_summary: Label
-var btn_mob_pin_inspect: Button
-var btn_mob_pin_close: Button
-
 # Header Logo
 var header_logo: TextureRect
 
-# Mobile Screen Zoom (+ / -) & Main Tab Mass Quick Controls
+# Mobile Screen Zoom (+ / -) Controller
 var mobile_zoom_controls: PanelContainer
 var btn_mob_zoom_in: Button
 var btn_mob_zoom_out: Button
 var lbl_mob_zoom_dist: Label
 
-var mobile_mass_panel: PanelContainer
-var lbl_mob_mass_title: Label
-var btn_mob_mass_dec: Button
-var slider_mob_mass: HSlider
-var btn_mob_mass_inc: Button
-var lbl_mob_mass_val: Label
-
-var sb_margin_ref: MarginContainer
-var sb_main_lbl_ref: Label
-var sb_sub_lbl_ref: Label
 var top_margin_ref: MarginContainer
 var top_hbox_ref: HBoxContainer
-var pin_card_margin_ref: MarginContainer
 
 var planet_preset_buttons: Array[Button] = []
 var quick_pin_buttons: Array[Button] = []
@@ -281,20 +285,46 @@ func _unhandled_input(event: InputEvent) -> void:
 func _toggle_sim_pause() -> void:
 	is_sim_paused = not is_sim_paused
 	var text_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+	var icon_name := "play" if is_sim_paused else "pause"
 	if is_sim_paused:
 		Engine.time_scale = 0.0
-		if btn_play_pause != null:
-			btn_play_pause.set_meta("icon_name", "play")
-			btn_play_pause.icon = _get_svg_icon("play", text_col, Vector2i(14, 14))
-		if lbl_speed_val != null:
-			lbl_speed_val.text = "⏸ Paused"
 	else:
 		Engine.time_scale = current_sim_speed
-		if btn_play_pause != null:
-			btn_play_pause.set_meta("icon_name", "pause")
-			btn_play_pause.icon = _get_svg_icon("pause", text_col, Vector2i(14, 14))
-		if lbl_speed_val != null:
-			lbl_speed_val.text = "%.2f×" % current_sim_speed
+
+	if btn_play_pause != null:
+		btn_play_pause.set_meta("icon_name", icon_name)
+		btn_play_pause.icon = _get_svg_icon(icon_name, text_col, Vector2i(14, 14))
+	if btn_mob_play_pause != null:
+		btn_mob_play_pause.set_meta("icon_name", icon_name)
+		btn_mob_play_pause.icon = _get_svg_icon(icon_name, text_col, Vector2i(16, 16))
+
+	_update_speed_ui()
+
+
+func _cycle_mobile_speed() -> void:
+	var speeds: Array[float] = [1.0, 0.5, 0.2, 2.0]
+	var cur_idx: int = -1
+	for i in range(speeds.size()):
+		if absf(speeds[i] - current_sim_speed) < 0.04:
+			cur_idx = i
+			break
+	if cur_idx == -1:
+		cur_idx = 0
+	var next_idx: int = (cur_idx + 1) % speeds.size()
+	current_sim_speed = speeds[next_idx]
+	if not is_sim_paused:
+		Engine.time_scale = current_sim_speed
+	if slider_speed != null:
+		slider_speed.value = current_sim_speed
+	_update_speed_ui()
+
+
+func _update_speed_ui() -> void:
+	var speed_str := "%.2f×" % current_sim_speed
+	if lbl_speed_val != null:
+		lbl_speed_val.text = ("⏸ " if is_sim_paused else "") + speed_str
+	if btn_mob_speed != null:
+		btn_mob_speed.text = ("⏸ " if is_sim_paused else "") + speed_str
 
 
 func _setup_pure_light_studio() -> void:
@@ -499,6 +529,7 @@ func _setup_rigs() -> void:
 	rig_c.pin_clicked.connect(_on_pin_clicked)
 	rig_b.pin_clicked.connect(_on_pin_clicked)
 	camera.screen_tapped.connect(_on_screen_tapped)
+	camera.double_tapped.connect(_on_screen_double_tapped)
 
 
 func _build_liquid_glass_ui() -> void:
@@ -1560,20 +1591,21 @@ func _build_formulas_modal(root: Control) -> void:
 
 
 func _build_mobile_ui(root: Control) -> void:
-	# 1. Fullscreen Backdrop Scrim (Dims 3D scene when Sidebar is open)
+	# 1. Fullscreen Backdrop Scrim (Dims 3D scene when Bottom Sheet is expanded)
 	backdrop_scrim = ColorRect.new()
 	backdrop_scrim.name = "MobileBackdropScrim"
 	backdrop_scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	backdrop_scrim.color = Color(0.0, 0.0, 0.0, 0.45)
+	backdrop_scrim.mouse_filter = Control.MOUSE_FILTER_STOP
 	backdrop_scrim.visible = false
 	backdrop_scrim.gui_input.connect(func(ev: InputEvent):
 		if (ev is InputEventMouseButton and ev.pressed) or (ev is InputEventScreenTouch and ev.pressed):
-			_toggle_mobile_sidebar(false)
+			_set_mobile_sheet_state(MobileSheetState.PEEK)
 	)
 	root.add_child(backdrop_scrim)
 
-	# 2. Sleek Floating Mobile Top Bar (VisionOS Capsule)
-	mobile_top_bar = _create_liquid_glass_panel(Vector2.ZERO, Vector2(360, 48), 24, 0.88)
+	# 2. Sleek Floating Mobile Top Bar (VisionOS Rig Carousel Capsule)
+	mobile_top_bar = _create_liquid_glass_panel(Vector2.ZERO, Vector2(360, 48), 24, 0.90)
 	mobile_top_bar.name = "MobileTopBar"
 	mobile_top_bar.anchor_left = 0.0
 	mobile_top_bar.anchor_right = 1.0
@@ -1581,6 +1613,7 @@ func _build_mobile_ui(root: Control) -> void:
 	mobile_top_bar.offset_right = -8.0
 	mobile_top_bar.offset_top = 8.0
 	mobile_top_bar.offset_bottom = 56.0
+	mobile_top_bar.mouse_filter = Control.MOUSE_FILTER_STOP
 	mobile_top_bar.visible = false
 	root.add_child(mobile_top_bar)
 
@@ -1595,49 +1628,52 @@ func _build_mobile_ui(root: Control) -> void:
 
 	var top_hbox := HBoxContainer.new()
 	top_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	top_hbox.add_theme_constant_override("separation", 6)
+	top_hbox.add_theme_constant_override("separation", 5)
 	top_hbox_ref = top_hbox
 	top_margin.add_child(top_hbox)
 
-	btn_mobile_menu = _create_liquid_button("Menu", "menu")
-	btn_mobile_menu.custom_minimum_size = Vector2(74, 34)
-	btn_mobile_menu.add_theme_font_size_override("font_size", 12)
-	btn_mobile_menu.pressed.connect(func():
-		_toggle_mobile_sidebar(not mobile_sidebar.visible)
-	)
-	top_hbox.add_child(btn_mobile_menu)
-
-	# Camera Quick Rig Focus Pills
+	# Camera Quick Rig Focus Carousel Buttons
 	btn_focus_all = _create_liquid_button("All")
-	btn_focus_all.custom_minimum_size = Vector2(36, 32)
+	btn_focus_all.custom_minimum_size = Vector2(40, 32)
 	btn_focus_all.add_theme_font_size_override("font_size", 11)
-	btn_focus_all.pressed.connect(func(): camera.focus_rig("ALL"))
+	btn_focus_all.pressed.connect(func(): _select_mobile_rig("ALL"))
 	top_hbox.add_child(btn_focus_all)
 
-	btn_focus_a = _create_liquid_button("A")
-	btn_focus_a.custom_minimum_size = Vector2(32, 32)
+	btn_focus_a = _create_liquid_button("Rig A")
+	btn_focus_a.custom_minimum_size = Vector2(48, 32)
 	btn_focus_a.add_theme_font_size_override("font_size", 11)
 	btn_focus_a.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
-	btn_focus_a.pressed.connect(func(): camera.focus_rig("A"))
+	btn_focus_a.pressed.connect(func(): _select_mobile_rig("A"))
 	top_hbox.add_child(btn_focus_a)
 
-	btn_focus_c = _create_liquid_button("C")
-	btn_focus_c.custom_minimum_size = Vector2(32, 32)
+	btn_focus_c = _create_liquid_button("Rig C")
+	btn_focus_c.custom_minimum_size = Vector2(48, 32)
 	btn_focus_c.add_theme_font_size_override("font_size", 11)
 	btn_focus_c.add_theme_color_override("font_color", Color(0.19, 0.82, 0.35))
-	btn_focus_c.pressed.connect(func(): camera.focus_rig("C"))
+	btn_focus_c.pressed.connect(func(): _select_mobile_rig("C"))
 	top_hbox.add_child(btn_focus_c)
 
-	btn_focus_b = _create_liquid_button("B")
-	btn_focus_b.custom_minimum_size = Vector2(32, 32)
+	btn_focus_b = _create_liquid_button("Rig B")
+	btn_focus_b.custom_minimum_size = Vector2(48, 32)
 	btn_focus_b.add_theme_font_size_override("font_size", 11)
 	btn_focus_b.add_theme_color_override("font_color", Color(1.0, 0.42, 0.05))
-	btn_focus_b.pressed.connect(func(): camera.focus_rig("B"))
+	btn_focus_b.pressed.connect(func(): _select_mobile_rig("B"))
 	top_hbox.add_child(btn_focus_b)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_hbox.add_child(spacer)
+
+	btn_mob_formulas = _create_liquid_button("", "formulas")
+	btn_mob_formulas.custom_minimum_size = Vector2(34, 32)
+	btn_mob_formulas.tooltip_text = "Formulas & Theoretical Derivation"
+	btn_mob_formulas.pressed.connect(func():
+		if OS.has_feature("web"):
+			JavaScriptBridge.eval("window.openFormulasModal && window.openFormulasModal();")
+		elif formulas_modal != null:
+			formulas_modal.visible = not formulas_modal.visible
+	)
+	top_hbox.add_child(btn_mob_formulas)
 
 	btn_mob_theme = _create_liquid_button("", "sun" if is_dark_theme else "moon")
 	btn_mob_theme.custom_minimum_size = Vector2(34, 32)
@@ -1651,176 +1687,268 @@ func _build_mobile_ui(root: Control) -> void:
 	btn_mob_reset.pressed.connect(func(): camera.reset_camera())
 	top_hbox.add_child(btn_mob_reset)
 
-	# 3. Mobile Slide-Out Sidebar Drawer
-	mobile_sidebar = _create_liquid_glass_panel(Vector2.ZERO, Vector2(350, 700), 22, 0.94)
-	mobile_sidebar.name = "MobileSidebar"
-	mobile_sidebar.anchor_left = 0.0
-	mobile_sidebar.anchor_right = 0.0
-	mobile_sidebar.anchor_top = 0.0
-	mobile_sidebar.anchor_bottom = 1.0
-	mobile_sidebar.offset_left = 0.0
-	mobile_sidebar.offset_right = 350.0
-	mobile_sidebar.offset_top = 0.0
-	mobile_sidebar.offset_bottom = 0.0
-	mobile_sidebar.visible = false
-	root.add_child(mobile_sidebar)
+	# 3. Interactive Bottom Sheet (VisionOS Glass, Snappable to Peek, Half, Full)
+	mobile_bottom_sheet = _create_liquid_glass_panel(Vector2.ZERO, Vector2(360, 78), 24, 0.95)
+	mobile_bottom_sheet.name = "MobileBottomSheet"
+	mobile_bottom_sheet.anchor_left = 0.0
+	mobile_bottom_sheet.anchor_right = 1.0
+	mobile_bottom_sheet.anchor_top = 1.0
+	mobile_bottom_sheet.anchor_bottom = 1.0
+	mobile_bottom_sheet.offset_left = 8.0
+	mobile_bottom_sheet.offset_right = -8.0
+	mobile_bottom_sheet.offset_top = -86.0
+	mobile_bottom_sheet.offset_bottom = -8.0
+	mobile_bottom_sheet.mouse_filter = Control.MOUSE_FILTER_STOP
+	mobile_bottom_sheet.visible = false
+	root.add_child(mobile_bottom_sheet)
 
-	var sb_margin := MarginContainer.new()
-	sb_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	sb_margin.add_theme_constant_override("margin_top", 14)
-	sb_margin.add_theme_constant_override("margin_bottom", 14)
-	sb_margin.add_theme_constant_override("margin_left", 14)
-	sb_margin.add_theme_constant_override("margin_right", 14)
-	sb_margin_ref = sb_margin
-	mobile_sidebar.add_child(sb_margin)
+	var sheet_margin := MarginContainer.new()
+	sheet_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sheet_margin.add_theme_constant_override("margin_left", 10)
+	sheet_margin.add_theme_constant_override("margin_right", 10)
+	sheet_margin.add_theme_constant_override("margin_top", 4)
+	sheet_margin.add_theme_constant_override("margin_bottom", 6)
+	sheet_margin.mouse_filter = Control.MOUSE_FILTER_STOP
+	mobile_bottom_sheet.add_child(sheet_margin)
 
-	var sb_vbox := VBoxContainer.new()
-	sb_vbox.add_theme_constant_override("separation", 10)
-	sb_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sb_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sb_margin.add_child(sb_vbox)
+	var sheet_vbox := VBoxContainer.new()
+	sheet_vbox.add_theme_constant_override("separation", 6)
+	sheet_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sheet_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sheet_vbox.mouse_filter = Control.MOUSE_FILTER_STOP
+	sheet_margin.add_child(sheet_vbox)
 
-	# Sidebar Header
-	var sb_header := HBoxContainer.new()
-	sb_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sb_vbox.add_child(sb_header)
+	# 3.1. Tactile Handle Pill (Tap or Drag to Snap Sheet)
+	sheet_handle_btn = Button.new()
+	sheet_handle_btn.flat = true
+	sheet_handle_btn.custom_minimum_size = Vector2(0, 14)
+	sheet_handle_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sheet_handle_btn.focus_mode = Control.FOCUS_NONE
+	sheet_handle_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	sheet_handle_btn.pressed.connect(func():
+		if current_sheet_state == MobileSheetState.PEEK:
+			_set_mobile_sheet_state(MobileSheetState.HALF)
+		else:
+			_set_mobile_sheet_state(MobileSheetState.PEEK)
+	)
+	sheet_handle_btn.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventScreenDrag:
+			var sd := ev as InputEventScreenDrag
+			var new_top: float = mobile_bottom_sheet.offset_top + sd.relative.y
+			var vp_h: float = get_viewport().get_visible_rect().size.y
+			new_top = clampf(new_top, -(vp_h - 68.0), -76.0)
+			mobile_bottom_sheet.offset_top = new_top
+		elif ev is InputEventScreenTouch:
+			var st := ev as InputEventScreenTouch
+			if not st.pressed:
+				var cur_h: float = -mobile_bottom_sheet.offset_top
+				var vp_h: float = get_viewport().get_visible_rect().size.y
+				if cur_h > vp_h * 0.70:
+					_set_mobile_sheet_state(MobileSheetState.FULL)
+				elif cur_h > vp_h * 0.25:
+					_set_mobile_sheet_state(MobileSheetState.HALF)
+				else:
+					_set_mobile_sheet_state(MobileSheetState.PEEK)
+	)
+	sheet_vbox.add_child(sheet_handle_btn)
 
-	var sb_titles := VBoxContainer.new()
-	sb_titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb_main_lbl := _create_title_label("Scissor Pantograph Lab", 15)
-	sb_main_lbl_ref = sb_main_lbl
-	sb_titles.add_child(sb_main_lbl)
-	var sb_sub_lbl := _create_subtitle_label("Sim-to-Real Multi-Linkage Physics", 10)
-	sb_sub_lbl_ref = sb_sub_lbl
-	sb_titles.add_child(sb_sub_lbl)
-	sb_header.add_child(sb_titles)
+	var handle_center := CenterContainer.new()
+	handle_center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	handle_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sheet_handle_btn.add_child(handle_center)
 
-	btn_close_sidebar = _create_liquid_button("", "close")
-	btn_close_sidebar.custom_minimum_size = Vector2(36, 32)
-	btn_close_sidebar.pressed.connect(func(): _toggle_mobile_sidebar(false))
-	sb_header.add_child(btn_close_sidebar)
+	sheet_handle_pill = Panel.new()
+	sheet_handle_pill.custom_minimum_size = Vector2(42, 5)
+	sheet_handle_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var h_sb := StyleBoxFlat.new()
+	h_sb.bg_color = Color(1.0, 1.0, 1.0, 0.35) if is_dark_theme else Color(0.2, 0.25, 0.35, 0.35)
+	h_sb.corner_radius_top_left = 3
+	h_sb.corner_radius_top_right = 3
+	h_sb.corner_radius_bottom_left = 3
+	h_sb.corner_radius_bottom_right = 3
+	sheet_handle_pill.add_theme_stylebox_override("panel", h_sb)
+	handle_center.add_child(sheet_handle_pill)
 
-	var sep_sb := HSeparator.new()
-	sb_vbox.add_child(sep_sb)
-
-	# Segmented Navigation Tabs
-	var sb_tabs := HBoxContainer.new()
-	sb_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sb_tabs.add_theme_constant_override("separation", 6)
-	sb_vbox.add_child(sb_tabs)
-
-	btn_mob_tab_0 = _create_liquid_button("Controls", "mass")
-	btn_mob_tab_0.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_mob_tab_0.custom_minimum_size.y = 32
-	btn_mob_tab_0.pressed.connect(func(): _show_mobile_tab(0))
-	sb_tabs.add_child(btn_mob_tab_0)
-
-	btn_mob_tab_1 = _create_liquid_button("Data", "chart")
-	btn_mob_tab_1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_mob_tab_1.custom_minimum_size.y = 32
-	btn_mob_tab_1.pressed.connect(func(): _show_mobile_tab(1))
-	sb_tabs.add_child(btn_mob_tab_1)
-
-	btn_mob_tab_2 = _create_liquid_button("Joint", "joint")
-	btn_mob_tab_2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_mob_tab_2.custom_minimum_size.y = 32
-	btn_mob_tab_2.pressed.connect(func(): _show_mobile_tab(2))
-	sb_tabs.add_child(btn_mob_tab_2)
-
-	btn_mob_tab_3 = _create_liquid_button("Curves", "chart")
-	btn_mob_tab_3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_mob_tab_3.custom_minimum_size.y = 32
-	btn_mob_tab_3.pressed.connect(func(): _show_mobile_tab(3))
-	sb_tabs.add_child(btn_mob_tab_3)
-
-	# Content Scroll Containers
-	mob_scroll_controls = ScrollContainer.new()
-	mob_scroll_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mob_scroll_controls.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	mob_scroll_controls.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sb_vbox.add_child(mob_scroll_controls)
-
-	mob_scroll_telem = ScrollContainer.new()
-	mob_scroll_telem.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mob_scroll_telem.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	mob_scroll_telem.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	mob_scroll_telem.visible = false
-	sb_vbox.add_child(mob_scroll_telem)
-
-	mob_scroll_joint = ScrollContainer.new()
-	mob_scroll_joint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mob_scroll_joint.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	mob_scroll_joint.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	mob_scroll_joint.visible = false
-	sb_vbox.add_child(mob_scroll_joint)
-
-	mob_scroll_graph = ScrollContainer.new()
-	mob_scroll_graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mob_scroll_graph.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	mob_scroll_graph.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	mob_scroll_graph.visible = false
-	sb_vbox.add_child(mob_scroll_graph)
-
-	# 4. Floating Bottom Pin Chip (Appears only when a pin is selected in 3D)
-	mobile_pin_card = _create_liquid_glass_panel(Vector2.ZERO, Vector2(340, 48), 24, 0.90)
-	mobile_pin_card.name = "MobilePinCard"
-	mobile_pin_card.anchor_left = 0.5
-	mobile_pin_card.anchor_right = 0.5
-	mobile_pin_card.anchor_top = 1.0
-	mobile_pin_card.anchor_bottom = 1.0
-	mobile_pin_card.offset_left = -170.0
-	mobile_pin_card.offset_right = 170.0
-	mobile_pin_card.offset_top = -62.0
-	mobile_pin_card.offset_bottom = -14.0
-	mobile_pin_card.visible = false
-	root.add_child(mobile_pin_card)
-
-	var pin_card_margin := MarginContainer.new()
-	pin_card_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	pin_card_margin.add_theme_constant_override("margin_left", 12)
-	pin_card_margin.add_theme_constant_override("margin_right", 8)
-	pin_card_margin.add_theme_constant_override("margin_top", 4)
-	pin_card_margin.add_theme_constant_override("margin_bottom", 4)
-	pin_card_margin_ref = pin_card_margin
-	mobile_pin_card.add_child(pin_card_margin)
-
-	var pin_card_hbox := HBoxContainer.new()
-	pin_card_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	pin_card_hbox.add_theme_constant_override("separation", 8)
-	pin_card_margin.add_child(pin_card_hbox)
+	# 3.2. Selected Pin Info Badge (Visible when pin is selected in 3D)
+	mob_pin_chip = HBoxContainer.new()
+	mob_pin_chip.alignment = BoxContainer.ALIGNMENT_CENTER
+	mob_pin_chip.add_theme_constant_override("separation", 6)
+	mob_pin_chip.visible = false
+	mob_pin_chip.mouse_filter = Control.MOUSE_FILTER_STOP
+	sheet_vbox.add_child(mob_pin_chip)
 
 	lbl_mob_pin_summary = Label.new()
 	lbl_mob_pin_summary.text = "Pin Selected"
 	lbl_mob_pin_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl_mob_pin_summary.add_theme_font_size_override("font_size", 11)
 	lbl_mob_pin_summary.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
-	pin_card_hbox.add_child(lbl_mob_pin_summary)
+	mob_pin_chip.add_child(lbl_mob_pin_summary)
 
 	btn_mob_pin_inspect = _create_liquid_button("Details", "joint")
 	btn_mob_pin_inspect.custom_minimum_size = Vector2(74, 28)
 	btn_mob_pin_inspect.add_theme_font_size_override("font_size", 11)
 	btn_mob_pin_inspect.pressed.connect(func():
-		_toggle_mobile_sidebar(true)
 		_show_mobile_tab(2)
+		_set_mobile_sheet_state(MobileSheetState.HALF)
 	)
-	pin_card_hbox.add_child(btn_mob_pin_inspect)
+	mob_pin_chip.add_child(btn_mob_pin_inspect)
 
 	btn_mob_pin_close = _create_liquid_button("", "close")
 	btn_mob_pin_close.custom_minimum_size = Vector2(28, 28)
 	btn_mob_pin_close.pressed.connect(func(): _deselect_pin())
-	pin_card_hbox.add_child(btn_mob_pin_close)
+	mob_pin_chip.add_child(btn_mob_pin_close)
 
-	# 5. Mobile Screen Zoom (+ / -) Controller
-	mobile_zoom_controls = _create_liquid_glass_panel(Vector2.ZERO, Vector2(46, 120), 16, 0.90)
+	# 3.3. Primary Peek Bar (Play/Pause, Speed multiplier, Mass Stepper, Expand button)
+	sheet_peek_bar = HBoxContainer.new()
+	sheet_peek_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	sheet_peek_bar.add_theme_constant_override("separation", 6)
+	sheet_peek_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	sheet_vbox.add_child(sheet_peek_bar)
+
+	btn_mob_play_pause = _create_liquid_button("", "pause")
+	btn_mob_play_pause.custom_minimum_size = Vector2(40, 36)
+	btn_mob_play_pause.tooltip_text = "Play / Pause"
+	btn_mob_play_pause.pressed.connect(func(): _toggle_sim_pause())
+	sheet_peek_bar.add_child(btn_mob_play_pause)
+
+	btn_mob_speed = _create_liquid_button("1.00×")
+	btn_mob_speed.custom_minimum_size = Vector2(52, 36)
+	btn_mob_speed.add_theme_font_size_override("font_size", 11)
+	btn_mob_speed.tooltip_text = "Speed Multiplier"
+	btn_mob_speed.pressed.connect(func(): _cycle_mobile_speed())
+	sheet_peek_bar.add_child(btn_mob_speed)
+
+	# Mass Quick Stepper ([-] 0.50 kg [+])
+	var mass_stepper := HBoxContainer.new()
+	mass_stepper.alignment = BoxContainer.ALIGNMENT_CENTER
+	mass_stepper.add_theme_constant_override("separation", 4)
+	mass_stepper.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	btn_mob_mass_dec = _create_liquid_button("", "minus")
+	btn_mob_mass_dec.custom_minimum_size = Vector2(34, 36)
+	btn_mob_mass_dec.pressed.connect(func():
+		var nv: float = clampf(mass_slider.value - 0.05, 0.0, 1.5)
+		mass_slider.value = nv
+		_on_mass_slider_changed(nv)
+	)
+	mass_stepper.add_child(btn_mob_mass_dec)
+
+	lbl_mob_mass_val = Label.new()
+	lbl_mob_mass_val.text = "%.2f kg" % mass_slider.value
+	lbl_mob_mass_val.custom_minimum_size = Vector2(54, 36)
+	lbl_mob_mass_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_mob_mass_val.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl_mob_mass_val.add_theme_font_size_override("font_size", 12)
+	var text_col_mass: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+	lbl_mob_mass_val.add_theme_color_override("font_color", text_col_mass)
+	theme_labels_primary.append(lbl_mob_mass_val)
+	mass_stepper.add_child(lbl_mob_mass_val)
+
+	btn_mob_mass_inc = _create_liquid_button("", "plus")
+	btn_mob_mass_inc.custom_minimum_size = Vector2(34, 36)
+	btn_mob_mass_inc.pressed.connect(func():
+		var nv: float = clampf(mass_slider.value + 0.05, 0.0, 1.5)
+		mass_slider.value = nv
+		_on_mass_slider_changed(nv)
+	)
+	mass_stepper.add_child(btn_mob_mass_inc)
+	sheet_peek_bar.add_child(mass_stepper)
+
+	var peek_spacer := Control.new()
+	peek_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	peek_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sheet_peek_bar.add_child(peek_spacer)
+
+	btn_mob_expand = _create_liquid_button("", "chevron_up")
+	btn_mob_expand.custom_minimum_size = Vector2(38, 36)
+	btn_mob_expand.tooltip_text = "Expand / Collapse Details"
+	btn_mob_expand.pressed.connect(func():
+		if current_sheet_state == MobileSheetState.PEEK:
+			_set_mobile_sheet_state(MobileSheetState.HALF)
+		else:
+			_set_mobile_sheet_state(MobileSheetState.PEEK)
+	)
+	sheet_peek_bar.add_child(btn_mob_expand)
+
+	# 3.4. Segmented Navigation Tabs (Controls, Data, Joint, Curves)
+	sheet_tabs_bar = HBoxContainer.new()
+	sheet_tabs_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sheet_tabs_bar.add_theme_constant_override("separation", 6)
+	sheet_tabs_bar.visible = false
+	sheet_tabs_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	sheet_vbox.add_child(sheet_tabs_bar)
+
+	btn_mob_tab_0 = _create_liquid_button("Controls", "mass")
+	btn_mob_tab_0.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_tab_0.custom_minimum_size.y = 34
+	btn_mob_tab_0.pressed.connect(func(): _show_mobile_tab(0))
+	sheet_tabs_bar.add_child(btn_mob_tab_0)
+
+	btn_mob_tab_1 = _create_liquid_button("Data", "chart")
+	btn_mob_tab_1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_tab_1.custom_minimum_size.y = 34
+	btn_mob_tab_1.pressed.connect(func(): _show_mobile_tab(1))
+	sheet_tabs_bar.add_child(btn_mob_tab_1)
+
+	btn_mob_tab_2 = _create_liquid_button("Joint", "joint")
+	btn_mob_tab_2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_tab_2.custom_minimum_size.y = 34
+	btn_mob_tab_2.pressed.connect(func(): _show_mobile_tab(2))
+	sheet_tabs_bar.add_child(btn_mob_tab_2)
+
+	btn_mob_tab_3 = _create_liquid_button("Curves", "chart")
+	btn_mob_tab_3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mob_tab_3.custom_minimum_size.y = 34
+	btn_mob_tab_3.pressed.connect(func(): _show_mobile_tab(3))
+	sheet_tabs_bar.add_child(btn_mob_tab_3)
+
+	# 3.5. Scroll Containers Area (Tab Contents)
+	sheet_content_area = Control.new()
+	sheet_content_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sheet_content_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sheet_content_area.mouse_filter = Control.MOUSE_FILTER_STOP
+	sheet_content_area.visible = false
+	sheet_vbox.add_child(sheet_content_area)
+
+	mob_scroll_controls = ScrollContainer.new()
+	mob_scroll_controls.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mob_scroll_controls.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	mob_scroll_controls.mouse_filter = Control.MOUSE_FILTER_STOP
+	sheet_content_area.add_child(mob_scroll_controls)
+
+	mob_scroll_telem = ScrollContainer.new()
+	mob_scroll_telem.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mob_scroll_telem.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	mob_scroll_telem.mouse_filter = Control.MOUSE_FILTER_STOP
+	mob_scroll_telem.visible = false
+	sheet_content_area.add_child(mob_scroll_telem)
+
+	mob_scroll_joint = ScrollContainer.new()
+	mob_scroll_joint.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mob_scroll_joint.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	mob_scroll_joint.mouse_filter = Control.MOUSE_FILTER_STOP
+	mob_scroll_joint.visible = false
+	sheet_content_area.add_child(mob_scroll_joint)
+
+	mob_scroll_graph = ScrollContainer.new()
+	mob_scroll_graph.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mob_scroll_graph.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	mob_scroll_graph.mouse_filter = Control.MOUSE_FILTER_STOP
+	mob_scroll_graph.visible = false
+	sheet_content_area.add_child(mob_scroll_graph)
+
+	# 4. Mobile Screen Zoom (+ / -) Controller
+	mobile_zoom_controls = _create_liquid_glass_panel(Vector2.ZERO, Vector2(46, 116), 16, 0.90)
 	mobile_zoom_controls.name = "MobileZoomControls"
 	mobile_zoom_controls.anchor_left = 1.0
 	mobile_zoom_controls.anchor_right = 1.0
-	mobile_zoom_controls.anchor_top = 0.5
-	mobile_zoom_controls.anchor_bottom = 0.5
-	mobile_zoom_controls.offset_left = -58.0
-	mobile_zoom_controls.offset_right = -12.0
-	mobile_zoom_controls.offset_top = -60.0
-	mobile_zoom_controls.offset_bottom = 60.0
+	mobile_zoom_controls.anchor_top = 0.36
+	mobile_zoom_controls.anchor_bottom = 0.36
+	mobile_zoom_controls.offset_left = -54.0
+	mobile_zoom_controls.offset_right = -10.0
+	mobile_zoom_controls.offset_top = -58.0
+	mobile_zoom_controls.offset_bottom = 58.0
+	mobile_zoom_controls.mouse_filter = Control.MOUSE_FILTER_STOP
 	mobile_zoom_controls.visible = false
 	root.add_child(mobile_zoom_controls)
 
@@ -1828,13 +1956,15 @@ func _build_mobile_ui(root: Control) -> void:
 	zoom_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	zoom_margin.add_theme_constant_override("margin_left", 4)
 	zoom_margin.add_theme_constant_override("margin_right", 4)
-	zoom_margin.add_theme_constant_override("margin_top", 6)
-	zoom_margin.add_theme_constant_override("margin_bottom", 6)
+	zoom_margin.add_theme_constant_override("margin_top", 4)
+	zoom_margin.add_theme_constant_override("margin_bottom", 4)
+	zoom_margin.mouse_filter = Control.MOUSE_FILTER_STOP
 	mobile_zoom_controls.add_child(zoom_margin)
 
 	var zoom_vbox := VBoxContainer.new()
 	zoom_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	zoom_vbox.add_theme_constant_override("separation", 4)
+	zoom_vbox.mouse_filter = Control.MOUSE_FILTER_STOP
 	zoom_margin.add_child(zoom_vbox)
 
 	btn_mob_zoom_in = _create_liquid_button("", "plus")
@@ -1854,86 +1984,11 @@ func _build_mobile_ui(root: Control) -> void:
 	btn_mob_zoom_out.pressed.connect(func(): if camera: camera.zoom_out(0.6))
 	zoom_vbox.add_child(btn_mob_zoom_out)
 
-	# 6. Mobile Main Tab Mass Quick Adjust Controller (Finger-friendly thick bar & large knob)
-	mobile_mass_panel = _create_liquid_glass_panel(Vector2.ZERO, Vector2(340, 58), 24, 0.94)
-	mobile_mass_panel.name = "MobileMassPanel"
-	mobile_mass_panel.anchor_left = 0.5
-	mobile_mass_panel.anchor_right = 0.5
-	mobile_mass_panel.anchor_top = 1.0
-	mobile_mass_panel.anchor_bottom = 1.0
-	mobile_mass_panel.offset_left = -170.0
-	mobile_mass_panel.offset_right = 170.0
-	mobile_mass_panel.offset_top = -76.0
-	mobile_mass_panel.offset_bottom = -14.0
-	mobile_mass_panel.visible = false
-	root.add_child(mobile_mass_panel)
-
-	var mass_margin := MarginContainer.new()
-	mass_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	mass_margin.add_theme_constant_override("margin_left", 12)
-	mass_margin.add_theme_constant_override("margin_right", 12)
-	mass_margin.add_theme_constant_override("margin_top", 6)
-	mass_margin.add_theme_constant_override("margin_bottom", 6)
-	mobile_mass_panel.add_child(mass_margin)
-
-	var mass_hbox_mob := HBoxContainer.new()
-	mass_hbox_mob.alignment = BoxContainer.ALIGNMENT_CENTER
-	mass_hbox_mob.add_theme_constant_override("separation", 8)
-	mass_margin.add_child(mass_hbox_mob)
-
-	lbl_mob_mass_title = Label.new()
-	lbl_mob_mass_title.text = "Mass:"
-	lbl_mob_mass_title.add_theme_font_size_override("font_size", 12)
-	theme_labels_primary.append(lbl_mob_mass_title)
-	mass_hbox_mob.add_child(lbl_mob_mass_title)
-
-	btn_mob_mass_dec = _create_liquid_button("", "minus")
-	btn_mob_mass_dec.custom_minimum_size = Vector2(38, 38)
-	btn_mob_mass_dec.pressed.connect(func():
-		var nv: float = clampf(mass_slider.value - 0.05, 0.0, 1.5)
-		mass_slider.value = nv
-		_on_mass_slider_changed(nv)
-	)
-	mass_hbox_mob.add_child(btn_mob_mass_dec)
-
-	slider_mob_mass = HSlider.new()
-	slider_mob_mass.min_value = 0.0
-	slider_mob_mass.max_value = 1.5
-	slider_mob_mass.step = 0.01
-	slider_mob_mass.value = mass_slider.value
-	slider_mob_mass.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slider_mob_mass.custom_minimum_size = Vector2(0, 44)
-	slider_mob_mass.value_changed.connect(func(val: float):
-		if absf(mass_slider.value - val) > 0.005:
-			mass_slider.value = val
-			_on_mass_slider_changed(val)
-	)
-	_style_mobile_mass_slider(slider_mob_mass)
-	mass_hbox_mob.add_child(slider_mob_mass)
-
-	btn_mob_mass_inc = _create_liquid_button("", "plus")
-	btn_mob_mass_inc.custom_minimum_size = Vector2(38, 38)
-	btn_mob_mass_inc.pressed.connect(func():
-		var nv: float = clampf(mass_slider.value + 0.05, 0.0, 1.5)
-		mass_slider.value = nv
-		_on_mass_slider_changed(nv)
-	)
-	mass_hbox_mob.add_child(btn_mob_mass_inc)
-
-	lbl_mob_mass_val = Label.new()
-	lbl_mob_mass_val.text = "%.2f kg" % mass_slider.value
-	lbl_mob_mass_val.custom_minimum_size = Vector2(56, 0)
-	lbl_mob_mass_val.add_theme_font_size_override("font_size", 12)
-	lbl_mob_mass_val.add_theme_color_override("font_color", Color(0.0, 0.443, 0.89))
-	mass_hbox_mob.add_child(lbl_mob_mass_val)
-
 
 func _on_mass_slider_changed(val: float) -> void:
 	mass_val_label.text = "%.2f kg" % val
 	if lbl_mob_mass_val != null:
 		lbl_mob_mass_val.text = "%.2f kg" % val
-	if slider_mob_mass != null and absf(slider_mob_mass.value - val) > 0.005:
-		slider_mob_mass.set_value_no_signal(val)
 	rig_a.set_mass(val)
 	rig_c.set_mass(val)
 	rig_b.set_mass(val)
@@ -3082,13 +3137,13 @@ func _on_pin_clicked(rig: PantographRig, pin_idx: int, _pos: Vector3) -> void:
 			camera.set_follow_rig(true, rig)
 
 		if is_mobile_layout:
-			if mobile_sidebar != null and mobile_sidebar.visible:
-				_show_mobile_tab(2)
-			elif mobile_pin_card != null and not is_focus_mode:
-				mobile_pin_card.visible = true
+			if mob_pin_chip != null:
+				mob_pin_chip.visible = true
 				if lbl_mob_pin_summary != null:
-					lbl_mob_pin_summary.text = "%s [Pin #%d] · R=%.1fN, Fx=%.1fN" % [rig.rig_name, pin_idx, data.R, data.F_x]
-			_update_mobile_bottom_positions()
+					lbl_mob_pin_summary.text = "%s [Pin #%d] · R=%.1fN" % [rig.rig_name, pin_idx, data.R]
+			if current_sheet_state != MobileSheetState.PEEK:
+				_show_mobile_tab(2)
+			_set_mobile_sheet_state(current_sheet_state, false)
 		else:
 			_show_right_tab(1)
 		_update_force_visualizer()
@@ -3099,9 +3154,10 @@ func _deselect_pin() -> void:
 	inspected_pin_idx = -1
 	if force_visualizer_root != null:
 		force_visualizer_root.visible = false
-	if mobile_pin_card != null:
-		mobile_pin_card.visible = false
-	_update_mobile_bottom_positions()
+	if mob_pin_chip != null:
+		mob_pin_chip.visible = false
+	if is_mobile_layout:
+		_set_mobile_sheet_state(current_sheet_state, false)
 	_sync_quick_pin_buttons(null, -1)
 	if not is_mobile_layout:
 		_show_right_tab(0)
@@ -3113,16 +3169,12 @@ func _set_focus_mode(focus: bool) -> void:
 	if is_mobile_layout:
 		if mobile_top_bar != null:
 			mobile_top_bar.visible = not focus
-		if mobile_sidebar != null:
-			mobile_sidebar.visible = false
+		if mobile_bottom_sheet != null:
+			mobile_bottom_sheet.visible = not focus
 		if backdrop_scrim != null:
-			backdrop_scrim.visible = false
-		if mobile_pin_card != null:
-			mobile_pin_card.visible = (not focus) if inspected_rig != null else false
+			backdrop_scrim.visible = false if focus else (current_sheet_state != MobileSheetState.PEEK)
 		if mobile_zoom_controls != null:
 			mobile_zoom_controls.visible = not focus
-		if mobile_mass_panel != null:
-			mobile_mass_panel.visible = not focus
 	else:
 		if header_panel != null:
 			header_panel.visible = not focus
@@ -3340,6 +3392,10 @@ func _apply_theme(is_dark: bool) -> void:
 	if btn_mob_theme != null:
 		btn_mob_theme.text = ""
 		btn_mob_theme.set_meta("icon_name", "sun" if is_dark else "moon")
+	if sheet_handle_pill != null:
+		var h_sb: StyleBoxFlat = sheet_handle_pill.get_theme_stylebox("panel") as StyleBoxFlat
+		if h_sb:
+			h_sb.bg_color = Color(1.0, 1.0, 1.0, 0.35) if is_dark else Color(0.2, 0.25, 0.35, 0.35)
 	_refresh_all_button_icons(is_dark)
 
 
@@ -3351,19 +3407,20 @@ func _refresh_all_button_icons(is_dark: bool) -> void:
 		btn_theme_toggle, btn_focus_toggle, btn_restore_ui, btn_tab_telemetry,
 		btn_tab_joint, btn_deselect_pin_ref, btn_toggle_vector_mode,
 		btn_toggle_force_dir, btn_toggle_advanced_stress, btn_graph_expand,
-		btn_graph_theme, btn_mobile_menu, btn_mob_theme, btn_mob_reset,
-		btn_close_sidebar, btn_mob_tab_0, btn_mob_tab_1, btn_mob_tab_2,
-		btn_mob_tab_3, btn_mob_pin_inspect, btn_mob_pin_close,
+		btn_graph_theme, btn_mob_formulas, btn_mob_theme, btn_mob_reset,
+		btn_mob_play_pause, btn_mob_expand, btn_mob_tab_0, btn_mob_tab_1,
+		btn_mob_tab_2, btn_mob_tab_3, btn_mob_pin_inspect, btn_mob_pin_close,
 		btn_mob_zoom_in, btn_mob_zoom_out, btn_mob_mass_dec, btn_mob_mass_inc
 	]
 	for btn in all_btns:
 		if btn != null and is_instance_valid(btn) and btn.has_meta("icon_name"):
 			var iname: String = btn.get_meta("icon_name")
-			var c: Color = blue_accent if (btn == btn_formulas) else col
+			var c: Color = blue_accent if (btn == btn_formulas or btn == btn_mob_formulas) else col
 			var sz := Vector2i(14, 14) if btn.text.is_empty() else Vector2i(11, 11)
 			btn.icon = _get_svg_icon(iname, c, sz)
 			btn.expand_icon = false
 	_update_stiction_button_ui()
+	_update_mobile_rig_carousel_styles()
 
 
 func _apply_visualizer_theme(is_dark: bool) -> void:
@@ -3420,39 +3477,98 @@ func _show_right_tab(tab_idx: int) -> void:
 			btn_tab_telemetry.add_theme_color_override("font_color", default_col)
 
 
-func _toggle_mobile_sidebar(open: bool) -> void:
-	if mobile_sidebar == null:
-		return
-	mobile_sidebar.visible = open
-	if backdrop_scrim != null:
-		backdrop_scrim.visible = open
-	if mobile_pin_card != null:
-		if open:
-			mobile_pin_card.visible = false
-		elif inspected_rig != null and not is_focus_mode:
-			mobile_pin_card.visible = true
-	if mobile_zoom_controls != null:
-		mobile_zoom_controls.visible = (not open) and is_mobile_layout and (not is_focus_mode)
-	if mobile_mass_panel != null:
-		mobile_mass_panel.visible = (not open) and is_mobile_layout and (not is_focus_mode)
-	_update_mobile_bottom_positions()
-	if open:
-		_show_mobile_tab(current_mobile_tab)
+func _select_mobile_rig(rig_id: String) -> void:
+	current_mobile_rig_id = rig_id
+	if camera != null:
+		camera.focus_rig(rig_id)
+	_update_mobile_rig_carousel_styles()
 
 
-func _update_mobile_bottom_positions() -> void:
-	if not is_mobile_layout or mobile_mass_panel == null or not is_inside_tree() or get_viewport() == null:
+func _update_mobile_rig_carousel_styles() -> void:
+	var items := [
+		{"id": "ALL", "btn": btn_focus_all, "color": Color(0.0, 0.443, 0.89) if is_dark_theme else Color(0.114, 0.114, 0.122)},
+		{"id": "A", "btn": btn_focus_a, "color": Color(0.0, 0.443, 0.89)},
+		{"id": "C", "btn": btn_focus_c, "color": Color(0.19, 0.82, 0.35)},
+		{"id": "B", "btn": btn_focus_b, "color": Color(1.0, 0.42, 0.05)}
+	]
+	for item in items:
+		var b: Button = item["btn"]
+		if b == null or not is_instance_valid(b):
+			continue
+		var is_sel: bool = (item["id"] == current_mobile_rig_id)
+		var col: Color = item["color"]
+		if is_sel:
+			b.add_theme_color_override("font_color", Color.WHITE if is_dark_theme else Color(0.05, 0.05, 0.08))
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = col * 0.40 if is_dark_theme else col * 0.22
+			sb.border_color = col
+			sb.border_width_left = 2
+			sb.border_width_right = 2
+			sb.border_width_top = 2
+			sb.border_width_bottom = 2
+			sb.corner_radius_top_left = 12
+			sb.corner_radius_top_right = 12
+			sb.corner_radius_bottom_left = 12
+			sb.corner_radius_bottom_right = 12
+			b.add_theme_stylebox_override("normal", sb)
+			b.add_theme_stylebox_override("hover", sb)
+			b.add_theme_stylebox_override("pressed", sb)
+		else:
+			b.add_theme_color_override("font_color", col)
+			_scale_button_stylebox(b, 12)
+
+
+func _get_sheet_height_for_state(state: MobileSheetState, vp_h: float) -> float:
+	match state:
+		MobileSheetState.FULL:
+			return clampf(vp_h - 68.0, 480.0, 920.0)
+		MobileSheetState.HALF:
+			return clampf(vp_h * 0.54, 380.0, 580.0)
+		_: # PEEK
+			var pin_h: float = 38.0 if (mob_pin_chip != null and mob_pin_chip.visible) else 0.0
+			return 78.0 + pin_h
+
+
+func _set_mobile_sheet_state(state: MobileSheetState, animate: bool = true) -> void:
+	current_sheet_state = state
+	if mobile_bottom_sheet == null or not is_inside_tree() or get_viewport() == null:
 		return
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	var S: float = clampf(vp_size.x / 400.0, 1.0, 4.5)
-	var card_h: float = 58.0 * S
-	var pin_card_active := (inspected_rig != null and not is_focus_mode and not (mobile_sidebar != null and mobile_sidebar.visible))
-	if pin_card_active:
-		mobile_mass_panel.offset_bottom = -14.0 * S - 56.0 * S
-		mobile_mass_panel.offset_top = -14.0 * S - 56.0 * S - card_h
+	var target_h: float = _get_sheet_height_for_state(state, vp_size.y)
+
+	if backdrop_scrim != null:
+		backdrop_scrim.visible = (state != MobileSheetState.PEEK) and not is_focus_mode
+
+	var expanded := (state != MobileSheetState.PEEK)
+	if sheet_tabs_bar != null:
+		sheet_tabs_bar.visible = expanded
+	if sheet_content_area != null:
+		sheet_content_area.visible = expanded
+	if btn_mob_expand != null:
+		btn_mob_expand.set_meta("icon_name", "chevron_down" if expanded else "chevron_up")
+		var icon_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
+		btn_mob_expand.icon = _get_svg_icon("chevron_down" if expanded else "chevron_up", icon_col, Vector2i(14, 14))
+
+	if camera != null:
+		if state == MobileSheetState.FULL:
+			camera.set_touch_disabled(true)
+		elif state == MobileSheetState.HALF:
+			camera.set_touch_disabled(false)
+			camera.set_touch_blocked_regions(60.0, vp_size.y - target_h)
+		else:
+			camera.set_touch_disabled(false)
+			camera.set_touch_blocked_regions(60.0, vp_size.y - target_h)
+
+	if animate:
+		var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(mobile_bottom_sheet, "offset_top", -target_h, 0.28)
+		tw.tween_property(mobile_bottom_sheet, "offset_bottom", -8.0, 0.28)
 	else:
-		mobile_mass_panel.offset_bottom = -14.0 * S
-		mobile_mass_panel.offset_top = -14.0 * S - card_h
+		mobile_bottom_sheet.offset_top = -target_h
+		mobile_bottom_sheet.offset_bottom = -8.0
+
+	if expanded:
+		_show_mobile_tab(current_mobile_tab)
 
 
 func _show_mobile_tab(tab_idx: int) -> void:
@@ -3475,11 +3591,25 @@ func _show_mobile_tab(tab_idx: int) -> void:
 		if b != null:
 			b.add_theme_color_override("font_color", active_color if i == tab_idx else default_color)
 
+	if current_sheet_state == MobileSheetState.PEEK:
+		_set_mobile_sheet_state(MobileSheetState.HALF)
+
+
+func _on_screen_double_tapped(screen_pos: Vector2) -> void:
+	if not is_inside_tree() or camera == null:
+		return
+	_on_screen_tapped(screen_pos)
+	if inspected_rig == null:
+		if current_mobile_rig_id == "ALL":
+			_select_mobile_rig("A")
+		else:
+			_select_mobile_rig("ALL")
+
 
 func _on_screen_tapped(screen_pos: Vector2) -> void:
 	if not is_inside_tree() or camera == null:
 		return
-	if is_mobile_layout and mobile_sidebar != null and mobile_sidebar.visible:
+	if is_mobile_layout and current_sheet_state != MobileSheetState.PEEK:
 		return
 
 	var ray_origin := camera.project_ray_origin(screen_pos)
@@ -3487,7 +3617,7 @@ func _on_screen_tapped(screen_pos: Vector2) -> void:
 
 	var best_rig: PantographRig = null
 	var best_pin: int = -1
-	var best_dist: float = 0.32
+	var best_dist: float = 0.45 if is_mobile_layout else 0.32
 
 	for rig in [rig_a, rig_c, rig_b]:
 		if rig == null or not is_instance_valid(rig):
@@ -3525,9 +3655,9 @@ func _scale_button_stylebox(btn: Button, radius: int) -> void:
 func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 	# 1. Top Bar
 	if mobile_top_bar != null:
-		var top_bar_h: float = 52.0 * S
-		var top_bar_pad_x: float = 10.0 * S
-		var top_bar_pad_y: float = 12.0 * S
+		var top_bar_h: float = 48.0 * S
+		var top_bar_pad_x: float = 8.0 * S
+		var top_bar_pad_y: float = 8.0 * S
 		mobile_top_bar.offset_left = top_bar_pad_x
 		mobile_top_bar.offset_right = -top_bar_pad_x
 		mobile_top_bar.offset_top = top_bar_pad_y
@@ -3540,128 +3670,105 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 			sb_top.corner_radius_top_right = rad
 			sb_top.corner_radius_bottom_left = rad
 			sb_top.corner_radius_bottom_right = rad
-			sb_top.border_width_left = max(1, int(1.2 * S))
-			sb_top.border_width_top = max(1, int(1.2 * S))
-			sb_top.border_width_right = max(1, int(1.2 * S))
-			sb_top.border_width_bottom = max(1, int(1.2 * S))
 
 		if top_margin_ref != null:
 			top_margin_ref.add_theme_constant_override("margin_left", int(8 * S))
 			top_margin_ref.add_theme_constant_override("margin_right", int(8 * S))
-			top_margin_ref.add_theme_constant_override("margin_top", int(5 * S))
-			top_margin_ref.add_theme_constant_override("margin_bottom", int(5 * S))
+			top_margin_ref.add_theme_constant_override("margin_top", int(4 * S))
+			top_margin_ref.add_theme_constant_override("margin_bottom", int(4 * S))
 
 		if top_hbox_ref != null:
-			top_hbox_ref.add_theme_constant_override("separation", int(6 * S))
+			top_hbox_ref.add_theme_constant_override("separation", int(5 * S))
 
-		var btn_h: float = 42.0 * S
-		var btn_rad: int = int(14 * S)
-
-		if btn_mobile_menu != null:
-			btn_mobile_menu.custom_minimum_size = Vector2(82.0 * S, btn_h)
-			btn_mobile_menu.add_theme_font_size_override("font_size", int(14 * S))
-			_scale_button_stylebox(btn_mobile_menu, btn_rad)
+		var btn_h: float = 34.0 * S
+		var btn_rad: int = int(12 * S)
 
 		if btn_focus_all != null:
 			btn_focus_all.custom_minimum_size = Vector2(40.0 * S, btn_h)
-			btn_focus_all.add_theme_font_size_override("font_size", int(13 * S))
+			btn_focus_all.add_theme_font_size_override("font_size", int(11 * S))
 			_scale_button_stylebox(btn_focus_all, btn_rad)
 
 		for b in [btn_focus_a, btn_focus_c, btn_focus_b]:
 			if b != null:
-				b.custom_minimum_size = Vector2(36.0 * S, btn_h)
-				b.add_theme_font_size_override("font_size", int(14 * S))
+				b.custom_minimum_size = Vector2(48.0 * S, btn_h)
+				b.add_theme_font_size_override("font_size", int(11 * S))
 				_scale_button_stylebox(b, btn_rad)
 
-		if btn_mob_theme != null:
-			btn_mob_theme.custom_minimum_size = Vector2(42.0 * S, btn_h)
-			_scale_button_stylebox(btn_mob_theme, btn_rad)
+		for b in [btn_mob_formulas, btn_mob_theme, btn_mob_reset]:
+			if b != null:
+				b.custom_minimum_size = Vector2(34.0 * S, btn_h)
+				_scale_button_stylebox(b, btn_rad)
 
-		if btn_mob_reset != null:
-			btn_mob_reset.custom_minimum_size = Vector2(42.0 * S, btn_h)
-			_scale_button_stylebox(btn_mob_reset, btn_rad)
+	# 2. Interactive Bottom Sheet
+	if mobile_bottom_sheet != null:
+		var pad_x: float = 8.0 * S
+		mobile_bottom_sheet.offset_left = pad_x
+		mobile_bottom_sheet.offset_right = -pad_x
+		mobile_bottom_sheet.offset_bottom = -8.0 * S
+		var sheet_h: float = _get_sheet_height_for_state(current_sheet_state, vp_size.y)
+		mobile_bottom_sheet.offset_top = -sheet_h
 
-	# 2. Sidebar Drawer (88% width, touch targets)
-	if mobile_sidebar != null:
-		var sb_w: float = vp_size.x * 0.88
-		mobile_sidebar.offset_left = 0.0
-		mobile_sidebar.offset_right = sb_w
-		mobile_sidebar.offset_top = 0.0
-		mobile_sidebar.offset_bottom = vp_size.y
+		var sb_sheet: StyleBoxFlat = mobile_bottom_sheet.get_theme_stylebox("panel") as StyleBoxFlat
+		if sb_sheet:
+			var s_rad: int = int(22 * S)
+			sb_sheet.corner_radius_top_left = s_rad
+			sb_sheet.corner_radius_top_right = s_rad
+			sb_sheet.corner_radius_bottom_left = s_rad
+			sb_sheet.corner_radius_bottom_right = s_rad
 
-		var sb_box: StyleBoxFlat = mobile_sidebar.get_theme_stylebox("panel") as StyleBoxFlat
-		if sb_box:
-			sb_box.corner_radius_top_right = int(24 * S)
-			sb_box.corner_radius_bottom_right = int(24 * S)
-			sb_box.corner_radius_top_left = 0
-			sb_box.corner_radius_bottom_left = 0
-			sb_box.border_width_right = max(1, int(1.5 * S))
+		var peek_btn_h: float = 36.0 * S
+		var peek_rad: int = int(11 * S)
 
-		if sb_margin_ref != null:
-			sb_margin_ref.add_theme_constant_override("margin_left", int(16 * S))
-			sb_margin_ref.add_theme_constant_override("margin_right", int(16 * S))
-			sb_margin_ref.add_theme_constant_override("margin_top", int(18 * S))
-			sb_margin_ref.add_theme_constant_override("margin_bottom", int(18 * S))
+		if btn_mob_play_pause != null:
+			btn_mob_play_pause.custom_minimum_size = Vector2(40.0 * S, peek_btn_h)
+			_scale_button_stylebox(btn_mob_play_pause, peek_rad)
 
-		if sb_main_lbl_ref != null:
-			sb_main_lbl_ref.add_theme_font_size_override("font_size", int(18 * S))
-		if sb_sub_lbl_ref != null:
-			sb_sub_lbl_ref.add_theme_font_size_override("font_size", int(11 * S))
+		if btn_mob_speed != null:
+			btn_mob_speed.custom_minimum_size = Vector2(50.0 * S, peek_btn_h)
+			btn_mob_speed.add_theme_font_size_override("font_size", int(11 * S))
+			_scale_button_stylebox(btn_mob_speed, peek_rad)
 
-		if btn_close_sidebar != null:
-			btn_close_sidebar.custom_minimum_size = Vector2(44.0 * S, 44.0 * S)
-			btn_close_sidebar.add_theme_font_size_override("font_size", int(22 * S))
-			_scale_button_stylebox(btn_close_sidebar, int(14 * S))
+		if btn_mob_mass_dec != null:
+			btn_mob_mass_dec.custom_minimum_size = Vector2(34.0 * S, peek_btn_h)
+			_scale_button_stylebox(btn_mob_mass_dec, peek_rad)
 
-		var tab_h: float = 44.0 * S
-		var tab_rad: int = int(12 * S)
+		if btn_mob_mass_inc != null:
+			btn_mob_mass_inc.custom_minimum_size = Vector2(34.0 * S, peek_btn_h)
+			_scale_button_stylebox(btn_mob_mass_inc, peek_rad)
+
+		if lbl_mob_mass_val != null:
+			lbl_mob_mass_val.add_theme_font_size_override("font_size", int(12 * S))
+			lbl_mob_mass_val.custom_minimum_size = Vector2(54.0 * S, peek_btn_h)
+
+		if btn_mob_expand != null:
+			btn_mob_expand.custom_minimum_size = Vector2(38.0 * S, peek_btn_h)
+			_scale_button_stylebox(btn_mob_expand, peek_rad)
+
+		if lbl_mob_pin_summary != null:
+			lbl_mob_pin_summary.add_theme_font_size_override("font_size", int(11 * S))
+
+		if btn_mob_pin_inspect != null:
+			btn_mob_pin_inspect.custom_minimum_size = Vector2(74.0 * S, 28.0 * S)
+			btn_mob_pin_inspect.add_theme_font_size_override("font_size", int(11 * S))
+			_scale_button_stylebox(btn_mob_pin_inspect, int(10 * S))
+
+		if btn_mob_pin_close != null:
+			btn_mob_pin_close.custom_minimum_size = Vector2(28.0 * S, 28.0 * S)
+			_scale_button_stylebox(btn_mob_pin_close, int(10 * S))
+
+		var tab_h: float = 34.0 * S
 		for tab_btn in [btn_mob_tab_0, btn_mob_tab_1, btn_mob_tab_2, btn_mob_tab_3]:
 			if tab_btn != null:
 				tab_btn.custom_minimum_size = Vector2(0, tab_h)
-				tab_btn.add_theme_font_size_override("font_size", int(13 * S))
-				_scale_button_stylebox(tab_btn, tab_rad)
+				tab_btn.add_theme_font_size_override("font_size", int(11 * S))
+				_scale_button_stylebox(tab_btn, int(10 * S))
 
-	# 3. Mobile Pin Chip (Bottom Float)
-	if mobile_pin_card != null:
-		var pill_h: float = 52.0 * S
-		mobile_pin_card.offset_left = 12.0 * S
-		mobile_pin_card.offset_right = -12.0 * S
-		mobile_pin_card.offset_bottom = -16.0 * S
-		mobile_pin_card.offset_top = -16.0 * S - pill_h
-
-		var pill_sb: StyleBoxFlat = mobile_pin_card.get_theme_stylebox("panel") as StyleBoxFlat
-		if pill_sb:
-			var pill_rad: int = int(pill_h * 0.5)
-			pill_sb.corner_radius_top_left = pill_rad
-			pill_sb.corner_radius_top_right = pill_rad
-			pill_sb.corner_radius_bottom_left = pill_rad
-			pill_sb.corner_radius_bottom_right = pill_rad
-
-		if pin_card_margin_ref != null:
-			pin_card_margin_ref.add_theme_constant_override("margin_left", int(14 * S))
-			pin_card_margin_ref.add_theme_constant_override("margin_right", int(12 * S))
-			pin_card_margin_ref.add_theme_constant_override("margin_top", int(5 * S))
-			pin_card_margin_ref.add_theme_constant_override("margin_bottom", int(5 * S))
-
-		if lbl_mob_pin_summary != null:
-			lbl_mob_pin_summary.add_theme_font_size_override("font_size", int(13 * S))
-
-		if btn_mob_pin_inspect != null:
-			btn_mob_pin_inspect.custom_minimum_size = Vector2(88.0 * S, 40.0 * S)
-			btn_mob_pin_inspect.add_theme_font_size_override("font_size", int(13 * S))
-			_scale_button_stylebox(btn_mob_pin_inspect, int(12 * S))
-
-		if btn_mob_pin_close != null:
-			btn_mob_pin_close.custom_minimum_size = Vector2(40.0 * S, 40.0 * S)
-			btn_mob_pin_close.add_theme_font_size_override("font_size", int(20 * S))
-			_scale_button_stylebox(btn_mob_pin_close, int(12 * S))
-
-	# 4. Mobile Zoom (+ / -) Controller
+	# 3. Mobile Screen Zoom (+ / -) Controller
 	if mobile_zoom_controls != null:
 		var zoom_w: float = 46.0 * S
-		var zoom_h: float = 120.0 * S
-		mobile_zoom_controls.offset_right = -12.0 * S
-		mobile_zoom_controls.offset_left = -12.0 * S - zoom_w
+		var zoom_h: float = 116.0 * S
+		mobile_zoom_controls.offset_right = -10.0 * S
+		mobile_zoom_controls.offset_left = -10.0 * S - zoom_w
 		mobile_zoom_controls.offset_top = -zoom_h * 0.5
 		mobile_zoom_controls.offset_bottom = zoom_h * 0.5
 
@@ -3673,7 +3780,7 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 			zoom_sb.corner_radius_bottom_left = z_rad
 			zoom_sb.corner_radius_bottom_right = z_rad
 
-		var zb_h: float = 38.0 * S
+		var zb_h: float = 36.0 * S
 		if btn_mob_zoom_in != null:
 			btn_mob_zoom_in.custom_minimum_size = Vector2(zoom_w - 8 * S, zb_h)
 			_scale_button_stylebox(btn_mob_zoom_in, int(10 * S))
@@ -3681,36 +3788,7 @@ func _apply_mobile_ui_scale(S: float, vp_size: Vector2) -> void:
 			btn_mob_zoom_out.custom_minimum_size = Vector2(zoom_w - 8 * S, zb_h)
 			_scale_button_stylebox(btn_mob_zoom_out, int(10 * S))
 		if lbl_mob_zoom_dist != null:
-			lbl_mob_zoom_dist.add_theme_font_size_override("font_size", int(11 * S))
-
-	# 5. Mobile Mass Panel (Main Tab Quick Adjust)
-	if mobile_mass_panel != null:
-		var mass_w: float = minf(vp_size.x - 20.0 * S, 360.0 * S)
-		mobile_mass_panel.offset_left = -mass_w * 0.5
-		mobile_mass_panel.offset_right = mass_w * 0.5
-		var m_sb: StyleBoxFlat = mobile_mass_panel.get_theme_stylebox("panel") as StyleBoxFlat
-		if m_sb:
-			var m_rad: int = int(24 * S)
-			m_sb.corner_radius_top_left = m_rad
-			m_sb.corner_radius_top_right = m_rad
-			m_sb.corner_radius_bottom_left = m_rad
-			m_sb.corner_radius_bottom_right = m_rad
-
-		if lbl_mob_mass_title != null:
-			lbl_mob_mass_title.add_theme_font_size_override("font_size", int(12 * S))
-		if lbl_mob_mass_val != null:
-			lbl_mob_mass_val.add_theme_font_size_override("font_size", int(12 * S))
-			lbl_mob_mass_val.custom_minimum_size.x = 56.0 * S
-		if slider_mob_mass != null:
-			slider_mob_mass.custom_minimum_size.y = 44.0 * S
-		var step_sz: float = 38.0 * S
-		if btn_mob_mass_dec != null:
-			btn_mob_mass_dec.custom_minimum_size = Vector2(step_sz, step_sz)
-			_scale_button_stylebox(btn_mob_mass_dec, int(12 * S))
-		if btn_mob_mass_inc != null:
-			btn_mob_mass_inc.custom_minimum_size = Vector2(step_sz, step_sz)
-			_scale_button_stylebox(btn_mob_mass_inc, int(12 * S))
-	_update_mobile_bottom_positions()
+			lbl_mob_zoom_dist.add_theme_font_size_override("font_size", int(10 * S))
 
 	# 4. Content inside Tab 0: Controls
 	for lbl in left_vbox_titles:
@@ -3970,35 +4048,36 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 			graph_vbox.visible = true
 
 		# 3. Calculate Scale and Apply to Mobile UI
-		var S: float = clampf(vp_size.x / 400.0, 1.0, 4.5)
+		var S: float = clampf(vp_size.x / 400.0, 1.0, 2.2)
 		_apply_mobile_ui_scale(S, vp_size)
 
 		# 4. Configure Visibilities
 		if mobile_top_bar != null:
 			mobile_top_bar.visible = not is_focus_mode
-		if mobile_pin_card != null:
-			mobile_pin_card.visible = (inspected_rig != null and not is_focus_mode and not (mobile_sidebar != null and mobile_sidebar.visible))
+		if mobile_bottom_sheet != null:
+			mobile_bottom_sheet.visible = not is_focus_mode
 		if mobile_zoom_controls != null:
 			mobile_zoom_controls.visible = not is_focus_mode
-		if mobile_mass_panel != null:
-			mobile_mass_panel.visible = not is_focus_mode and not (mobile_sidebar != null and mobile_sidebar.visible)
-		_update_mobile_bottom_positions()
+		if mob_pin_chip != null:
+			mob_pin_chip.visible = (inspected_rig != null and not is_focus_mode)
+		_set_mobile_sheet_state(current_sheet_state, false)
+		_update_mobile_rig_carousel_styles()
+		_update_speed_ui()
 
 	else:
 		# Desktop Mode:
 		# 1. Hide Mobile Controls
 		if mobile_top_bar != null:
 			mobile_top_bar.visible = false
-		if mobile_sidebar != null:
-			mobile_sidebar.visible = false
+		if mobile_bottom_sheet != null:
+			mobile_bottom_sheet.visible = false
 		if backdrop_scrim != null:
 			backdrop_scrim.visible = false
-		if mobile_pin_card != null:
-			mobile_pin_card.visible = false
 		if mobile_zoom_controls != null:
 			mobile_zoom_controls.visible = false
-		if mobile_mass_panel != null:
-			mobile_mass_panel.visible = false
+		if camera != null:
+			camera.set_touch_blocked_regions(0.0, 0.0)
+			camera.set_touch_disabled(false)
 
 		# 2. Reparent Content VBoxes back to Desktop Panels
 		if left_vbox != null and left_margin != null and left_vbox.get_parent() != left_margin:
@@ -4030,7 +4109,7 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 
 
 func _adjust_mobile_sizes(vp_size: Vector2) -> void:
-	var S: float = clampf(vp_size.x / 400.0, 1.0, 4.5)
+	var S: float = clampf(vp_size.x / 400.0, 1.0, 2.2)
 	_apply_mobile_ui_scale(S, vp_size)
 
 

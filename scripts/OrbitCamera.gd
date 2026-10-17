@@ -5,6 +5,7 @@ extends Camera3D
 ## Mobile Multi-Touch & Desktop Mouse Navigation with Responsive Auto-Framing
 
 signal screen_tapped(screen_pos: Vector2)
+signal double_tapped(screen_pos: Vector2)
 
 @export var target_point: Vector3 = Vector3(-0.20, 1.60, 0.0)
 @export var default_distance: float = 8.25
@@ -32,13 +33,18 @@ var is_mobile_mode: bool = false
 var is_following_rig: bool = false
 var follow_target_node: Node3D = null
 
-# Mobile Multi-Touch State
+# Mobile Multi-Touch State & Safe Touch Isolation
 var touch_points: Dictionary = {}
 var touch_start_pos: Vector2 = Vector2.ZERO
 var touch_start_time: int = 0
 var initial_pinch_dist: float = 0.0
 var initial_target_distance: float = 6.85
 var touch_dragged: bool = false
+var touch_blocked_top_y: float = 0.0
+var touch_blocked_bottom_y: float = 0.0
+var is_touch_input_disabled: bool = false
+var last_tap_time: int = 0
+var last_tap_pos: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -57,6 +63,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var st := event as InputEventScreenTouch
 		if st.pressed:
+			if is_touch_input_disabled:
+				return
+			if touch_blocked_top_y > 0.0 and st.position.y <= touch_blocked_top_y:
+				return
+			if touch_blocked_bottom_y > 0.0 and st.position.y >= touch_blocked_bottom_y:
+				return
 			touch_points[st.index] = st.position
 			if touch_points.size() == 1:
 				touch_start_pos = st.position
@@ -67,18 +79,28 @@ func _unhandled_input(event: InputEvent) -> void:
 				initial_pinch_dist = touch_points[keys[0]].distance_to(touch_points[keys[1]])
 				initial_target_distance = target_distance
 		else:
-			if st.index == 0 and touch_points.size() == 1 and not touch_dragged:
-				var duration: int = Time.get_ticks_msec() - touch_start_time
-				var dist: float = st.position.distance_to(touch_start_pos)
-				if duration < 350 and dist < 14.0:
-					screen_tapped.emit(st.position)
-			touch_points.erase(st.index)
-			if touch_points.is_empty():
-				touch_dragged = false
+			if touch_points.has(st.index):
+				if st.index == 0 and touch_points.size() == 1 and not touch_dragged:
+					var now := Time.get_ticks_msec()
+					var duration: int = now - touch_start_time
+					var dist: float = st.position.distance_to(touch_start_pos)
+					if duration < 350 and dist < 18.0:
+						if (now - last_tap_time) < 320 and st.position.distance_to(last_tap_pos) < 32.0:
+							double_tapped.emit(st.position)
+							last_tap_time = 0
+						else:
+							last_tap_time = now
+							last_tap_pos = st.position
+							screen_tapped.emit(st.position)
+				touch_points.erase(st.index)
+				if touch_points.is_empty():
+					touch_dragged = false
 
 	# 2. Mobile Screen Drag Events
 	elif event is InputEventScreenDrag:
 		var sd := event as InputEventScreenDrag
+		if not touch_points.has(sd.index):
+			return
 		touch_points[sd.index] = sd.position
 		if sd.relative.length_squared() > 4.0:
 			touch_dragged = true
@@ -260,3 +282,12 @@ func update_aspect_ratio_framing(vp_size: Vector2) -> void:
 	# If currently close to default, gently adjust target distance to new framing
 	if absf(current_distance - target_distance) < 0.2:
 		target_distance = default_distance
+
+
+func set_touch_blocked_regions(top_y: float, bottom_y: float) -> void:
+	touch_blocked_top_y = top_y
+	touch_blocked_bottom_y = bottom_y
+
+
+func set_touch_disabled(disabled: bool) -> void:
+	is_touch_input_disabled = disabled
