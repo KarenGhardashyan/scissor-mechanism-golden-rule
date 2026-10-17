@@ -199,6 +199,7 @@ var mat_ring: StandardMaterial3D
 var arrow_fy_data: Dictionary = {}
 var arrow_fx_data: Dictionary = {}
 var arrow_res_data: Dictionary = {}
+var arrow_fspr_data: Dictionary = {}
 var arrow_fk_data: Dictionary = {}
 var arrow_fs_data: Dictionary = {}
 var arrow_fric_data: Dictionary = {}
@@ -210,6 +211,7 @@ var inspected_pin_idx: int = -1
 var filtered_fy: float = 0.0
 var filtered_fx: float = 0.0
 var filtered_res: float = 0.0
+var filtered_fspr: float = 0.0
 var filtered_fk: float = 0.0
 var filtered_fs: float = 0.0
 var filtered_fric: float = 0.0
@@ -222,6 +224,7 @@ var joint_card_desc: Label
 var joint_val_fy: Label
 var joint_val_fx: Label
 var joint_val_res: Label
+var joint_val_fspr: Label
 var joint_val_fk: Label
 var joint_val_fs: Label
 var joint_val_fric: Label
@@ -277,46 +280,45 @@ func _setup_pure_light_studio() -> void:
 	env_res = Environment.new()
 
 	# 1. Apple Keynote Showroom Sky Gradient
+	# 1. Matte Studio Gray Sky
 	env_res.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	sky_proc_mat = ProceduralSkyMaterial.new()
-	sky_proc_mat.sky_top_color = Color(0.965, 0.968, 0.976)
-	sky_proc_mat.sky_horizon_color = Color(0.885, 0.895, 0.92)
-	sky_proc_mat.ground_bottom_color = Color(0.84, 0.85, 0.88)
-	sky_proc_mat.ground_horizon_color = Color(0.885, 0.895, 0.92)
+	sky_proc_mat.sky_top_color = Color(0.74, 0.76, 0.80)
+	sky_proc_mat.sky_horizon_color = Color(0.82, 0.84, 0.88)
+	sky_proc_mat.ground_bottom_color = Color(0.68, 0.70, 0.74)
+	sky_proc_mat.ground_horizon_color = Color(0.80, 0.82, 0.86)
 	sky_proc_mat.sun_angle_max = 25.0
 	sky.sky_material = sky_proc_mat
 	env_res.sky = sky
 
 	# 2. Balanced Studio Ambient Light
 	env_res.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env_res.ambient_light_color = Color(0.88, 0.89, 0.92)
-	env_res.ambient_light_energy = 0.65
+	env_res.ambient_light_color = Color(0.78, 0.80, 0.84)
+	env_res.ambient_light_energy = 0.55
 
-	# 3. Tonemapping & SSAO Photorealism
+	# 3. Tonemapping & Clean SSAO (Zero WebGL Grain / Zero SSR Flicker)
 	env_res.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env_res.tonemap_exposure = 1.04
+	env_res.tonemap_exposure = 1.02
 	env_res.ssao_enabled = true
 	env_res.ssao_radius = 1.6
-	env_res.ssao_intensity = 1.3
-	env_res.ssao_power = 1.4
-	env_res.ssr_enabled = true
-	env_res.ssr_max_steps = 32
+	env_res.ssao_intensity = 1.1
+	env_res.ssao_power = 1.3
+	env_res.ssr_enabled = false
 	env_res.glow_enabled = false
-	env_res.glow_bloom = 0.18
-	env_res.glow_intensity = 0.60
-	env_res.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env_res.glow_bloom = 0.0
+	env_res.glow_intensity = 0.0
 
 	world_env.environment = env_res
 
-	# 4. Warm-Neutral Key Directional Light
+	# 4. Matte Key Directional Light
 	dir_light = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if dir_light == null:
 		dir_light = DirectionalLight3D.new()
 		dir_light.name = "DirectionalLight3D"
 		add_child(dir_light)
-	dir_light.light_color = Color(1.0, 0.992, 0.98)
-	dir_light.light_energy = 1.35
+	dir_light.light_color = Color(0.98, 0.98, 1.0)
+	dir_light.light_energy = 1.05
 	dir_light.rotation = Vector3(deg_to_rad(-34.0), deg_to_rad(30.0), 0.0)
 	dir_light.shadow_enabled = true
 	dir_light.shadow_bias = 0.015
@@ -325,7 +327,7 @@ func _setup_pure_light_studio() -> void:
 
 	# 5. Soft Studio Fill Light
 	fill_light = DirectionalLight3D.new()
-	fill_light.light_color = Color(0.92, 0.94, 0.98)
+	fill_light.light_color = Color(0.90, 0.92, 0.96)
 	fill_light.light_energy = 0.45
 	fill_light.rotation = Vector3(deg_to_rad(-12.0), deg_to_rad(-35.0), 0.0)
 	fill_light.shadow_enabled = false
@@ -333,8 +335,8 @@ func _setup_pure_light_studio() -> void:
 
 	# 6. Rim Backlight
 	rim_light = DirectionalLight3D.new()
-	rim_light.light_color = Color(0.98, 0.98, 1.0)
-	rim_light.light_energy = 0.40
+	rim_light.light_color = Color(0.95, 0.95, 0.98)
+	rim_light.light_energy = 0.30
 	rim_light.rotation = Vector3(deg_to_rad(25.0), deg_to_rad(155.0), 0.0)
 	rim_light.shadow_enabled = false
 	add_child(rim_light)
@@ -345,29 +347,29 @@ func _setup_showroom_bay() -> void:
 	bay.name = "ShowroomBay"
 	add_child(bay)
 
-	# 1. Studio Floor Plane
+	# 1. Studio Floor Plane (Matte Studio Gray)
 	var floor_inst := MeshInstance3D.new()
 	var floor_mesh := PlaneMesh.new()
 	floor_mesh.size = Vector2(80.0, 80.0)
 	floor_inst.mesh = floor_mesh
 	floor_inst.position = Vector3(0, 0.0, 0)
 	mat_floor = StandardMaterial3D.new()
-	mat_floor.albedo_color = Color(0.905, 0.91, 0.925)
+	mat_floor.albedo_color = Color(0.68, 0.70, 0.74)
 	mat_floor.metallic = 0.02
-	mat_floor.roughness = 0.45
+	mat_floor.roughness = 0.85
 	floor_inst.material_override = mat_floor
 	bay.add_child(floor_inst)
 
-	# 2. Architectural Gantry Frame
+	# 2. Architectural Gantry Frame (Matte Slate)
 	mat_gantry = StandardMaterial3D.new()
 	mat_gantry.albedo_color = Color(0.24, 0.25, 0.28)
-	mat_gantry.metallic = 0.85
-	mat_gantry.roughness = 0.28
+	mat_gantry.metallic = 0.15
+	mat_gantry.roughness = 0.75
 
 	mat_gantry_accent = StandardMaterial3D.new()
-	mat_gantry_accent.albedo_color = Color(0.78, 0.80, 0.85)
-	mat_gantry_accent.metallic = 0.95
-	mat_gantry_accent.roughness = 0.18
+	mat_gantry_accent.albedo_color = Color(0.42, 0.44, 0.48)
+	mat_gantry_accent.metallic = 0.20
+	mat_gantry_accent.roughness = 0.65
 
 	# Overhead horizontal beam (Span 6.0m)
 	var overhead_bar := MeshInstance3D.new()
@@ -1208,6 +1210,10 @@ func _build_liquid_glass_ui() -> void:
 	jgrid.add_child(_create_body_label("Reaction Resultant R:"))
 	joint_val_res = _create_value_cell("0.0 N", Color(0.12, 0.75, 0.35))
 	jgrid.add_child(joint_val_res)
+
+	jgrid.add_child(_create_body_label("Spring Pull F_spr:"))
+	joint_val_fspr = _create_value_cell("0.0 N", Color(0.72, 0.40, 0.98))
+	jgrid.add_child(joint_val_fspr)
 
 	jgrid.add_child(_create_body_label("Kinetic Friction fk:"))
 	joint_val_fk = _create_value_cell("0.0 N", Color(0.95, 0.65, 0.05))
@@ -2393,6 +2399,7 @@ func _build_force_visualizer() -> void:
 	arrow_fy_data = _create_arrow_node("ArrowFy", Color(0.0, 0.44, 0.95))
 	arrow_fx_data = _create_arrow_node("ArrowFx", Color(0.95, 0.22, 0.22))
 	arrow_res_data = _create_arrow_node("ArrowResultant", Color(0.12, 0.75, 0.35))
+	arrow_fspr_data = _create_arrow_node("ArrowSpringForce", Color(0.72, 0.40, 0.98))
 	arrow_fk_data = _create_arrow_node("ArrowKineticFriction", Color(0.95, 0.65, 0.05))
 	arrow_fs_data = _create_arrow_node("ArrowStaticFriction", Color(0.68, 0.36, 0.16)) # Brown
 	arrow_fric_data = arrow_fk_data
@@ -2531,6 +2538,7 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var F_y: float = 0.0
 	var F_x: float = 0.0
 	var R: float = 0.0
+	var F_spr: float = 0.0
 	var F_k: float = 0.0
 	var F_s: float = 0.0
 	var F_fric: float = 0.0
@@ -2539,9 +2547,16 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var dir_fy := Vector3.ZERO
 	var dir_fx := Vector3.ZERO
 	var dir_res := Vector3.ZERO
+	var dir_fspr := Vector3.ZERO
 	var dir_fk := Vector3.ZERO
 	var dir_fs := Vector3.ZERO
 	var dir_fric := Vector3.ZERO
+
+	# Spring restoring pull (Hooke's Law: F_spr = k * max(0, H - H_rest))
+	var base_rest_h: float = rig.get_base_resting_H()
+	var delta_h_spr: float = maxf(rig.current_H - base_rest_h, 0.0)
+	var k_spring: float = rig.spring_k
+	var total_f_spring: float = k_spring * delta_h_spr
 
 	var title := ""
 	var desc := ""
@@ -2554,6 +2569,10 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		F_x = 0.0
 		dir_fx = Vector3.ZERO
 		R = F_y
+
+		# Spring pulls ceiling anchor directly downward
+		F_spr = total_f_spring
+		dir_fspr = Vector3(0, -1, 0)
 
 		if is_upper_force_reaction:
 			dir_fy = Vector3(0, 1, 0) # Upward support reaction strictly vertical
@@ -2580,11 +2599,14 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		var stages_below: float = float(n - 1 - s)
 		var p_below: float = m * g_eff + stages_below * link_m * g_eff
 		var p_stage: float = p_below + link_m * g_eff * 0.5
+		var spr_trans: float = total_f_spring / float(s + 1)
 
 		if type == 0:
 			# Left Lateral Hinge
 			F_y = p_stage * 0.5
 			F_x = p_stage / (2.0 * tan_theta)
+			F_spr = spr_trans / (2.0 * tan_theta)
+			dir_fspr = Vector3(1, 0, 0) # Inward horizontal centering pull (+X)
 
 			if is_upper_force_reaction:
 				dir_fy = Vector3(0, 1, 0) # Upper link supporting joint upward
@@ -2634,6 +2656,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			# Right Lateral Hinge
 			F_y = p_stage * 0.5
 			F_x = p_stage / (2.0 * tan_theta)
+			F_spr = spr_trans / (2.0 * tan_theta)
+			dir_fspr = Vector3(-1, 0, 0) # Inward horizontal centering pull (-X)
 
 			if is_upper_force_reaction:
 				dir_fy = Vector3(0, 1, 0) # Upper link supporting joint upward
@@ -2683,6 +2707,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			# Central Coupling Hinge on Vertical Centerline Axis (Horizontal symmetry: Sum(Fx) = 0)
 			F_x = 0.0
 			dir_fx = Vector3.ZERO
+			F_spr = spr_trans
+			dir_fspr = Vector3(0, 1, 0) # Upward restoring tension
 
 			if s == n - 1:
 				# Bottommost pin supporting payload mass directly
@@ -2748,10 +2774,12 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var len_fy: float = clampf(absf(F_y) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_y) >= FORCE_MIN_DISPLAY else 0.0
 	var len_fx: float = clampf(absf(F_x) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_x) >= FORCE_MIN_DISPLAY else 0.0
 	var len_res: float = clampf(absf(R) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(R) >= FORCE_MIN_DISPLAY else 0.0
+	var len_fspr: float = clampf(absf(F_spr) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if absf(F_spr) >= FORCE_MIN_DISPLAY else 0.0
 	var len_fk: float = clampf(absf(F_k) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (absf(F_k) >= FORCE_MIN_DISPLAY and mu > 0.0001) else 0.0
 	var len_fs: float = clampf(absf(F_s) * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (absf(F_s) >= FORCE_MIN_DISPLAY and mu > 0.0001) else 0.0
 	var len_fric: float = len_fk if is_moving else len_fs
 
+	var lbl_fspr: String = ("Fspr = %.2f N" % absf(F_spr)) if len_fspr >= 0.012 else ""
 	var lbl_fk: String = ("fk = %.2f N" % absf(F_k)) if (mu > 0.0001 and len_fk >= 0.012) else ""
 	var lbl_fs: String = ("fs = %.2f N" % absf(F_s)) if (mu > 0.0001 and len_fs >= 0.012) else ""
 	var lbl_fric: String = lbl_fk if is_moving else lbl_fs
@@ -2763,6 +2791,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"len_fx": len_fx,
 		"dir_res": dir_res,
 		"len_res": len_res,
+		"dir_fspr": dir_fspr,
+		"len_fspr": len_fspr,
 		"dir_fk": dir_fk,
 		"len_fk": len_fk,
 		"dir_fs": dir_fs,
@@ -2772,12 +2802,14 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"lbl_fy": "Fy = %.2f N" % absf(F_y),
 		"lbl_fx": "Fx = %.2f N" % absf(F_x),
 		"lbl_res": "R = %.2f N" % absf(R),
+		"lbl_fspr": lbl_fspr,
 		"lbl_fk": lbl_fk,
 		"lbl_fs": lbl_fs,
 		"lbl_fric": lbl_fric,
 		"F_y": absf(F_y),
 		"F_x": absf(F_x),
 		"R": absf(R),
+		"F_spr": absf(F_spr),
 		"F_k": absf(F_k),
 		"F_s": absf(F_s),
 		"F_fric": absf(F_fric),
@@ -2811,6 +2843,7 @@ func _update_force_visualizer() -> void:
 	filtered_fy = lerpf(filtered_fy, absf(data.F_y), filter_alpha)
 	filtered_fx = lerpf(filtered_fx, absf(data.F_x), filter_alpha)
 	filtered_res = lerpf(filtered_res, absf(data.R), filter_alpha)
+	filtered_fspr = lerpf(filtered_fspr, absf(data.F_spr), filter_alpha)
 	var mu_val: float = data.get("friction_mu", 0.20)
 	if mu_val <= 0.0001:
 		filtered_fk = 0.0
@@ -2830,6 +2863,7 @@ func _update_force_visualizer() -> void:
 	var disp_len_fy: float = clampf(filtered_fy * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fy >= FORCE_MIN_DISPLAY else 0.0
 	var disp_len_fx: float = clampf(filtered_fx * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fx >= FORCE_MIN_DISPLAY else 0.0
 	var disp_len_res: float = clampf(filtered_res * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_res >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_fspr: float = clampf(filtered_fspr * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fspr >= FORCE_MIN_DISPLAY else 0.0
 	var disp_len_fk: float = clampf(filtered_fk * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (filtered_fk >= FORCE_MIN_DISPLAY and mu_val > 0.0001) else 0.0
 	var disp_len_fs: float = clampf(filtered_fs * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (filtered_fs >= FORCE_MIN_DISPLAY and mu_val > 0.0001) else 0.0
 
@@ -2837,6 +2871,7 @@ func _update_force_visualizer() -> void:
 	var lbl_fy_str := ("Fy = %.2f N" % absf(filtered_fy)) if filtered_fy >= FORCE_MIN_DISPLAY else ""
 	var lbl_fx_str := ("Fx = %.2f N" % absf(filtered_fx)) if filtered_fx >= FORCE_MIN_DISPLAY else ""
 	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_MIN_DISPLAY else ""
+	var lbl_fspr_str := ("Fspr = %.2f N" % absf(filtered_fspr)) if disp_len_fspr >= 0.012 else ""
 	var is_moving: bool = inspected_rig.oscillations_enabled and (absf(inspected_rig.velocity_H) > 0.0005)
 	var lbl_fk_str := ("fk = %.2f N" % absf(filtered_fk)) if (disp_len_fk >= 0.012 and mu_val > 0.0001) else ""
 	var lbl_fs_str := ("fs = %.2f N" % absf(filtered_fs)) if (disp_len_fs >= 0.012 and mu_val > 0.0001) else ""
@@ -2846,6 +2881,7 @@ func _update_force_visualizer() -> void:
 		# Mode: Resultant (R Only) - Render ONLY total vector sum R
 		arrow_fy_data["root"].visible = false
 		arrow_fx_data["root"].visible = false
+		arrow_fspr_data["root"].visible = false
 		if disp_len_res >= 0.012 and not lbl_res_str.is_empty():
 			var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if data.dir_res.y > 0.0 else Vector3(0.12, -0.06, 0.0)
 			_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
@@ -2874,6 +2910,13 @@ func _update_force_visualizer() -> void:
 			# On central symmetric pins (Fx == 0), R is IDENTICAL to Fy.
 			# Hide redundant R arrow to strictly prevent double-arrow / label collision!
 			arrow_res_data["root"].visible = false
+
+		# Fspr (Spring Restoring Pull - Purple):
+		if disp_len_fspr >= 0.012 and not lbl_fspr_str.is_empty() and data.dir_fspr.length_squared() > 0.01:
+			var lbl_fspr_offset := Vector3(0.08, 0.08, 0.0) if data.dir_fspr.y >= 0.0 else Vector3(0.08, -0.08, 0.0)
+			_update_arrow_vector(arrow_fspr_data, pin_pos, data.dir_fspr, disp_len_fspr, lbl_fspr_str, lbl_fspr_offset)
+		else:
+			arrow_fspr_data["root"].visible = false
 
 	# Joint Pin Friction Vectors:
 	# fk (Kinetic Friction - Amber): Active when mechanism oscillates/moves
@@ -2918,6 +2961,8 @@ func _update_force_visualizer() -> void:
 		joint_val_fy.text = "%.2f N  %s" % [absf(filtered_fy), fy_tag]
 		joint_val_fx.text = "%.2f N" % absf(filtered_fx)
 		joint_val_res.text = "%.2f N" % absf(filtered_res)
+		if joint_val_fspr != null:
+			joint_val_fspr.text = "%.2f N" % absf(filtered_fspr)
 
 		if mu_val <= 0.0001:
 			if joint_val_fk != null:
@@ -3021,6 +3066,9 @@ func _on_pin_clicked(rig: PantographRig, pin_idx: int, _pos: Vector3) -> void:
 		filtered_fy = absf(data.F_y)
 		filtered_fx = absf(data.F_x)
 		filtered_res = data.R
+		filtered_fspr = data.F_spr
+		filtered_fk = data.F_k
+		filtered_fs = data.F_s
 		filtered_fric = data.F_fric
 		filtered_theta = data.theta_deg
 
@@ -3094,51 +3142,51 @@ func _apply_theme(is_dark: bool) -> void:
 	# 1. WorldEnvironment Sky & Ambient Light
 	if sky_proc_mat != null:
 		if is_dark:
-			sky_proc_mat.sky_top_color = Color(0.04, 0.05, 0.08)
-			sky_proc_mat.sky_horizon_color = Color(0.08, 0.10, 0.16)
-			sky_proc_mat.ground_bottom_color = Color(0.02, 0.025, 0.04)
-			sky_proc_mat.ground_horizon_color = Color(0.06, 0.08, 0.12)
+			sky_proc_mat.sky_top_color = Color(0.08, 0.09, 0.12)
+			sky_proc_mat.sky_horizon_color = Color(0.12, 0.14, 0.18)
+			sky_proc_mat.ground_bottom_color = Color(0.06, 0.07, 0.09)
+			sky_proc_mat.ground_horizon_color = Color(0.10, 0.11, 0.14)
 		else:
-			sky_proc_mat.sky_top_color = Color(0.965, 0.968, 0.976)
-			sky_proc_mat.sky_horizon_color = Color(0.885, 0.895, 0.92)
-			sky_proc_mat.ground_bottom_color = Color(0.84, 0.85, 0.88)
-			sky_proc_mat.ground_horizon_color = Color(0.885, 0.895, 0.92)
+			sky_proc_mat.sky_top_color = Color(0.74, 0.76, 0.80)
+			sky_proc_mat.sky_horizon_color = Color(0.82, 0.84, 0.88)
+			sky_proc_mat.ground_bottom_color = Color(0.68, 0.70, 0.74)
+			sky_proc_mat.ground_horizon_color = Color(0.80, 0.82, 0.86)
 
 	if env_res != null:
 		if is_dark:
-			env_res.ambient_light_color = Color(0.18, 0.20, 0.28)
-			env_res.ambient_light_energy = 0.42
-			env_res.glow_enabled = true
-			env_res.glow_bloom = 0.06
-			env_res.glow_intensity = 0.28
-			env_res.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+			env_res.ambient_light_color = Color(0.18, 0.20, 0.26)
+			env_res.ambient_light_energy = 0.38
 		else:
-			env_res.ambient_light_color = Color(0.88, 0.89, 0.92)
-			env_res.ambient_light_energy = 0.65
-			env_res.glow_enabled = false
+			env_res.ambient_light_color = Color(0.78, 0.80, 0.84)
+			env_res.ambient_light_energy = 0.55
+		env_res.glow_enabled = false
+		env_res.ssr_enabled = false
 
 	# 2. Directional Lights
 	if dir_light != null:
-		dir_light.light_color = Color(0.95, 0.96, 1.0) if is_dark else Color(1.0, 0.992, 0.98)
-		dir_light.light_energy = 0.95 if is_dark else 1.35
+		dir_light.light_color = Color(0.95, 0.96, 1.0) if is_dark else Color(0.98, 0.98, 1.0)
+		dir_light.light_energy = 0.85 if is_dark else 1.05
 	if fill_light != null:
-		fill_light.light_color = Color(0.25, 0.45, 0.70) if is_dark else Color(0.92, 0.94, 0.98)
-		fill_light.light_energy = 0.30 if is_dark else 0.45
+		fill_light.light_color = Color(0.25, 0.45, 0.70) if is_dark else Color(0.90, 0.92, 0.96)
+		fill_light.light_energy = 0.25 if is_dark else 0.45
 	if rim_light != null:
-		rim_light.light_color = Color(1.0, 0.55, 0.15) if is_dark else Color(0.98, 0.98, 1.0)
-		rim_light.light_energy = 0.90 if is_dark else 0.40
+		rim_light.light_color = Color(0.90, 0.92, 0.98) if is_dark else Color(0.95, 0.95, 0.98)
+		rim_light.light_energy = 0.25 if is_dark else 0.30
 
-	# 3. Showroom Bay Materials
+	# 3. Showroom Bay Materials (Matte Studio)
 	if mat_floor != null:
-		mat_floor.albedo_color = Color(0.065, 0.075, 0.095) if is_dark else Color(0.905, 0.91, 0.925)
-		mat_floor.metallic = 0.22 if is_dark else 0.02
-		mat_floor.roughness = 0.35 if is_dark else 0.45
+		mat_floor.albedo_color = Color(0.11, 0.12, 0.15) if is_dark else Color(0.68, 0.70, 0.74)
+		mat_floor.metallic = 0.04 if is_dark else 0.02
+		mat_floor.roughness = 0.90 if is_dark else 0.85
 	if mat_gantry != null:
 		mat_gantry.albedo_color = Color(0.12, 0.13, 0.16) if is_dark else Color(0.24, 0.25, 0.28)
+		mat_gantry.metallic = 0.15
+		mat_gantry.roughness = 0.75
 	if mat_gantry_accent != null:
-		mat_gantry_accent.albedo_color = Color(1.0, 0.55, 0.12) if is_dark else Color(0.78, 0.80, 0.85)
-		mat_gantry_accent.emission_enabled = is_dark
-		mat_gantry_accent.emission = Color(1.0, 0.55, 0.12) * 0.40 if is_dark else Color.BLACK
+		mat_gantry_accent.albedo_color = Color(0.38, 0.40, 0.44) if is_dark else Color(0.42, 0.44, 0.48)
+		mat_gantry_accent.emission_enabled = false
+		mat_gantry_accent.metallic = 0.20
+		mat_gantry_accent.roughness = 0.65
 
 	# 4. Rigs
 	if rig_a != null:
@@ -3236,6 +3284,8 @@ func _apply_theme(is_dark: bool) -> void:
 				lbl.add_theme_color_override("font_color", Color(1.0, 0.35, 0.20) if is_dark else Color(0.85, 0.15, 0.15))
 			elif lbl == joint_val_res:
 				lbl.add_theme_color_override("font_color", Color(0.25, 1.0, 0.50) if is_dark else Color(0.05, 0.55, 0.22))
+			elif lbl == joint_val_fspr:
+				lbl.add_theme_color_override("font_color", Color(0.85, 0.55, 1.0) if is_dark else Color(0.60, 0.25, 0.90))
 			elif lbl == joint_val_fk:
 				lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.15) if is_dark else Color(0.75, 0.45, 0.0))
 			elif lbl == joint_val_fs:
@@ -3325,6 +3375,7 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
 		{"data": arrow_fx_data, "col": Color(1.0, 0.35, 0.20) if is_dark else Color(0.95, 0.22, 0.22)},
 		{"data": arrow_res_data, "col": Color(0.25, 1.0, 0.50) if is_dark else Color(0.12, 0.75, 0.35)},
+		{"data": arrow_fspr_data, "col": Color(0.85, 0.55, 1.0) if is_dark else Color(0.68, 0.35, 0.95)},
 		{"data": arrow_fk_data, "col": Color(1.0, 0.82, 0.15) if is_dark else Color(0.95, 0.65, 0.05)},
 		{"data": arrow_fs_data, "col": Color(0.82, 0.48, 0.25) if is_dark else Color(0.68, 0.36, 0.16)},
 		{"data": arrow_fric_data, "col": Color(1.0, 0.82, 0.15) if is_dark else Color(1.0, 0.78, 0.12)}
@@ -4019,7 +4070,7 @@ func _adjust_desktop_sizes(vp_size: Vector2) -> void:
 	var vp_scale: float = clampf(vp_size.x / 1920.0, 0.7, 1.3)
 	var label_pixel: float = lerpf(0.0036, 0.0030, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0))
 	var label_font: int = int(lerpf(22.0, 20.0, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0)))
-	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
+	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fspr_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
 		if arrow_data.has("label"):
 			var lbl: Label3D = arrow_data["label"]
 			lbl.pixel_size = label_pixel

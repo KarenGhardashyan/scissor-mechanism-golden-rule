@@ -58,10 +58,11 @@ flowchart LR
 ```
 
 ### 1. Parametric CAD Modeling (SolidWorks)
-The pantograph links were modeled parametrically from scratch:
-- **Primary Scissor Bars ($6.0\text{ cm} \times 1.0\text{ cm}$):** Designed with 3 symmetrical hinge holes ($\varnothing = 4.0\text{ mm}$ via Hole Wizard) at both extremities and the exact geometric midpoint ($3.0\text{ cm}$).
-- **Terminal Half-Bars ($3.0\text{ cm} \times 1.0\text{ cm}$):** Dual-pivot links for mounting to the upper fixed gantry clamp.
+The pantograph links were modeled parametrically from scratch (archived in [`cad/`](cad/)):
+- **Primary Scissor Bars ($6.0\text{ cm} \times 1.0\text{ cm}$):** Designed with 3 symmetrical hinge holes ($\varnothing = 4.0\text{ mm}$ via Hole Wizard) at both extremities and the exact geometric midpoint ($3.0\text{ cm}$). Binary STL: [`cad/stl/Деталь1.STL`](cad/stl/Деталь1.STL).
+- **Terminal Half-Bars ($3.0\text{ cm} \times 1.0\text{ cm}$):** Dual-pivot links for mounting to the upper fixed gantry clamp. Binary STL: [`cad/stl/Деталь2.STL`](cad/stl/Деталь2.STL).
 - **Stress-Relief Filleting ($R = 0.5\text{ cm}$):** Applied to all bar ends using the Fillet tool. This crucial geometry prevents adjacent links from colliding during scissor compression and eliminates stress concentrations near the pivot pins.
+- **SolidWorks Modeling Screenshots:** View original CAD sketches and assembly constraints in [`cad/screenshots/`](cad/screenshots/).
 
 | SolidWorks CAD Assembly & STL Mesh | Cura Slicing Profiles ($0.1\text{ mm}$) |
 | :---: | :---: |
@@ -73,6 +74,7 @@ The pantograph links were modeled parametrically from scratch:
 - **Layer Thickness:** $0.1\text{ mm}$ (Fine Profile) to achieve ultra-smooth bearing contact faces and minimize plastic-on-plastic Coulomb friction.
 - **Print Speed:** $60\text{ mm/s}$ extrusion speed, $120\text{ mm/s}$ travel speed.
 - **Infill & Shell Geometry:** High-density Cubic/Gyroid infill with 3 perimeter walls ($1.2\text{ mm}$ shell thickness) to resist out-of-plane buckling under high tensile loads.
+- **G-Code Toolpaths:** Ready-to-print production G-code and custom printer start/end scripts are provided in [`cad/gcode/`](cad/gcode/).
 
 ---
 
@@ -252,10 +254,24 @@ graph TD
    - Calculates exact trigonometric rhombus positions: $\theta = \arccos\left(\frac{H}{2\ell}\right)$, $W = 2\ell\sin(\theta)$.
    - Handles both uniform and 1:2:3 progressive arm scaling with automatic center-of-mass balancing.
 2. **Symplectic Integration for Dynamics:**
-   - Evaluates $\ddot{H} + 2\zeta\omega_n \dot{H} + \omega_n^2 (H - H_{\text{target}}) = 0$ across 4 sub-steps per frame, ensuring numerical stability without jitter even at low damping ratios.
-3. **Procedural Helical Spring Mesh (`SpringMeshGenerator.gd`):**
+   - Evaluates $\ddot{H} + 2\zeta\omega_n \dot{H} + \omega_n^2 (H - H_{\text{target}}) = 0$ across high-frequency sub-steps (up to 400 Hz), ensuring unconditional numerical stability without jitter even under low damping ratios.
+3. **Interactive 3D Joint Force Vector Visualizer Engine:**
+   - Click any pivot pin in 3D to inspect the full local force decomposition in real time:
+     - **$F_y$ (Vertical Load / Upper Support):** Downward transmitted load or upward support reaction [Blue].
+     - **$F_x$ (Lateral Thrust):** Scissor toggle mechanical thrust $F_x = \frac{P}{2\tan\theta}$ [Red].
+     - **$R$ (Reaction Resultant):** Vector sum $\vec{R} = \vec{F}_x + \vec{F}_y$ [Green].
+     - **$F_{\text{spr}}$ (Spring Restoring Pull):** Direct helical spring tension pulling anchor downward, stage 0 bottom pin upward, and centering lateral scissor hinges [Purple].
+     - **$f_k$ (Kinetic Friction):** Dynamic Coulomb sliding drag active during oscillation opposing velocity [Amber].
+     - **$f_s$ (Static Friction / Stiction):** Incipient slip threshold capacity holding the linkage at rest [Brown].
+4. **Coulomb Friction Mechanics & Stiction Toggle:**
+   - Toggle static friction on/off to compare ideal theoretical equilibrium against real-world stick-slip hysteresis with a physical deadband ($L \pm \text{deadband}$).
+5. **Stepped Response & Linear Regression Engine (`LiveGraph.gd`):**
+   - Isolate individual rigs (e.g., Rig A only) to inspect discrete step increments with real-time empirical linear regression and slope $\tan(\alpha)$ overlay.
+6. **Procedural Helical Spring Mesh (`SpringMeshGenerator.gd`):**
    - Generates 3D cylindrical tube coils along a 3D helix path in real time, flexing and compressing smoothly with dynamic load.
-4. **Liquid Glass UI with KaTeX LaTeX Engine:**
+7. **Refined Matte Studio PBR Materials:**
+   - Non-glare industrial matte polymer (`metallic = 0.06`, `roughness = 0.68`), slate gray calibration masses, and spring steel under studio lighting with zero bloom and zero SSR dithering for pristine WebGL performance.
+8. **Liquid Glass UI with KaTeX LaTeX Engine:**
    - VisionOS frosted glass aesthetic with floating panels, backdrop blur (`16px`), and web-integrated KaTeX typesetting for mathematical textbook formulas.
 
 ---
@@ -278,8 +294,11 @@ This project exhibits the exact traits sought by admissions committees and facul
 ## 📂 Repository Structure
 
 ```text
-├── cad/                     # SolidWorks 3D CAD models & STL 3D-printing files
-│   └── README.md            # Part geometry, tolerances, and assembly guide
+├── cad/                     # SolidWorks 3D CAD models, STL meshes, Cura G-code & screenshots
+│   ├── README.md            # Manufacturing guide, part geometry, and print parameters
+│   ├── stl/                 # 3D printable meshes (Деталь1.STL, Деталь2.STL)
+│   ├── gcode/               # Cura production toolpaths (CFFFP_Group.gcode, start/end scripts)
+│   └── screenshots/         # SolidWorks 3D CAD modeling and assembly screenshots
 ├── slicer_profiles/         # Ultimaker Cura FFF print profiles & parameters
 ├── experimental_data/       # Raw physical measurement datasets (CSV)
 │   ├── spring_n5_measurements.csv
@@ -294,9 +313,9 @@ This project exhibits the exact traits sought by admissions committees and facul
 │       └── simulation_showcase.png
 ├── scenes/                  # Godot 4 3D scene files (Main.tscn, PantographRig.tscn)
 ├── scripts/                 # Core simulation GDScript source code
-│   ├── Main.gd              # UI coordinator, telemetry bus, and KaTeX bridge
-│   ├── PantographRig.gd     # Kinematic solver, spring dynamics, and lasers
-│   ├── LiveGraph.gd         # Real-time procedural 2D plot panel
+│   ├── Main.gd              # UI coordinator, telemetry bus, force visualizer & KaTeX bridge
+│   ├── PantographRig.gd     # Kinematic solver, spring dynamics, stiction & laser visualizers
+│   ├── LiveGraph.gd         # Real-time procedural 2D plot panel & regression analysis
 │   ├── OrbitCamera.gd       # 360° orbit, smooth panning, and zoom controller
 │   └── SpringMeshGenerator.gd # Procedural helical spring geometry generator
 ├── shaders/                 # Frosted glass blur shaders (GlassPanel.gdshader)
