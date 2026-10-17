@@ -143,9 +143,6 @@ func _init_materials() -> void:
 			mat_pin_accent.metallic = 0.95
 			mat_pin_accent.roughness = 0.12
 
-			mat_mass_metal.albedo_color = Color(0.85, 0.92, 0.88)
-			mat_mass_metal.metallic = 0.95
-			mat_mass_metal.roughness = 0.15
 			mat_laser.albedo_color = Color(0.25, 1.0, 0.48, 0.95)
 		else:
 			mat_arm_body.albedo_color = Color(0.19, 0.82, 0.35)
@@ -162,9 +159,6 @@ func _init_materials() -> void:
 			mat_pin_accent.metallic = 0.90
 			mat_pin_accent.roughness = 0.16
 
-			mat_mass_metal.albedo_color = Color(0.85, 0.86, 0.88)
-			mat_mass_metal.metallic = 0.95
-			mat_mass_metal.roughness = 0.18
 			mat_laser.albedo_color = Color(0.19, 0.82, 0.35, 0.85)
 	elif theme == "orange" or (not is_left_rig and not is_scaled_123):
 		# RIG B (Mechanism 2): Ultra Orange / Cyber Amber
@@ -187,9 +181,6 @@ func _init_materials() -> void:
 			mat_pin_accent.metallic = 0.95
 			mat_pin_accent.roughness = 0.12
 
-			mat_mass_metal.albedo_color = Color(0.95, 0.82, 0.52)
-			mat_mass_metal.metallic = 0.95
-			mat_mass_metal.roughness = 0.15
 			mat_laser.albedo_color = Color(1.0, 0.52, 0.10, 0.95)
 		else:
 			mat_arm_body.albedo_color = Color(1.0, 0.42, 0.05)
@@ -206,9 +197,6 @@ func _init_materials() -> void:
 			mat_pin_accent.metallic = 0.92
 			mat_pin_accent.roughness = 0.16
 
-			mat_mass_metal.albedo_color = Color(0.92, 0.78, 0.46)
-			mat_mass_metal.metallic = 0.94
-			mat_mass_metal.roughness = 0.16
 			mat_laser.albedo_color = Color(1.0, 0.45, 0.0, 0.85)
 	else:
 		# RIG A (Mechanism 1): Electric Tech-Blue / Neon Cyan
@@ -231,9 +219,6 @@ func _init_materials() -> void:
 			mat_pin_accent.metallic = 0.95
 			mat_pin_accent.roughness = 0.12
 
-			mat_mass_metal.albedo_color = Color(0.88, 0.92, 0.98)
-			mat_mass_metal.metallic = 0.95
-			mat_mass_metal.roughness = 0.15
 			mat_laser.albedo_color = Color(0.18, 0.72, 1.0, 0.95)
 		else:
 			mat_arm_body.albedo_color = Color(0.06, 0.45, 0.92)
@@ -250,9 +235,6 @@ func _init_materials() -> void:
 			mat_pin_accent.metallic = 0.90
 			mat_pin_accent.roughness = 0.16
 
-			mat_mass_metal.albedo_color = Color(0.86, 0.88, 0.92)
-			mat_mass_metal.metallic = 0.95
-			mat_mass_metal.roughness = 0.18
 			mat_laser.albedo_color = Color(0.0, 0.443, 0.89, 0.85)
 
 	# Shared hardware materials
@@ -266,10 +248,22 @@ func _init_materials() -> void:
 	mat_joint_brass.metallic = 0.90
 	mat_joint_brass.roughness = 0.22
 
+	# Calibration mass: neutral slate gray with soft glow, high contrast on both light and dark backgrounds without glare
+	mat_mass_metal.albedo_color = Color(0.48, 0.50, 0.54)
+	mat_mass_metal.metallic = 0.28
+	mat_mass_metal.roughness = 0.52
+	mat_mass_metal.emission_enabled = true
+	mat_mass_metal.emission = Color(0.48, 0.50, 0.54)
+	mat_mass_metal.emission_energy_multiplier = 0.22 if dark_theme else 0.12
+
+	# Helical spring: matching industrial slate steel with soft self-illumination (zero harsh glares)
 	mat_spring_chrome = StandardMaterial3D.new()
-	mat_spring_chrome.albedo_color = Color(0.95, 0.96, 0.98)
-	mat_spring_chrome.metallic = 0.98
-	mat_spring_chrome.roughness = 0.12
+	mat_spring_chrome.albedo_color = Color(0.48, 0.50, 0.54)
+	mat_spring_chrome.metallic = 0.32
+	mat_spring_chrome.roughness = 0.50
+	mat_spring_chrome.emission_enabled = true
+	mat_spring_chrome.emission = Color(0.48, 0.50, 0.54)
+	mat_spring_chrome.emission_energy_multiplier = 0.22 if dark_theme else 0.12
 
 
 func _build_rig_hierarchy() -> void:
@@ -395,9 +389,9 @@ func _build_rig_hierarchy() -> void:
 	spring_mesh_instance.material_override = mat_spring_chrome
 	spring_mesh_instance.mesh = SpringMeshGenerator.generate_spring(
 		base_spring_vis_height,
-		0.048,
+		0.024,
 		7.5,
-		0.010,
+		0.0055,
 		90,
 		10
 	)

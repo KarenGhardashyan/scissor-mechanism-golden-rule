@@ -387,24 +387,6 @@ func _setup_showroom_bay() -> void:
 	rail.material_override = mat_gantry_accent
 	bay.add_child(rail)
 
-	# Support Pillars at X = -2.85 and +2.85
-	for x_pos in [-2.85, 2.85]:
-		var pillar := MeshInstance3D.new()
-		var p_mesh := BoxMesh.new()
-		p_mesh.size = Vector3(0.16, 3.50, 0.2)
-		pillar.mesh = p_mesh
-		pillar.position = Vector3(x_pos, 1.75, 0)
-		pillar.material_override = mat_gantry
-		bay.add_child(pillar)
-
-		var footing := MeshInstance3D.new()
-		var f_mesh := BoxMesh.new()
-		f_mesh.size = Vector3(0.36, 0.08, 0.36)
-		footing.mesh = f_mesh
-		footing.position = Vector3(x_pos, 0.04, 0)
-		footing.material_override = mat_gantry_accent
-		bay.add_child(footing)
-
 
 func _setup_rigs() -> void:
 	if rig_a == null:
