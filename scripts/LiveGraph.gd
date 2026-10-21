@@ -255,12 +255,14 @@ func compute_regression_L_cm(m: float, n: int, is_rig_c: bool = false) -> float:
 	return l_0 + slope * m
 
 
-## Stiction deadband width in cm for visual uncertainty envelope
-func compute_stiction_deadband_cm(n: int, is_rig_c: bool = false) -> float:
+## Stiction deadband width in cm for visual uncertainty envelope (matched to Coulomb law)
+func compute_stiction_deadband_cm(n: int, is_rig_c: bool = false, m_val: float = 0.5) -> float:
 	if not stiction_enabled or friction_mu < 0.005:
 		return 0.0
 	var eff_n: float = 6.0 if is_rig_c else float(n)
-	return (friction_mu / 0.20) * 0.0045 * eff_n * 100.0
+	var p_eff: float = m_val * gravity + (eff_n * link_mass * gravity) * 0.5
+	var delta_h_db: float = (eff_n * friction_mu * p_eff) / maxf(spring_k, 10.0)
+	return eff_n * delta_h_db * 100.0
 
 
 # UI Scale Factor for Mobile Responsive Rendering

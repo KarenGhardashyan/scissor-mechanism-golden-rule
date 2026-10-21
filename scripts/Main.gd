@@ -615,6 +615,18 @@ func _build_liquid_glass_ui() -> void:
 		self.is_sim_paused = is_paused
 		Engine.time_scale = 0.0 if is_paused else current_sim_speed
 	)
+	main_hud.damping_changed.connect(func(val: float):
+		if damping_slider: damping_slider.value = val
+		if rig_a: rig_a.damping_ratio_zeta = val
+		if rig_b: rig_b.damping_ratio_zeta = val
+		if rig_c: rig_c.damping_ratio_zeta = val
+	)
+	main_hud.oscillations_toggled.connect(func(enabled: bool):
+		if oscillations_check: oscillations_check.button_pressed = enabled
+		if rig_a: rig_a.oscillations_enabled = enabled
+		if rig_b: rig_b.oscillations_enabled = enabled
+		if rig_c: rig_c.oscillations_enabled = enabled
+	)
 	main_hud.jolt_requested.connect(func():
 		if oscillations_check: oscillations_check.button_pressed = true
 		if rig_a: rig_a.apply_impulse(0.12)
@@ -2276,14 +2288,22 @@ func _update_ui_telemetry() -> void:
 		return
 
 	# Determine active rig telemetry for MainHUD
-	var active_telem: Dictionary = telemetry_c
-	var active_rig_ref = inspected_rig if (inspected_rig != null and is_instance_valid(inspected_rig)) else rig_c
-	if active_rig_ref == rig_a:
-		active_telem = telemetry_a
-	elif active_rig_ref == rig_b:
+	var active_rig_ref = inspected_rig if (inspected_rig != null and is_instance_valid(inspected_rig)) else null
+	if active_rig_ref == null:
+		if current_mobile_rig_id == "RIG_B" or current_mobile_rig_id == "B":
+			active_rig_ref = rig_b
+		elif current_mobile_rig_id == "RIG_C" or current_mobile_rig_id == "C":
+			active_rig_ref = rig_c
+		else:
+			active_rig_ref = rig_a
+
+	var active_telem: Dictionary = telemetry_a
+	if active_rig_ref == rig_b:
 		active_telem = telemetry_b
-	else:
+	elif active_rig_ref == rig_c:
 		active_telem = telemetry_c
+	else:
+		active_telem = telemetry_a
 
 	if main_hud != null:
 		var h_cm: float = active_telem.get("H_cm", 7.5)

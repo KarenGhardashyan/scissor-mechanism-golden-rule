@@ -21,6 +21,8 @@ signal formulas_requested()
 signal reset_view_requested()
 signal sim_speed_changed(val: float)
 signal sim_pause_toggled(is_paused: bool)
+signal damping_changed(val: float)
+signal oscillations_toggled(enabled: bool)
 signal jolt_requested()
 signal deselect_pin_requested()
 signal vector_group_toggled(group_id: String, is_active: bool)
@@ -30,6 +32,8 @@ var is_dark_theme: bool = true
 var is_slow_mo: bool = false
 var is_upper_beam: bool = true
 var is_stiction_on: bool = true
+var is_oscillations_on: bool = true
+var current_damping: float = 0.25
 var current_rig_id: String = "ALL"
 
 # Vector Filter Group States (Bottom-Left Control Pill)
@@ -946,7 +950,7 @@ func _build_control_card_tabs(ctrl_vbox: VBoxContainer) -> void:
 	all_param_val_labels.clear()
 	all_param_preset_buttons.clear()
 
-	var tab_titles := ["MASS (m)", "FRICTION (μ)", "STIFFNESS (k)", "GRAVITY (g)", "TIME / SPEED"]
+	var tab_titles := ["MASS (m)", "FRICTION (μ)", "STIFFNESS (k)", "GRAVITY (g)", "DYNAMICS / SPEED"]
 	for i in range(tab_titles.size()):
 		var btn := Button.new()
 		btn.text = tab_titles[i]
@@ -1298,6 +1302,61 @@ func _build_control_card_tabs(ctrl_vbox: VBoxContainer) -> void:
 	all_param_preset_buttons.append(btn_deselect_pin)
 	p_time.add_child(action_row)
 
+	# Dynamic Oscillations & Damping Section
+	var osc_row := HBoxContainer.new()
+	lbl_damping_tag = Label.new()
+	lbl_damping_tag.text = "DAMPING RATIO (ζ):"
+	lbl_damping_tag.add_theme_font_size_override("font_size", 11)
+	osc_row.add_child(lbl_damping_tag)
+	all_param_tag_labels.append(lbl_damping_tag)
+
+	lbl_damping_val = Label.new()
+	lbl_damping_val.text = "0.25 [Underdamped]"
+	lbl_damping_val.add_theme_font_size_override("font_size", 13)
+	osc_row.add_child(lbl_damping_val)
+	all_param_val_labels.append(lbl_damping_val)
+
+	var spacer_osc := Control.new()
+	spacer_osc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	osc_row.add_child(spacer_osc)
+
+	btn_oscillations_toggle = Button.new()
+	btn_oscillations_toggle.text = "OSCILLATIONS: ON"
+	btn_oscillations_toggle.custom_minimum_size = Vector2(140, 24)
+	btn_oscillations_toggle.add_theme_font_size_override("font_size", 10)
+	btn_oscillations_toggle.pressed.connect(_on_oscillations_toggle_pressed)
+	osc_row.add_child(btn_oscillations_toggle)
+	all_param_preset_buttons.append(btn_oscillations_toggle)
+	p_time.add_child(osc_row)
+
+	slider_damping = HSlider.new()
+	slider_damping.min_value = 0.00
+	slider_damping.max_value = 1.50
+	slider_damping.step = 0.05
+	slider_damping.value = current_damping
+	slider_damping.value_changed.connect(_on_damping_slider_changed)
+	p_time.add_child(slider_damping)
+
+	var damp_presets := HBoxContainer.new()
+	damp_presets.add_theme_constant_override("separation", 4)
+	var d_cfgs := [
+		{"label": "Zero (0.0)", "val": 0.00},
+		{"label": "Light (0.15)", "val": 0.15},
+		{"label": "Nominal (0.25)", "val": 0.25},
+		{"label": "Critical (1.00)", "val": 1.00}
+	]
+	for cfg in d_cfgs:
+		var dbtn := Button.new()
+		dbtn.text = cfg["label"]
+		dbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		dbtn.custom_minimum_size = Vector2(0, 22)
+		dbtn.add_theme_font_size_override("font_size", 9)
+		var dval: float = cfg["val"]
+		dbtn.pressed.connect(func(): slider_damping.value = dval)
+		damp_presets.add_child(dbtn)
+		all_param_preset_buttons.append(dbtn)
+	p_time.add_child(damp_presets)
+
 	# 3. 3x2 Telemetry Metric Grid (Always pinned below active parameters)
 	var grid := GridContainer.new()
 	grid.columns = 3
@@ -1400,6 +1459,29 @@ func _on_deselect_pin_pressed() -> void:
 	deselect_pin_requested.emit()
 
 
+func _on_damping_slider_changed(val: float) -> void:
+	current_damping = val
+	var mode_str := "Undamped" if val < 0.01 else ("Underdamped" if val < 0.99 else ("Critical" if val <= 1.01 else "Overdamped"))
+	if lbl_damping_val != null:
+		lbl_damping_val.text = "%.2f [%s]" % [val, mode_str]
+	damping_changed.emit(val)
+
+
+func _on_oscillations_toggle_pressed() -> void:
+	is_oscillations_on = not is_oscillations_on
+	_update_oscillations_button_ui()
+	oscillations_toggled.emit(is_oscillations_on)
+
+
+func _update_oscillations_button_ui() -> void:
+	if btn_oscillations_toggle != null:
+		if is_oscillations_on:
+			btn_oscillations_toggle.text = "OSCILLATIONS: ON"
+		else:
+			btn_oscillations_toggle.text = "OSCILLATIONS: OFF (Glide)"
+		btn_oscillations_toggle.add_theme_stylebox_override("normal", ThemeManager.create_button_style(is_dark_theme, is_oscillations_on, false, 4))
+
+
 ## Applies theme tokens to all cards and buttons
 func apply_theme(is_dark: bool) -> void:
 	is_dark_theme = is_dark
@@ -1461,9 +1543,10 @@ func apply_theme(is_dark: bool) -> void:
 
 	_update_param_tab_buttons()
 	_update_vector_group_buttons()
+	_update_oscillations_button_ui()
 
 	# 5. Sliders
-	for sl in [slider_mass, slider_stiffness, slider_efficiency, slider_friction, slider_gravity, slider_sim_speed]:
+	for sl in [slider_mass, slider_stiffness, slider_efficiency, slider_friction, slider_gravity, slider_sim_speed, slider_damping]:
 		if sl != null:
 			ThemeManager.apply_slider_style(sl, is_dark, 20)
 	if slider_mob_mass != null:
