@@ -654,6 +654,7 @@ func _build_liquid_glass_ui() -> void:
 		if inspected_rig != null and is_instance_valid(inspected_rig):
 			_update_force_visualizer()
 	)
+	main_hud.stiction_toggled.connect(func(stiction_on: bool):
 		is_stiction_enabled = stiction_on
 		if rig_a: rig_a.stiction_enabled = stiction_on
 		if rig_c: rig_c.stiction_enabled = stiction_on
