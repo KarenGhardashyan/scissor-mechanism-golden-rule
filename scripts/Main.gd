@@ -2931,15 +2931,6 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			# Left Lateral Hinge
 			F_y_down = p_stage_down * 0.5
 			F_x_down = p_stage_down / (2.0 * tan_theta)
-			F_y_up = p_stage_up * 0.5
-			F_x_up = p_stage_up / (2.0 * tan_theta)
-
-			# Upper beam pulls up-right (+X, +Y)
-			dir_fy_up = Vector3(0, 1, 0)
-			dir_fx_up = Vector3(1, 0, 0)
-			var vec_upper := Vector3(F_x_up, F_y_up, 0.0)
-			R_up = vec_upper.length()
-			dir_res_upper = vec_upper.normalized()
 
 			# Lower beam pulls down-left (-X, -Y)
 			dir_fy_down = Vector3(0, -1, 0)
@@ -2948,20 +2939,26 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			R_down = vec_lower.length()
 			dir_res_lower = vec_lower.normalized()
 
-			# Physical static friction balances the net difference between upper and lower beams:
-			# F_net = R_upper + R_lower + F_friction = 0 => F_friction = -(R_upper + R_lower)
-			var vec_fric := - (vec_upper + vec_lower)
-			F_s = vec_fric.length()
-			dir_fs = vec_fric.normalized() if F_s > 0.001 else Vector3.ZERO
-
-			if is_moving:
-				F_k = mu * R_down * vel_norm
-				dir_fk = Vector3(-1.0, 0.0, 0.0) * motion_dir
-				F_fric = F_k
-				dir_fric = dir_fk
+			# Friction opposes inward sliding / folding:
+			if mu > 0.0001 and is_stiction_enabled:
+				F_s = mu * R_down * clampf(cos(theta_clamped), 0.3, 0.9)
 			else:
-				F_fric = F_s
-				dir_fric = dir_fs
+				F_s = 0.0
+			var vec_fric := Vector3(-F_s, 0.0, 0.0) if not is_moving else Vector3(-1.0, 0.0, 0.0) * (mu * R_down * vel_norm * motion_dir)
+			dir_fs = vec_fric.normalized() if vec_fric.length_squared() > 0.0001 else Vector3.ZERO
+			F_k = mu * R_down * vel_norm if is_moving else 0.0
+			F_fric = F_k if is_moving else F_s
+			dir_fk = Vector3(-1.0, 0.0, 0.0) * motion_dir if is_moving else Vector3.ZERO
+			dir_fric = dir_fk if is_moving else dir_fs
+
+			# Upper beam must balance lower beam AND friction: R_upper = -(R_lower + F_friction) => ΣF = 0
+			var vec_upper := - (vec_lower + (vec_fric if not is_moving else Vector3.ZERO))
+			F_x_up = absf(vec_upper.x)
+			F_y_up = absf(vec_upper.y)
+			R_up = vec_upper.length()
+			dir_fy_up = Vector3(0, 1, 0)
+			dir_fx_up = Vector3(1, 0, 0)
+			dir_res_upper = vec_upper.normalized()
 
 			tau_fric = F_fric * r_pin
 			F_y = F_y_up if is_upper_force_reaction else F_y_down
@@ -2978,15 +2975,6 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			# Right Lateral Hinge
 			F_y_down = p_stage_down * 0.5
 			F_x_down = p_stage_down / (2.0 * tan_theta)
-			F_y_up = p_stage_up * 0.5
-			F_x_up = p_stage_up / (2.0 * tan_theta)
-
-			# Upper beam pulls up-left (-X, +Y)
-			dir_fy_up = Vector3(0, 1, 0)
-			dir_fx_up = Vector3(-1, 0, 0)
-			var vec_upper := Vector3(-F_x_up, F_y_up, 0.0)
-			R_up = vec_upper.length()
-			dir_res_upper = vec_upper.normalized()
 
 			# Lower beam pulls down-right (+X, -Y)
 			dir_fy_down = Vector3(0, -1, 0)
@@ -2995,20 +2983,26 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			R_down = vec_lower.length()
 			dir_res_lower = vec_lower.normalized()
 
-			# Physical static friction balances the net difference between upper and lower beams:
-			# F_net = R_upper + R_lower + F_friction = 0 => F_friction = -(R_upper + R_lower)
-			var vec_fric := - (vec_upper + vec_lower)
-			F_s = vec_fric.length()
-			dir_fs = vec_fric.normalized() if F_s > 0.001 else Vector3.ZERO
-
-			if is_moving:
-				F_k = mu * R_down * vel_norm
-				dir_fk = Vector3(1.0, 0.0, 0.0) * motion_dir
-				F_fric = F_k
-				dir_fric = dir_fk
+			# Friction opposes inward sliding / folding:
+			if mu > 0.0001 and is_stiction_enabled:
+				F_s = mu * R_down * clampf(cos(theta_clamped), 0.3, 0.9)
 			else:
-				F_fric = F_s
-				dir_fric = dir_fs
+				F_s = 0.0
+			var vec_fric := Vector3(F_s, 0.0, 0.0) if not is_moving else Vector3(1.0, 0.0, 0.0) * (mu * R_down * vel_norm * motion_dir)
+			dir_fs = vec_fric.normalized() if vec_fric.length_squared() > 0.0001 else Vector3.ZERO
+			F_k = mu * R_down * vel_norm if is_moving else 0.0
+			F_fric = F_k if is_moving else F_s
+			dir_fk = Vector3(1.0, 0.0, 0.0) * motion_dir if is_moving else Vector3.ZERO
+			dir_fric = dir_fk if is_moving else dir_fs
+
+			# Upper beam must balance lower beam AND friction: R_upper = -(R_lower + F_friction) => ΣF = 0
+			var vec_upper := - (vec_lower + (vec_fric if not is_moving else Vector3.ZERO))
+			F_x_up = absf(vec_upper.x)
+			F_y_up = absf(vec_upper.y)
+			R_up = vec_upper.length()
+			dir_fy_up = Vector3(0, 1, 0)
+			dir_fx_up = Vector3(-1, 0, 0)
+			dir_res_upper = vec_upper.normalized()
 
 			tau_fric = F_fric * r_pin
 			F_y = F_y_up if is_upper_force_reaction else F_y_down
