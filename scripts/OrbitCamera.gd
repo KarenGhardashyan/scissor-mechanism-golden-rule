@@ -290,31 +290,57 @@ func set_mobile_mode(is_mobile: bool) -> void:
 		max_distance = 14.0
 
 
-## Auto-framing clamp for desktop/tablet viewports to prevent side cards from occluding Rig C or Rig B
+## Auto-framing clamp for desktop/tablet viewports to center mechanism in free space
 func update_aspect_ratio_framing(vp_size: Vector2) -> void:
 	if is_mobile_mode:
 		return
 	var aspect: float = vp_size.x / maxf(vp_size.y, 1.0)
+	# On Desktop Landscape, right 40% is occupied by HUD cards.
+	# The free 3D viewing area is the left 60%.
+	# Center of left 60% is at X = 30% of screen.
+	# To center the rigs horizontally in this left 60% window, the camera focus must shift slightly right (+X),
+	# or camera target offset left (-0.55m).
 	if aspect < 1.18:
-		# Very narrow aspect ratio
-		default_distance = 9.0
-		default_target = Vector3(-0.20, 1.45, 0.0)
+		default_distance = 8.8
+		default_target = Vector3(-0.55, 1.55, 0.0)
 	elif aspect < 1.45:
-		# 4:3 or square laptop/tablet display
-		default_distance = 8.7
-		default_target = Vector3(-0.20, 1.60, 0.0)
+		default_distance = 8.5
+		default_target = Vector3(-0.55, 1.65, 0.0)
 	elif aspect < 1.70:
-		# 16:10 standard laptop display (e.g. 1440x900, 1680x1050, 1920x1200)
-		default_distance = 8.4
-		default_target = Vector3(-0.20, 1.60, 0.0)
+		default_distance = 8.2
+		default_target = Vector3(-0.55, 1.65, 0.0)
 	else:
-		# 16:9 standard and Ultrawide displays
-		default_distance = 8.25
-		default_target = Vector3(-0.20, 1.60, 0.0)
+		default_distance = 8.0
+		default_target = Vector3(-0.55, 1.65, 0.0)
 
 	# If currently close to default, gently adjust target distance to new framing
 	if absf(current_distance - target_distance) < 0.2:
 		target_distance = default_distance
+	if current_target.distance_to(default_target) < 0.5:
+		current_target = default_target
+
+
+## Centers the camera precisely inside the unobstructed screen window
+func auto_fit_free_rect(free_rect: Rect2, vp_size: Vector2, rig_pos: Vector3, rig_height: float) -> void:
+	if vp_size.x <= 0.0 or vp_size.y <= 0.0:
+		return
+	# Screen center vs free rect center
+	var screen_center := vp_size * 0.5
+	var free_center := free_rect.position + (free_rect.size * 0.5)
+	var offset_ratio := (free_center - screen_center) / vp_size
+
+	# Target 75% of available free height
+	var visible_h_target: float = maxf(rig_height / 0.75, 1.5)
+	var rad_fov: float = deg_to_rad(fov)
+	var required_dist: float = (visible_h_target * 0.5) / tan(rad_fov * 0.5)
+
+	# Adjust target position in 3D based on offset_ratio
+	var h_shift: float = - offset_ratio.x * (visible_h_target * (vp_size.x / vp_size.y))
+	var v_shift: float = offset_ratio.y * visible_h_target
+
+	target_distance = clampf(required_dist, min_distance, max_distance)
+	target_point = Vector3(rig_pos.x + h_shift, rig_pos.y + v_shift, rig_pos.z)
+	current_target = target_point
 
 
 func set_touch_blocked_regions(top_y: float, bottom_y: float) -> void:

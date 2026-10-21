@@ -4,6 +4,9 @@ extends Node3D
 ## Apple "Light Liquid Glass" Showroom Architecture (VisionOS Minimalist Aesthetic)
 ## Pure Light Studio | Tactile Physical Hardware Linkages | Frosted Glassmorphism UI
 
+const MainHUDClass = preload("res://scripts/ui/MainHUD.gd")
+const ThemeManagerClass = preload("res://scripts/ui/ThemeManager.gd")
+
 @onready var camera: OrbitCamera = $OrbitCamera
 @onready var rig_a: PantographRig = $RigA
 @onready var rig_c: PantographRig = $RigC
@@ -25,6 +28,7 @@ var mat_gantry: StandardMaterial3D
 var mat_gantry_accent: StandardMaterial3D
 
 # Liquid Glass UI Panels & Containers
+var main_hud: CanvasLayer
 var ui_layer: CanvasLayer
 var header_panel: PanelContainer
 var left_panel: PanelContainer
@@ -405,17 +409,23 @@ func _setup_showroom_bay() -> void:
 	bay.name = "ShowroomBay"
 	add_child(bay)
 
-	# 1. Studio Floor Plane
+	# 1. Studio Floor Plane with SpaceX / Astro UXDS Grid Shader
 	var floor_inst := MeshInstance3D.new()
 	var floor_mesh := PlaneMesh.new()
 	floor_mesh.size = Vector2(80.0, 80.0)
 	floor_inst.mesh = floor_mesh
 	floor_inst.position = Vector3(0, 0.0, 0)
-	mat_floor = StandardMaterial3D.new()
-	mat_floor.albedo_color = Color(0.905, 0.91, 0.925)
-	mat_floor.metallic = 0.02
-	mat_floor.roughness = 0.45
-	floor_inst.material_override = mat_floor
+	var grid_shader := load("res://shaders/grid_floor.gdshader") as Shader
+	if grid_shader != null:
+		var grid_mat := ShaderMaterial.new()
+		grid_mat.shader = grid_shader
+		floor_inst.material_override = grid_mat
+	else:
+		mat_floor = StandardMaterial3D.new()
+		mat_floor.albedo_color = Color(0.905, 0.91, 0.925)
+		mat_floor.metallic = 0.02
+		mat_floor.roughness = 0.45
+		floor_inst.material_override = mat_floor
 	bay.add_child(floor_inst)
 
 	# 2. Architectural Gantry Frame
@@ -533,6 +543,50 @@ func _setup_rigs() -> void:
 
 
 func _build_liquid_glass_ui() -> void:
+	# Instantiate SpaceX Crew Dragon / Astro UXDS Unified MainHUD
+	main_hud = MainHUDClass.new()
+	main_hud.name = "MainHUD"
+	add_child(main_hud)
+
+	# Connect MainHUD interactive signals to simulation controller
+	main_hud.mass_changed.connect(func(val: float):
+		if rig_a: rig_a.set_mass(val)
+		if rig_c: rig_c.set_mass(val)
+		if rig_b: rig_b.set_mass(val)
+	)
+	main_hud.beam_reaction_toggled.connect(func(is_upper: bool):
+		is_upper_force_reaction = is_upper
+		_update_force_visualizer()
+	)
+	main_hud.stiction_toggled.connect(func(stiction_on: bool):
+		is_stiction_enabled = stiction_on
+		if rig_a: rig_a.stiction_enabled = stiction_on
+		if rig_c: rig_c.stiction_enabled = stiction_on
+		if rig_b: rig_b.stiction_enabled = stiction_on
+	)
+	main_hud.slow_mo_toggled.connect(func(slow_mo_on: bool):
+		Engine.time_scale = 0.20 if slow_mo_on else 1.00
+	)
+	main_hud.theme_toggled.connect(func(dark_on: bool):
+		_apply_theme(dark_on)
+	)
+	main_hud.rig_selection_changed.connect(func(rig_id: String):
+		_select_mobile_rig(rig_id)
+		if camera != null and camera.has_method("focus_rig"):
+			camera.focus_rig(rig_id)
+	)
+	main_hud.reset_view_requested.connect(func():
+		if camera != null:
+			camera.reset_camera()
+	)
+	main_hud.formulas_requested.connect(func():
+		if OS.has_feature("web"):
+			JavaScriptBridge.eval("window.openFormulasModal && window.openFormulasModal();")
+		elif formulas_modal != null:
+			formulas_modal.visible = not formulas_modal.visible
+	)
+
+	# Keep legacy root for formulas modal dialog only
 	ui_layer = CanvasLayer.new()
 	ui_layer.name = "UILayer"
 	add_child(ui_layer)
@@ -542,15 +596,10 @@ func _build_liquid_glass_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui_layer.add_child(root)
 
-	# 1. FLOATING HEADER PILL (Centered with balanced padding and space distribution)
-	header_panel = _create_liquid_glass_panel(Vector2(0, 16), Vector2(1180, 68), 24)
-	header_panel.anchor_left = 0.5
-	header_panel.anchor_right = 0.5
-	header_panel.offset_left = -590.0
-	header_panel.offset_right = 590.0
-	header_panel.offset_top = 16.0
-	header_panel.offset_bottom = 84.0
-	root.add_child(header_panel)
+	_build_formulas_modal(root)
+	return
+
+	# [DEPRECATED LEGACY FLOATING CODE BELOW BYPASSED BY MainHUD]
 
 	var header_margin := MarginContainer.new()
 	header_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -2084,12 +2133,15 @@ func _on_gravity_slider_changed(val: float) -> void:
 
 
 func _apply_preset(m: float, k: float, eta: float = 1.0, g: float = 9.81, mu: float = 0.20) -> void:
-	mass_slider.value = m
-	stiffness_slider.value = k
-	efficiency_slider.value = eta * 100.0
-	gravity_slider.value = g
-	if friction_slider != null:
-		friction_slider.value = mu
+	if main_hud != null:
+		main_hud.current_mass = m
+		if main_hud.slider_mass: main_hud.slider_mass.value = m
+		if main_hud.slider_mob_mass: main_hud.slider_mob_mass.value = m
+	if mass_slider != null: mass_slider.value = m
+	if stiffness_slider != null: stiffness_slider.value = k
+	if efficiency_slider != null: efficiency_slider.value = eta * 100.0
+	if gravity_slider != null: gravity_slider.value = g
+	if friction_slider != null: friction_slider.value = mu
 	if live_graph != null:
 		live_graph.set_mass(m)
 		live_graph.set_stiffness(k)
@@ -2114,34 +2166,53 @@ func _update_ui_telemetry() -> void:
 	if telemetry_a.is_empty() or telemetry_c.is_empty() or telemetry_b.is_empty():
 		return
 
-	# Update Rig A numbers
-	label_a_delta_h.text = "+%.2f cm" % telemetry_a.get("delta_H_cm", 0.0)
-	label_a_h.text = "%.2f cm" % telemetry_a.get("H_cm", 0.0)
-	label_a_l.text = "%.2f cm" % telemetry_a.get("L_cm", 0.0)
-	label_a_lambda.text = "%.3f×" % telemetry_a.get("transmission_lambda", 3.0)
-	label_a_t.text = "%.2f N" % telemetry_a.get("tensile_force_T", 0.0)
-	label_a_work.text = "%.1f%%" % telemetry_a.get("work_ratio_pct", 100.0)
+	# Determine active rig telemetry for MainHUD
+	var active_telem: Dictionary = telemetry_c
+	var active_rig_ref = inspected_rig if (inspected_rig != null and is_instance_valid(inspected_rig)) else rig_c
+	if active_rig_ref == rig_a:
+		active_telem = telemetry_a
+	elif active_rig_ref == rig_b:
+		active_telem = telemetry_b
+	else:
+		active_telem = telemetry_c
 
-	# Update Rig C numbers
-	label_c_delta_h.text = "+%.2f cm" % telemetry_c.get("delta_H_cm", 0.0)
-	label_c_h.text = "%.2f cm" % telemetry_c.get("H_cm", 0.0)
-	label_c_l.text = "%.2f cm" % telemetry_c.get("L_cm", 0.0)
-	label_c_lambda.text = "%.3f×" % telemetry_c.get("transmission_lambda", 6.0)
-	label_c_t.text = "%.2f N" % telemetry_c.get("tensile_force_T", 0.0)
-	label_c_work.text = "%.1f%%" % telemetry_c.get("work_ratio_pct", 100.0)
+	if main_hud != null:
+		var h_cm: float = active_telem.get("H_cm", 7.5)
+		var l_cm: float = active_telem.get("L_cm", 22.5)
+		var r_n: float = absf(filtered_res)
+		var fx_n: float = absf(filtered_fx)
+		var fy_n: float = absf(filtered_fy)
+		var fric_n: float = absf(filtered_fric)
+		main_hud.update_telemetry(h_cm, l_cm, r_n, fx_n, fy_n, fric_n)
 
-	# Update Rig B numbers
-	label_b_delta_h.text = "+%.2f cm" % telemetry_b.get("delta_H_cm", 0.0)
-	label_b_h.text = "%.2f cm" % telemetry_b.get("H_cm", 0.0)
-	label_b_l.text = "%.2f cm" % telemetry_b.get("L_cm", 0.0)
-	label_b_lambda.text = "%.3f×" % telemetry_b.get("transmission_lambda", 5.0)
-	label_b_t.text = "%.2f N" % telemetry_b.get("tensile_force_T", 0.0)
-	label_b_work.text = "%.1f%%" % telemetry_b.get("work_ratio_pct", 100.0)
+	# Update legacy labels if instantiated
+	if label_a_delta_h != null:
+		label_a_delta_h.text = "+%.2f cm" % telemetry_a.get("delta_H_cm", 0.0)
+		label_a_h.text = "%.2f cm" % telemetry_a.get("H_cm", 0.0)
+		label_a_l.text = "%.2f cm" % telemetry_a.get("L_cm", 0.0)
+		label_a_lambda.text = "%.3f×" % telemetry_a.get("transmission_lambda", 3.0)
+		label_a_t.text = "%.2f N" % telemetry_a.get("tensile_force_T", 0.0)
+		label_a_work.text = "%.1f%%" % telemetry_a.get("work_ratio_pct", 100.0)
 
-	# Update Extension comparison bars
-	ratio_bar_a.value = telemetry_a.get("L_cm", 0.0)
-	ratio_bar_c.value = telemetry_c.get("L_cm", 0.0)
-	ratio_bar_b.value = telemetry_b.get("L_cm", 0.0)
+	if label_c_delta_h != null:
+		label_c_delta_h.text = "+%.2f cm" % telemetry_c.get("delta_H_cm", 0.0)
+		label_c_h.text = "%.2f cm" % telemetry_c.get("H_cm", 0.0)
+		label_c_l.text = "%.2f cm" % telemetry_c.get("L_cm", 0.0)
+		label_c_lambda.text = "%.3f×" % telemetry_c.get("transmission_lambda", 6.0)
+		label_c_t.text = "%.2f N" % telemetry_c.get("tensile_force_T", 0.0)
+		label_c_work.text = "%.1f%%" % telemetry_c.get("work_ratio_pct", 100.0)
+
+	if label_b_delta_h != null:
+		label_b_delta_h.text = "+%.2f cm" % telemetry_b.get("delta_H_cm", 0.0)
+		label_b_h.text = "%.2f cm" % telemetry_b.get("H_cm", 0.0)
+		label_b_l.text = "%.2f cm" % telemetry_b.get("L_cm", 0.0)
+		label_b_lambda.text = "%.3f×" % telemetry_b.get("transmission_lambda", 5.0)
+		label_b_t.text = "%.2f N" % telemetry_b.get("tensile_force_T", 0.0)
+		label_b_work.text = "%.1f%%" % telemetry_b.get("work_ratio_pct", 100.0)
+
+	if ratio_bar_a != null: ratio_bar_a.value = telemetry_a.get("L_cm", 0.0)
+	if ratio_bar_c != null: ratio_bar_c.value = telemetry_c.get("L_cm", 0.0)
+	if ratio_bar_b != null: ratio_bar_b.value = telemetry_b.get("L_cm", 0.0)
 
 	if lbl_mob_zoom_dist != null and camera != null and is_instance_valid(camera):
 		lbl_mob_zoom_dist.text = "%.1fm" % camera.current_distance
@@ -2556,14 +2627,14 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 	var lbl := Label3D.new()
 	lbl.name = "Label"
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.pixel_size = 0.0030
-	lbl.font_size = 20
+	lbl.pixel_size = 0.0035
+	lbl.font_size = 22
 	lbl.shaded = false
 	lbl.no_depth_test = true
 	lbl.render_priority = 15
-	lbl.modulate = col
-	lbl.outline_size = 6
-	lbl.outline_modulate = Color(0.05, 0.05, 0.05, 0.95)
+	lbl.modulate = Color.WHITE
+	lbl.outline_size = 8
+	lbl.outline_modulate = Color(0.04, 0.06, 0.09, 0.96)
 	root.add_child(lbl)
 
 	return {
@@ -3206,56 +3277,59 @@ func _set_focus_mode(focus: bool) -> void:
 func _apply_theme(is_dark: bool) -> void:
 	is_dark_theme = is_dark
 
+	if main_hud != null:
+		main_hud.apply_theme(is_dark)
+
 	# 1. WorldEnvironment Sky & Ambient Light
 	if sky_proc_mat != null:
 		if is_dark:
-			sky_proc_mat.sky_top_color = Color(0.04, 0.05, 0.08)
-			sky_proc_mat.sky_horizon_color = Color(0.08, 0.10, 0.16)
+			sky_proc_mat.sky_top_color = Color(0.031, 0.043, 0.063) # #080B10 Deep space obsidian
+			sky_proc_mat.sky_horizon_color = Color(0.067, 0.090, 0.133)
 			sky_proc_mat.ground_bottom_color = Color(0.02, 0.025, 0.04)
-			sky_proc_mat.ground_horizon_color = Color(0.06, 0.08, 0.12)
+			sky_proc_mat.ground_horizon_color = Color(0.04, 0.05, 0.08)
 		else:
-			sky_proc_mat.sky_top_color = Color(0.965, 0.968, 0.976)
-			sky_proc_mat.sky_horizon_color = Color(0.885, 0.895, 0.92)
-			sky_proc_mat.ground_bottom_color = Color(0.84, 0.85, 0.88)
-			sky_proc_mat.ground_horizon_color = Color(0.885, 0.895, 0.92)
+			sky_proc_mat.sky_top_color = Color(0.945, 0.961, 0.976) # #F1F5F9 Slate-100 paper
+			sky_proc_mat.sky_horizon_color = Color(0.885, 0.905, 0.93)
+			sky_proc_mat.ground_bottom_color = Color(0.84, 0.86, 0.89)
+			sky_proc_mat.ground_horizon_color = Color(0.885, 0.905, 0.93)
 
 	if env_res != null:
 		if is_dark:
-			env_res.ambient_light_color = Color(0.18, 0.20, 0.28)
-			env_res.ambient_light_energy = 0.42
+			env_res.ambient_light_color = Color(0.18, 0.22, 0.32)
+			env_res.ambient_light_energy = 0.50
 			env_res.glow_enabled = true
-			env_res.glow_bloom = 0.06
-			env_res.glow_intensity = 0.28
+			env_res.glow_bloom = 0.08
+			env_res.glow_intensity = 0.30
 			env_res.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 		else:
-			env_res.ambient_light_color = Color(0.88, 0.89, 0.92)
-			env_res.ambient_light_energy = 0.65
+			env_res.ambient_light_color = Color(0.88, 0.90, 0.94)
+			env_res.ambient_light_energy = 0.70
 			env_res.glow_enabled = false
 
 	# 2. Directional Lights
 	if dir_light != null:
 		dir_light.light_color = Color(0.95, 0.96, 1.0) if is_dark else Color(1.0, 0.992, 0.98)
-		dir_light.light_energy = 0.95 if is_dark else 1.35
+		dir_light.light_energy = 1.05 if is_dark else 1.35
 	if fill_light != null:
-		fill_light.light_color = Color(0.25, 0.45, 0.70) if is_dark else Color(0.92, 0.94, 0.98)
-		fill_light.light_energy = 0.30 if is_dark else 0.45
+		fill_light.light_color = Color(0.20, 0.45, 0.75) if is_dark else Color(0.92, 0.94, 0.98)
+		fill_light.light_energy = 0.35 if is_dark else 0.45
 	if rim_light != null:
-		rim_light.light_color = Color(1.0, 0.55, 0.15) if is_dark else Color(0.98, 0.98, 1.0)
-		rim_light.light_energy = 0.90 if is_dark else 0.40
+		rim_light.light_color = Color(0.0, 0.824, 1.0) if is_dark else Color(0.98, 0.98, 1.0)
+		rim_light.light_energy = 0.60 if is_dark else 0.40
 
 	# 3. Showroom Bay Materials
 	if mat_floor != null:
-		mat_floor.albedo_color = Color(0.065, 0.075, 0.095) if is_dark else Color(0.905, 0.91, 0.925)
+		mat_floor.albedo_color = Color(0.031, 0.043, 0.063) if is_dark else Color(0.945, 0.961, 0.976)
 		mat_floor.metallic = 0.22 if is_dark else 0.02
 		mat_floor.roughness = 0.35 if is_dark else 0.45
 	if mat_gantry != null:
-		mat_gantry.albedo_color = Color(0.12, 0.13, 0.16) if is_dark else Color(0.24, 0.25, 0.28)
+		mat_gantry.albedo_color = Color(0.08, 0.10, 0.14) if is_dark else Color(0.24, 0.25, 0.28)
 	if mat_gantry_accent != null:
-		mat_gantry_accent.albedo_color = Color(1.0, 0.55, 0.12) if is_dark else Color(0.78, 0.80, 0.85)
+		mat_gantry_accent.albedo_color = Color(0.0, 0.824, 1.0) if is_dark else Color(0.008, 0.518, 0.780)
 		mat_gantry_accent.emission_enabled = is_dark
-		mat_gantry_accent.emission = Color(1.0, 0.55, 0.12) * 0.40 if is_dark else Color.BLACK
+		mat_gantry_accent.emission = Color(0.0, 0.824, 1.0) * 0.40 if is_dark else Color.BLACK
 
-	# 4. Rigs
+	# 4. Rigs Theme
 	if rig_a != null:
 		rig_a.set_dark_theme(is_dark)
 	if rig_c != null:
@@ -4024,32 +4098,26 @@ func _restore_desktop_ui_scale() -> void:
 func _check_responsive_layout() -> void:
 	if not is_inside_tree() or get_viewport() == null:
 		return
-	var win := get_tree().root
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	if vp_size.x <= 0 or vp_size.y <= 0:
 		return
-	if camera != null and camera.has_method("update_aspect_ratio_framing"):
+
+	if main_hud != null:
+		main_hud.update_responsive_layout(vp_size)
+
+	var aspect: float = vp_size.x / maxf(vp_size.y, 1.0)
+	var is_mobile := (aspect < 1.10)
+	is_mobile_layout = is_mobile
+
+	if camera != null:
+		camera.set_mobile_mode(is_mobile)
 		camera.update_aspect_ratio_framing(vp_size)
-	var raw_aspect: float = vp_size.x / maxf(vp_size.y, 1.0)
-	var is_mobile := (raw_aspect < 1.18) or (vp_size.x * win.content_scale_factor < 1050.0)
-
-	# Dynamic Viewport Content Scaling for mobile/high-DPI screens:
-	var target_scale: float = 1.0
-	if is_mobile:
-		var unscaled_w: float = vp_size.x * win.content_scale_factor
-		target_scale = clampf(unscaled_w / 500.0, 1.5, 3.4)
-
-	if absf(win.content_scale_factor - target_scale) > 0.05:
-		win.content_scale_factor = target_scale
-		return
-
-	if is_mobile != is_mobile_layout:
-		_apply_responsive_layout(is_mobile, vp_size)
-	else:
-		if is_mobile:
-			_adjust_mobile_sizes(vp_size)
-		else:
-			_adjust_desktop_sizes(vp_size)
+		if main_hud != null and camera.has_method("auto_fit_free_rect"):
+			var free_rect: Rect2 = main_hud.get_free_viewport_rect()
+			var rig_to_fit = inspected_rig if (inspected_rig != null and is_instance_valid(inspected_rig)) else rig_c
+			if rig_to_fit != null:
+				camera.auto_fit_free_rect(free_rect, vp_size, rig_to_fit.global_position, 2.2)
+	return
 
 
 func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
