@@ -23,6 +23,7 @@ signal sim_speed_changed(val: float)
 signal sim_pause_toggled(is_paused: bool)
 signal jolt_requested()
 signal deselect_pin_requested()
+signal vector_group_toggled(group_id: String, is_active: bool)
 
 # State
 var is_dark_theme: bool = true
@@ -30,6 +31,15 @@ var is_slow_mo: bool = false
 var is_upper_beam: bool = true
 var is_stiction_on: bool = true
 var current_rig_id: String = "ALL"
+
+# Vector Filter Group States (Bottom-Left Control Pill)
+var vector_active_groups := {
+	"projections": true,
+	"upper_beam": true,
+	"lower_beam": false,
+	"equilibrium": false,
+	"friction": true
+}
 var current_mass: float = 0.50
 var current_stiffness: float = 981.0
 var current_efficiency: float = 0.94
@@ -110,6 +120,11 @@ var tile_val_r: Label
 var tile_val_fx: Label
 var tile_val_fy: Label
 var tile_val_fric: Label
+
+# Bottom-Left Vector Force Groups Floating Panel
+var vector_panel: PanelContainer
+var vector_group_buttons: Dictionary = {}
+var mob_vector_group_buttons: Dictionary = {}
 
 # Rig Selection Buttons
 var rig_buttons: Dictionary = {}
@@ -275,13 +290,15 @@ func _build_desktop_layout() -> void:
 	desktop_split.add_theme_constant_override("separation", 16)
 	desktop_container.add_child(desktop_split)
 
-	# Left 60%: Empty viewport spacer that lets all clicks pass through to 3D OrbitCamera!
+	# Left 60%: Viewport spacer with Bottom-Left Floating Vector Group Capsule!
 	desktop_3d_viewport_spacer = Control.new()
 	desktop_3d_viewport_spacer.name = "Desktop3DViewportSpacer"
 	desktop_3d_viewport_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desktop_3d_viewport_spacer.size_flags_stretch_ratio = 1.45 # ~60% of width
 	desktop_3d_viewport_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	desktop_split.add_child(desktop_3d_viewport_spacer)
+
+	_build_desktop_vector_panel()
 
 	# Right 40%: Vertical Stack (Controls Top + Live Graph Bottom)
 	var right_margin := MarginContainer.new()
@@ -556,11 +573,183 @@ func _build_mobile_layout() -> void:
 	mob_toggles.add_child(btn_m_fric)
 	mobile_tab_controls.add_child(mob_toggles)
 
+	# Mobile Vector Filter Groups Row (2 rows of clean pill buttons)
+	var mob_vec_header := Label.new()
+	mob_vec_header.text = "VECTOR FORCES DISPLAY:"
+	mob_vec_header.add_theme_font_size_override("font_size", 11)
+	mob_vec_header.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_MUTED)
+	mobile_tab_controls.add_child(mob_vec_header)
+
+	var mob_vec_row1 := HBoxContainer.new()
+	mob_vec_row1.add_theme_constant_override("separation", 6)
+	var mob_vec_row2 := HBoxContainer.new()
+	mob_vec_row2.add_theme_constant_override("separation", 6)
+
+	var m_cfgs := [
+		{"id": "upper_beam", "label": "Upper ↗", "row": mob_vec_row1},
+		{"id": "lower_beam", "label": "Lower ↙", "row": mob_vec_row1},
+		{"id": "equilibrium", "label": "ΣF = 0", "row": mob_vec_row1},
+		{"id": "projections", "label": "Fx / Fy", "row": mob_vec_row2},
+		{"id": "friction", "label": "Friction (fs)", "row": mob_vec_row2}
+	]
+	for cfg in m_cfgs:
+		var gid: String = cfg["id"]
+		var m_btn := Button.new()
+		m_btn.text = cfg["label"]
+		m_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		m_btn.custom_minimum_size = Vector2(0, 32)
+		m_btn.add_theme_font_size_override("font_size", 11)
+		m_btn.pressed.connect(func(): _toggle_vector_group(gid))
+		(cfg["row"] as HBoxContainer).add_child(m_btn)
+		mob_vector_group_buttons[gid] = m_btn
+	mobile_tab_controls.add_child(mob_vec_row1)
+	mobile_tab_controls.add_child(mob_vec_row2)
+
 	# Tab 1: Graph (Placeholder container to re-parent or toggle)
 	mobile_tab_graph = VBoxContainer.new()
 	mobile_tab_graph.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	mobile_tab_graph.visible = false
 	mob_bot_vbox.add_child(mobile_tab_graph)
+
+
+# -----------------------------------------------------------------------------
+# DESKTOP FLOATING BOTTOM-LEFT VECTOR FILTER PANEL
+# -----------------------------------------------------------------------------
+
+func _build_desktop_vector_panel() -> void:
+	# Floating bottom-left glass capsule located over the 3D viewport
+	vector_panel = PanelContainer.new()
+	vector_panel.name = "VectorFilterPanel"
+	vector_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	vector_panel.offset_left = 20.0
+	vector_panel.offset_bottom = -20.0
+	vector_panel.offset_right = 460.0
+	vector_panel.offset_top = -68.0
+	vector_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	vector_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	desktop_3d_viewport_spacer.add_child(vector_panel)
+
+	var p_margin := MarginContainer.new()
+	p_margin.add_theme_constant_override("margin_left", 10)
+	p_margin.add_theme_constant_override("margin_right", 10)
+	p_margin.add_theme_constant_override("margin_top", 6)
+	p_margin.add_theme_constant_override("margin_bottom", 6)
+	vector_panel.add_child(p_margin)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 6)
+	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	p_margin.add_child(hbox)
+
+	var lbl_tag := Label.new()
+	lbl_tag.text = "FORCES:"
+	lbl_tag.add_theme_font_size_override("font_size", 10)
+	lbl_tag.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_MUTED)
+	lbl_tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hbox.add_child(lbl_tag)
+
+	var cfgs := [
+		{"id": "upper_beam", "label": "Upper ↗", "tooltip": "Show upper scissor arm reaction vector (R_upper)"},
+		{"id": "lower_beam", "label": "Lower ↙", "tooltip": "Show lower scissor arm reaction vector (R_lower)"},
+		{"id": "equilibrium", "label": "ΣF = 0", "tooltip": "Show full pin static equilibrium (Upper + Lower reactions)"},
+		{"id": "projections", "label": "Fx / Fy", "tooltip": "Show vertical (Fy) and horizontal (Fx) component projections"},
+		{"id": "friction", "label": "Friction fs", "tooltip": "Show joint pin friction resisting shear trajectory"}
+	]
+
+	for cfg in cfgs:
+		var gid: String = cfg["id"]
+		var btn := Button.new()
+		btn.text = cfg["label"]
+		btn.tooltip_text = cfg["tooltip"]
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size = Vector2(0, 28)
+		btn.add_theme_font_size_override("font_size", 10)
+		btn.pressed.connect(func(): _toggle_vector_group(gid))
+		hbox.add_child(btn)
+		vector_group_buttons[gid] = btn
+
+	_update_vector_group_buttons()
+
+
+func _toggle_vector_group(group_id: String) -> void:
+	if not vector_active_groups.has(group_id):
+		return
+	var new_state: bool = not vector_active_groups[group_id]
+	vector_active_groups[group_id] = new_state
+
+	# If equilibrium is enabled, automatically activate both upper and lower
+	if group_id == "equilibrium" and new_state:
+		vector_active_groups["upper_beam"] = true
+		vector_active_groups["lower_beam"] = true
+
+	# If user manually disables upper or lower while equilibrium was on, turn off equilibrium
+	if (group_id == "upper_beam" or group_id == "lower_beam") and not new_state:
+		vector_active_groups["equilibrium"] = false
+
+	_update_vector_group_buttons()
+	vector_group_toggled.emit(group_id, new_state)
+
+
+func sync_vector_toggle_states(states: Dictionary) -> void:
+	for k in states.keys():
+		if vector_active_groups.has(k):
+			vector_active_groups[k] = states[k]
+	_update_vector_group_buttons()
+
+
+func _update_vector_group_buttons() -> void:
+	var active_bg := Color(0.0, 0.443, 0.89) # Vibrant Electric Blue #0070E0
+	var inactive_dark_bg := Color(0.10, 0.14, 0.20, 0.75)
+	var inactive_light_bg := Color(0.92, 0.94, 0.98, 0.90)
+
+	var all_dicts := [vector_group_buttons, mob_vector_group_buttons]
+	for dict in all_dicts:
+		for gid in dict.keys():
+			var btn: Button = dict[gid]
+			if btn == null or not is_instance_valid(btn):
+				continue
+			var is_active: bool = vector_active_groups.get(gid, false)
+
+			var sb := StyleBoxFlat.new()
+			sb.corner_radius_top_left = 6
+			sb.corner_radius_top_right = 6
+			sb.corner_radius_bottom_left = 6
+			sb.corner_radius_bottom_right = 6
+			sb.border_width_left = 1
+			sb.border_width_top = 1
+			sb.border_width_right = 1
+			sb.border_width_bottom = 1
+			sb.content_margin_left = 6
+			sb.content_margin_right = 6
+			sb.content_margin_top = 3
+			sb.content_margin_bottom = 3
+
+			if is_active:
+				# Active button: Rich Blue background, white text
+				sb.bg_color = active_bg
+				sb.border_color = Color(0.40, 0.75, 1.0, 0.85)
+				btn.add_theme_stylebox_override("normal", sb)
+				btn.add_theme_stylebox_override("hover", sb)
+				btn.add_theme_stylebox_override("pressed", sb)
+				btn.add_theme_stylebox_override("focus", sb)
+				btn.add_theme_color_override("font_color", Color.WHITE)
+				btn.add_theme_color_override("font_hover_color", Color.WHITE)
+				btn.add_theme_color_override("font_pressed_color", Color.WHITE)
+				btn.add_theme_color_override("font_focus_color", Color.WHITE)
+			else:
+				# Inactive button: Neutral theme glass (gray in dark theme, crisp light in light theme)
+				sb.bg_color = inactive_dark_bg if is_dark_theme else inactive_light_bg
+				sb.border_color = Color(1.0, 1.0, 1.0, 0.12) if is_dark_theme else Color("#94A3B8")
+				btn.add_theme_stylebox_override("normal", sb)
+				btn.add_theme_stylebox_override("hover", sb)
+				btn.add_theme_stylebox_override("pressed", sb)
+				btn.add_theme_stylebox_override("focus", sb)
+				var text_c: Color = ThemeManager.DARK_TEXT_PRIMARY if is_dark_theme else ThemeManager.LIGHT_TEXT_PRIMARY
+				btn.add_theme_color_override("font_color", text_c)
+				btn.add_theme_color_override("font_hover_color", text_c)
+				btn.add_theme_color_override("font_pressed_color", text_c)
+				btn.add_theme_color_override("font_focus_color", text_c)
 
 
 # -----------------------------------------------------------------------------
@@ -1219,6 +1408,7 @@ func apply_theme(is_dark: bool) -> void:
 	if top_bar != null: top_bar.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 0, 8, false))
 	if control_card != null: control_card.add_theme_stylebox_override("panel", card_sb)
 	if graph_card != null: graph_card.add_theme_stylebox_override("panel", card_sb)
+	if vector_panel != null: vector_panel.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 8, 8, false))
 	if mobile_top_bar != null: mobile_top_bar.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 0, 8, false))
 	if mobile_bottom_sheet != null: mobile_bottom_sheet.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 4, 12, true))
 	if formulas_modal != null: formulas_modal.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 4, 18, true))
@@ -1269,6 +1459,7 @@ func apply_theme(is_dark: bool) -> void:
 			btn.add_theme_color_override("font_focus_color", primary_c)
 
 	_update_param_tab_buttons()
+	_update_vector_group_buttons()
 
 	# 5. Sliders
 	for sl in [slider_mass, slider_stiffness, slider_efficiency, slider_friction, slider_gravity, slider_sim_speed]:

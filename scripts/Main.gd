@@ -254,6 +254,16 @@ var btn_toggle_force_dir: Button
 var is_upper_force_reaction: bool = true
 var is_resultant_only_mode: bool = false
 
+# Group Visibility Toggles for Bottom-Left Filter Bar
+var vector_show_projections: bool = true
+var vector_show_upper_beam: bool = true
+var vector_show_lower_beam: bool = false
+var vector_show_equilibrium: bool = false
+var vector_show_friction: bool = true
+
+var arrow_res_lower_data: Dictionary = {}
+
+
 
 func _ready() -> void:
 	_setup_pure_light_studio()
@@ -607,9 +617,30 @@ func _build_liquid_glass_ui() -> void:
 	main_hud.deselect_pin_requested.connect(func():
 		_deselect_pin()
 	)
-	main_hud.beam_reaction_toggled.connect(func(is_upper: bool):
-		is_upper_force_reaction = is_upper
-		_update_force_visualizer()
+	main_hud.vector_group_toggled.connect(func(group_id: String, is_active: bool):
+		match group_id:
+			"projections":
+				vector_show_projections = is_active
+			"upper_beam":
+				vector_show_upper_beam = is_active
+			"lower_beam":
+				vector_show_lower_beam = is_active
+			"equilibrium":
+				vector_show_equilibrium = is_active
+				if is_active:
+					vector_show_upper_beam = true
+					vector_show_lower_beam = true
+					main_hud.sync_vector_toggle_states({
+						"projections": vector_show_projections,
+						"upper_beam": vector_show_upper_beam,
+						"lower_beam": vector_show_lower_beam,
+						"equilibrium": vector_show_equilibrium,
+						"friction": vector_show_friction
+					})
+			"friction":
+				vector_show_friction = is_active
+		if inspected_rig != null and is_instance_valid(inspected_rig):
+			_update_force_visualizer()
 	)
 	main_hud.stiction_toggled.connect(func(stiction_on: bool):
 		is_stiction_enabled = stiction_on
@@ -2644,10 +2675,11 @@ func _build_force_visualizer() -> void:
 	pin_highlight_ring.material_override = mat_ring
 	force_visualizer_root.add_child(pin_highlight_ring)
 
-	# 2. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), fk (Kinetic Friction), fs (Static Friction)
+	# 2. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), R_lower (Opposing Reaction), fk (Kinetic Friction), fs (Static Friction)
 	arrow_fy_data = _create_arrow_node("ArrowFy", Color(0.0, 0.44, 0.95))
 	arrow_fx_data = _create_arrow_node("ArrowFx", Color(0.95, 0.22, 0.22))
 	arrow_res_data = _create_arrow_node("ArrowResultant", Color(0.12, 0.75, 0.35))
+	arrow_res_lower_data = _create_arrow_node("ArrowResultantLower", Color(0.08, 0.58, 0.85)) # Distinct cyan/blue for lower beam reaction
 	arrow_fk_data = _create_arrow_node("ArrowKineticFriction", Color(0.12, 0.35, 0.90)) # Dark Blue / Deep Indigo
 	arrow_fs_data = _create_arrow_node("ArrowStaticFriction", Color(0.78, 0.25, 0.98)) # Vibrant Purple / Violet
 	arrow_fric_data = arrow_fk_data
@@ -2818,6 +2850,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var dir_fy := Vector3.ZERO
 	var dir_fx := Vector3.ZERO
 	var dir_res := Vector3.ZERO
+	var dir_res_upper := Vector3.ZERO
+	var dir_res_lower := Vector3.ZERO
 	var dir_fk := Vector3.ZERO
 	var dir_fs := Vector3.ZERO
 	var dir_fric := Vector3.ZERO
@@ -2833,6 +2867,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		F_x = 0.0
 		dir_fx = Vector3.ZERO
 		R = F_y
+		dir_res_upper = Vector3(0, 1, 0)
+		dir_res_lower = Vector3(0, -1, 0)
 
 		if is_upper_force_reaction:
 			dir_fy = Vector3(0, 1, 0) # Upward support reaction strictly vertical
@@ -2865,19 +2901,22 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			F_y = p_stage * 0.5
 			F_x = p_stage / (2.0 * tan_theta)
 
+			var raw_res_upper := Vector3(F_x, F_y, 0.0)
+			var raw_res_lower := Vector3(-F_x, -F_y, 0.0)
+			dir_res_upper = raw_res_upper.normalized()
+			dir_res_lower = raw_res_lower.normalized()
+
 			if is_upper_force_reaction:
 				dir_fy = Vector3(0, 1, 0) # Upper beam tension supporting joint upward
 				dir_fx = Vector3(1, 0, 0) # Inward horizontal tension from upper beam
-				var raw_res := Vector3(F_x, F_y, 0.0)
-				R = raw_res.length()
-				dir_res = raw_res.normalized()
+				R = raw_res_upper.length()
+				dir_res = dir_res_upper
 				desc = "Upper beam reaction supporting joint against gravity and lateral thrust (Upper Reaction ↗)."
 			else:
 				dir_fy = Vector3(0, -1, 0) # Opposing structural reaction on pin
 				dir_fx = Vector3(-1, 0, 0) # Outward reaction balancing the pin
-				var raw_res := Vector3(-F_x, -F_y, 0.0)
-				R = raw_res.length()
-				dir_res = raw_res.normalized()
+				R = raw_res_lower.length()
+				dir_res = dir_res_lower
 				desc = "Opposing structural reaction on pin (Reaction ↙, satisfying ΣF = 0 on pin by Newton's 3rd Law)."
 
 			# Joint pin friction: acts horizontally along line of motion of lateral hinge
@@ -2915,19 +2954,22 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			F_y = p_stage * 0.5
 			F_x = p_stage / (2.0 * tan_theta)
 
+			var raw_res_upper := Vector3(-F_x, F_y, 0.0)
+			var raw_res_lower := Vector3(F_x, -F_y, 0.0)
+			dir_res_upper = raw_res_upper.normalized()
+			dir_res_lower = raw_res_lower.normalized()
+
 			if is_upper_force_reaction:
 				dir_fy = Vector3(0, 1, 0) # Upper beam tension supporting joint upward
 				dir_fx = Vector3(-1, 0, 0) # Inward horizontal tension from upper beam
-				var raw_res := Vector3(-F_x, F_y, 0.0)
-				R = raw_res.length()
-				dir_res = raw_res.normalized()
+				R = raw_res_upper.length()
+				dir_res = dir_res_upper
 				desc = "Upper beam reaction supporting joint against gravity and lateral thrust (Upper Reaction ↖)."
 			else:
 				dir_fy = Vector3(0, -1, 0) # Opposing structural reaction on pin
 				dir_fx = Vector3(1, 0, 0) # Outward reaction balancing the pin
-				var raw_res := Vector3(F_x, -F_y, 0.0)
-				R = raw_res.length()
-				dir_res = raw_res.normalized()
+				R = raw_res_lower.length()
+				dir_res = dir_res_lower
 				desc = "Opposing structural reaction on pin (Reaction ↘, satisfying ΣF = 0 on pin by Newton's 3rd Law)."
 
 			# Joint pin friction: acts horizontally along line of motion of lateral hinge
@@ -2964,6 +3006,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			# Central Coupling Hinge on Vertical Centerline Axis (Horizontal symmetry: Sum(Fx) = 0)
 			F_x = 0.0
 			dir_fx = Vector3.ZERO
+			dir_res_upper = Vector3(0, 1, 0)
+			dir_res_lower = Vector3(0, -1, 0)
 
 			if s == n - 1:
 				# Bottommost pin supporting payload mass directly
@@ -3043,6 +3087,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"dir_fx": dir_fx,
 		"len_fx": len_fx,
 		"dir_res": dir_res,
+		"dir_res_upper": dir_res_upper,
+		"dir_res_lower": dir_res_lower,
 		"len_res": len_res,
 		"dir_fk": dir_fk,
 		"len_fk": len_fk,
@@ -3123,51 +3169,75 @@ func _update_force_visualizer() -> void:
 	var lbl_fs_str := ("fs = %.2f N" % absf(filtered_fs)) if (disp_len_fs >= 0.012 and mu_val > 0.0001) else ""
 
 	# COMMON CONCURRENT ANCHOR & VECTOR MODE FILTERING
+	var show_proj: bool = vector_show_projections and not is_resultant_only_mode
+	var show_upper: bool = vector_show_upper_beam or vector_show_equilibrium
+	var show_lower: bool = vector_show_lower_beam or vector_show_equilibrium
+	var show_fric: bool = vector_show_friction
+
 	if is_resultant_only_mode:
 		# Mode: Resultant (R Only) - Render ONLY total vector sum R
 		arrow_fy_data["root"].visible = false
 		arrow_fx_data["root"].visible = false
-		if disp_len_res >= 0.012 and not lbl_res_str.is_empty():
-			var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if data.dir_res.y > 0.0 else Vector3(0.12, -0.06, 0.0)
-			_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
+		if show_upper and disp_len_res >= 0.012 and not lbl_res_str.is_empty():
+			var dir_u: Vector3 = data.get("dir_res_upper", data.dir_res)
+			var lbl_u_str := "R_up = %.2f N" % absf(filtered_res)
+			var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if dir_u.y > 0.0 else Vector3(0.12, -0.06, 0.0)
+			_update_arrow_vector(arrow_res_data, pin_pos, dir_u, disp_len_res, lbl_u_str, lbl_res_offset)
 		else:
 			arrow_res_data["root"].visible = false
+
+		if show_lower and disp_len_res >= 0.012 and not lbl_res_str.is_empty() and arrow_res_lower_data.has("root"):
+			var dir_l: Vector3 = data.get("dir_res_lower", -data.dir_res)
+			var lbl_l_str := "R_low = %.2f N" % absf(filtered_res)
+			var lbl_l_offset := Vector3(-0.18, -0.08, 0.0) if dir_l.y < 0.0 else Vector3(-0.18, 0.08, 0.0)
+			_update_arrow_vector(arrow_res_lower_data, pin_pos, dir_l, disp_len_res, lbl_l_str, lbl_l_offset)
+		elif arrow_res_lower_data.has("root"):
+			arrow_res_lower_data["root"].visible = false
 	else:
-		# Mode: All Vectors
+		# Mode: Component Vectors & Resultants
 		# Fy (Vertical Load / Reaction Reaction):
-		if disp_len_fy >= 0.012 and not lbl_fy_str.is_empty():
+		if show_proj and disp_len_fy >= 0.012 and not lbl_fy_str.is_empty():
 			var lbl_fy_offset := Vector3(-0.28, 0.02, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.24, -0.08, 0.0)
 			_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
 		else:
 			arrow_fy_data["root"].visible = false
 
 		# Fx (Lateral Thrust): (Only drawn when Fx > 0, e.g. on lateral hinges)
-		if disp_len_fx >= 0.012 and not lbl_fx_str.is_empty():
+		if show_proj and disp_len_fx >= 0.012 and not lbl_fx_str.is_empty():
 			var lbl_fx_offset := Vector3(0.0, 0.14, 0.0)
 			_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, lbl_fx_offset)
-			# On lateral pins, R is diagonal and visually distinct from Fy; render R too
-			if disp_len_res >= 0.012 and not lbl_res_str.is_empty():
-				var lbl_res_offset := Vector3(0.18, 0.10, 0.0) if data.dir_res.y > 0.0 else Vector3(0.18, -0.10, 0.0)
-				_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
-			else:
-				arrow_res_data["root"].visible = false
 		else:
 			arrow_fx_data["root"].visible = false
-			# On central symmetric pins (Fx == 0), R is IDENTICAL to Fy.
-			# Hide redundant R arrow to strictly prevent double-arrow / label collision!
+
+		# Resultant Vector R_upper (Emerald Green):
+		if show_upper and disp_len_res >= 0.012 and not lbl_res_str.is_empty():
+			var dir_u: Vector3 = data.get("dir_res_upper", data.dir_res)
+			var lbl_u_str := "R_up = %.2f N" % absf(filtered_res)
+			var lbl_res_offset := Vector3(0.18, 0.10, 0.0) if dir_u.y > 0.0 else Vector3(0.18, -0.10, 0.0)
+			_update_arrow_vector(arrow_res_data, pin_pos, dir_u, disp_len_res, lbl_u_str, lbl_res_offset)
+		else:
 			arrow_res_data["root"].visible = false
+
+		# Resultant Vector R_lower (Cyan / Newton's 3rd Law Opposing Reaction):
+		if show_lower and disp_len_res >= 0.012 and not lbl_res_str.is_empty() and arrow_res_lower_data.has("root"):
+			var dir_l: Vector3 = data.get("dir_res_lower", -data.dir_res)
+			var lbl_l_str := "R_low = %.2f N" % absf(filtered_res)
+			var lbl_l_offset := Vector3(-0.18, -0.10, 0.0) if dir_l.y < 0.0 else Vector3(-0.18, 0.10, 0.0)
+			_update_arrow_vector(arrow_res_lower_data, pin_pos, dir_l, disp_len_res, lbl_l_str, lbl_l_offset)
+		elif arrow_res_lower_data.has("root"):
+			arrow_res_lower_data["root"].visible = false
 
 	# Joint Pin Friction Vectors:
 	# fk (Kinetic Friction - Amber): Active when mechanism oscillates/moves
-	# fs (Static Friction - Brown): Active when mechanism is at rest / holding
-	# When mu == 0: BOTH arrows are strictly hidden!
-	if mu_val <= 0.0001:
+	# fs (Static Friction - Purple): Active when mechanism is at rest / holding
+	# When mu == 0 or friction toggle is OFF: BOTH arrows are strictly hidden!
+	if not show_fric or mu_val <= 0.0001:
 		if arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
 		if arrow_fs_data.has("root"):
 			arrow_fs_data["root"].visible = false
 	elif is_moving:
-		# In motion: Show fk (Amber), Hide fs (Brown)
+		# In motion: Show fk (Amber), Hide fs (Purple)
 		if arrow_fs_data.has("root"):
 			arrow_fs_data["root"].visible = false
 		if disp_len_fk >= 0.012 and not lbl_fk_str.is_empty() and data.dir_fk.length_squared() > 0.01:
@@ -3176,7 +3246,7 @@ func _update_force_visualizer() -> void:
 		elif arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
 	else:
-		# At rest: Show fs (Brown) ONLY if is_stiction_enabled, Hide fk (Amber)
+		# At rest: Show fs (Purple) ONLY if is_stiction_enabled, Hide fk (Amber)
 		if arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
 		if is_stiction_enabled and disp_len_fs >= 0.012 and not lbl_fs_str.is_empty() and data.dir_fs.length_squared() > 0.01:
@@ -3447,7 +3517,7 @@ func _apply_theme(is_dark: bool) -> void:
 		live_graph.queue_redraw()
 
 	# 6. 3D Vector Arrow Labels and Background Capsules
-	for ad in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fk_data, arrow_fs_data]:
+	for ad in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_res_lower_data, arrow_fk_data, arrow_fs_data]:
 		if ad != null and ad.has("label"):
 			var lbl: Label3D = ad["label"]
 			var bg: MeshInstance3D = ad.get("label_bg", null)
@@ -3655,6 +3725,7 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
 		{"data": arrow_fx_data, "col": Color(1.0, 0.35, 0.20) if is_dark else Color(0.95, 0.22, 0.22)},
 		{"data": arrow_res_data, "col": Color(0.25, 1.0, 0.50) if is_dark else Color(0.12, 0.75, 0.35)},
+		{"data": arrow_res_lower_data, "col": Color(0.20, 0.85, 1.0) if is_dark else Color(0.08, 0.58, 0.85)},
 		{"data": arrow_fk_data, "col": Color(0.10, 0.35, 0.95) if is_dark else Color(0.08, 0.25, 0.80)}, # Deep Blue
 		{"data": arrow_fs_data, "col": Color(0.78, 0.20, 0.98) if is_dark else Color(0.65, 0.15, 0.85)}  # Vibrant Purple
 	]
@@ -4341,7 +4412,7 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 
 func _adjust_mobile_sizes(vp_size: Vector2) -> void:
 	_apply_mobile_ui_scale(1.0, vp_size)
-	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
+	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_res_lower_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
 		if arrow_data.has("label"):
 			var lbl: Label3D = arrow_data["label"]
 			lbl.pixel_size = 0.0042
@@ -4387,7 +4458,7 @@ func _adjust_desktop_sizes(vp_size: Vector2) -> void:
 	var vp_scale: float = clampf(vp_size.x / 1920.0, 0.7, 1.3)
 	var label_pixel: float = lerpf(0.0036, 0.0030, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0))
 	var label_font: int = int(lerpf(22.0, 20.0, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0)))
-	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
+	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_res_lower_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
 		if arrow_data.has("label"):
 			var lbl: Label3D = arrow_data["label"]
 			lbl.pixel_size = label_pixel
