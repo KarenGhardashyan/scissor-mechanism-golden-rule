@@ -2976,10 +2976,10 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			# Friction calculation:
 			if mu > 0.0001:
 				if is_moving:
-					# Kinetic friction opposing motion during oscillation:
+					# Kinetic friction opposing motion along beam line:
 					F_k = mu * R_down * cos_theta * vel_norm
 					F_s = 0.0
-					dir_fk = Vector3(side_x_sign, 0.0, 0.0) * motion_dir
+					dir_fk = upper_beam_unit if (vel_h > 0.0) else lower_beam_unit
 					dir_fs = Vector3.ZERO
 				else:
 					# Static equilibrium:
@@ -3321,8 +3321,15 @@ func _update_force_visualizer() -> void:
 		if arrow_fs_data.has("root"):
 			arrow_fs_data["root"].visible = false
 		if disp_len_fk >= 0.012 and not lbl_fk_str.is_empty() and data.dir_fk.length_squared() > 0.01:
+			var fk_origin := pin_pos
+			if show_upper and disp_len_res_up >= 0.012 and data.dir_fk.dot(data.dir_res_upper) > 0.7:
+				var perp_dir := Vector3(-data.dir_fk.y, data.dir_fk.x, 0.0).normalized()
+				fk_origin += perp_dir * 0.038
+			elif show_lower and disp_len_res_down >= 0.012 and data.dir_fk.dot(data.dir_res_lower) > 0.7:
+				var perp_dir := Vector3(-data.dir_fk.y, data.dir_fk.x, 0.0).normalized()
+				fk_origin += perp_dir * 0.038
 			var lbl_fk_offset := Vector3(0.16, -0.14, 0.0)
-			_update_arrow_vector(arrow_fk_data, pin_pos, data.dir_fk, disp_len_fk, lbl_fk_str, lbl_fk_offset)
+			_update_arrow_vector(arrow_fk_data, fk_origin, data.dir_fk, disp_len_fk, lbl_fk_str, lbl_fk_offset)
 		elif arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
 	else:
