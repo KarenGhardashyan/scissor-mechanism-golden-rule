@@ -214,6 +214,9 @@ var arrow_res_data: Dictionary = {}
 var arrow_fk_data: Dictionary = {}
 var arrow_fs_data: Dictionary = {}
 var arrow_fric_data: Dictionary = {}
+var arrow_fy_lower_data: Dictionary = {}
+var arrow_fx_lower_data: Dictionary = {}
+var arrow_res_lower_data: Dictionary = {}
 
 var inspected_rig: PantographRig = null
 var inspected_pin_idx: int = -1
@@ -222,6 +225,12 @@ var inspected_pin_idx: int = -1
 var filtered_fy: float = 0.0
 var filtered_fx: float = 0.0
 var filtered_res: float = 0.0
+var filtered_fy_up: float = 0.0
+var filtered_fx_up: float = 0.0
+var filtered_res_up: float = 0.0
+var filtered_fy_down: float = 0.0
+var filtered_fx_down: float = 0.0
+var filtered_res_down: float = 0.0
 var filtered_fk: float = 0.0
 var filtered_fs: float = 0.0
 var filtered_fric: float = 0.0
@@ -260,8 +269,6 @@ var vector_show_upper_beam: bool = true
 var vector_show_lower_beam: bool = false
 var vector_show_equilibrium: bool = false
 var vector_show_friction: bool = true
-
-var arrow_res_lower_data: Dictionary = {}
 
 
 
@@ -2675,11 +2682,16 @@ func _build_force_visualizer() -> void:
 	pin_highlight_ring.material_override = mat_ring
 	force_visualizer_root.add_child(pin_highlight_ring)
 
-	# 2. Vector Arrows: Fy (Load), Fx (Thrust), R (Reaction Resultant), R_lower (Opposing Reaction), fk (Kinetic Friction), fs (Static Friction)
+	# 2. Vector Arrows:
+	# Upper Beam: Fy_up, Fx_up, R_upper
+	# Lower Beam: Fy_down, Fx_down, R_lower
+	# Joint Friction: fk (Kinetic Friction), fs (Static Friction)
 	arrow_fy_data = _create_arrow_node("ArrowFy", Color(0.0, 0.44, 0.95))
 	arrow_fx_data = _create_arrow_node("ArrowFx", Color(0.95, 0.22, 0.22))
-	arrow_res_data = _create_arrow_node("ArrowResultant", Color(0.12, 0.75, 0.35))
-	arrow_res_lower_data = _create_arrow_node("ArrowResultantLower", Color(0.08, 0.58, 0.85)) # Distinct cyan/blue for lower beam reaction
+	arrow_res_data = _create_arrow_node("ArrowResultant", Color(0.12, 0.75, 0.35)) # Emerald Green (R_upper)
+	arrow_fy_lower_data = _create_arrow_node("ArrowFyLower", Color(0.20, 0.65, 1.0)) # Cyan / Light Blue (Fy_down)
+	arrow_fx_lower_data = _create_arrow_node("ArrowFxLower", Color(1.0, 0.45, 0.35)) # Coral Orange (Fx_down)
+	arrow_res_lower_data = _create_arrow_node("ArrowResultantLower", Color(0.08, 0.58, 0.85)) # Distinct Steel/Cobalt Blue (R_down)
 	arrow_fk_data = _create_arrow_node("ArrowKineticFriction", Color(0.12, 0.35, 0.90)) # Dark Blue / Deep Indigo
 	arrow_fs_data = _create_arrow_node("ArrowStaticFriction", Color(0.78, 0.25, 0.98)) # Vibrant Purple / Violet
 	arrow_fric_data = arrow_fk_data
@@ -2842,6 +2854,12 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var F_y: float = 0.0
 	var F_x: float = 0.0
 	var R: float = 0.0
+	var F_y_up: float = 0.0
+	var F_x_up: float = 0.0
+	var R_up: float = 0.0
+	var F_y_down: float = 0.0
+	var F_x_down: float = 0.0
+	var R_down: float = 0.0
 	var F_k: float = 0.0
 	var F_s: float = 0.0
 	var F_fric: float = 0.0
@@ -2852,6 +2870,10 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var dir_res := Vector3.ZERO
 	var dir_res_upper := Vector3.ZERO
 	var dir_res_lower := Vector3.ZERO
+	var dir_fy_up := Vector3.ZERO
+	var dir_fx_up := Vector3.ZERO
+	var dir_fy_down := Vector3.ZERO
+	var dir_fx_down := Vector3.ZERO
 	var dir_fk := Vector3.ZERO
 	var dir_fs := Vector3.ZERO
 	var dir_fric := Vector3.ZERO
@@ -2859,27 +2881,28 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	var title := ""
 	var desc := ""
 
+	# Physical spring tension at current stage extension H
+	var base_rest_h: float = rig.get_base_resting_H() if rig.has_method("get_base_resting_H") else 0.075
+	var cur_h: float = rig.current_H
+	var eff_n: float = 6.0 if rig.is_scaled_123 else float(n)
+	var spring_force_actual: float = maxf(rig.spring_k * (cur_h - base_rest_h), 0.0)
+	var p_spring_per_stage: float = spring_force_actual / maxf(eff_n, 1.0)
+
 	if pin_idx == 0:
 		# Top Gantry Anchor (Static ceiling beam - zero linear sliding displacement)
-		# Central Vertical Axis: Left and right scissor links exert equal and opposite forces -> Sum(Fx) = 0
 		var p_tot: float = m * g_eff + float(n) * link_m * g_eff
+		F_y_down = p_tot
+		F_y_up = p_tot
 		F_y = p_tot
 		F_x = 0.0
-		dir_fx = Vector3.ZERO
 		R = F_y
+		R_up = F_y
+		R_down = F_y
 		dir_res_upper = Vector3(0, 1, 0)
 		dir_res_lower = Vector3(0, -1, 0)
+		dir_fy = Vector3(0, 1, 0) if is_upper_force_reaction else Vector3(0, -1, 0)
+		dir_res = dir_fy
 
-		if is_upper_force_reaction:
-			dir_fy = Vector3(0, 1, 0) # Upward support reaction strictly vertical
-			dir_res = Vector3(0, 1, 0)
-			desc = "Ceiling support reaction balancing total suspended mass + mechanism weight (Upper Reaction ↑)."
-		else:
-			dir_fy = Vector3(0, -1, 0) # Downward load pulling on ceiling anchor
-			dir_res = Vector3(0, -1, 0)
-			desc = "Total suspended weight pulling down on the ceiling anchor (Transmitted Load ↓)."
-
-		# Static ceiling gantry pins have zero linear displacement
 		F_k = 0.0
 		F_s = 0.0
 		F_fric = 0.0
@@ -2889,154 +2912,162 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		dir_fric = Vector3.ZERO
 
 		title = "%s · Top Gantry Pivot [Pin #0]" % rig.rig_name
+		desc = "Ceiling support reaction balancing total suspended mass + mechanism weight."
 	else:
 		var s: int = (pin_idx - 1) / 3
 		var type: int = (pin_idx - 1) % 3
 		var stages_below: float = float(n - 1 - s)
 		var p_below: float = m * g_eff + stages_below * link_m * g_eff
-		var p_stage: float = p_below + link_m * g_eff * 0.5
+		var p_stage_down: float = p_below + link_m * g_eff * 0.5
+
+		# When stiction holds the mechanism at height H != target_H, the upward load from the spring/upper stage
+		# is determined by the actual spring stretch, while the downward load is determined by mass + gravity.
+		var p_stage_up: float = p_stage_down
+		if s == 0 and rig.friction_mu > 0.0001 and rig.stiction_enabled and absf(rig.velocity_H) < 0.001:
+			# Stage 0: Direct coupling with spring
+			p_stage_up = clampf(p_spring_per_stage + link_m * g_eff * 0.5, 0.1, p_stage_down * 2.0)
 
 		if type == 0:
 			# Left Lateral Hinge
-			F_y = p_stage * 0.5
-			F_x = p_stage / (2.0 * tan_theta)
+			F_y_down = p_stage_down * 0.5
+			F_x_down = p_stage_down / (2.0 * tan_theta)
+			F_y_up = p_stage_up * 0.5
+			F_x_up = p_stage_up / (2.0 * tan_theta)
 
-			var raw_res_upper := Vector3(F_x, F_y, 0.0)
-			var raw_res_lower := Vector3(-F_x, -F_y, 0.0)
-			dir_res_upper = raw_res_upper.normalized()
-			dir_res_lower = raw_res_lower.normalized()
+			# Upper beam pulls up-right (+X, +Y)
+			dir_fy_up = Vector3(0, 1, 0)
+			dir_fx_up = Vector3(1, 0, 0)
+			var vec_upper := Vector3(F_x_up, F_y_up, 0.0)
+			R_up = vec_upper.length()
+			dir_res_upper = vec_upper.normalized()
 
-			if is_upper_force_reaction:
-				dir_fy = Vector3(0, 1, 0) # Upper beam tension supporting joint upward
-				dir_fx = Vector3(1, 0, 0) # Inward horizontal tension from upper beam
-				R = raw_res_upper.length()
-				dir_res = dir_res_upper
-				desc = "Upper beam reaction supporting joint against gravity and lateral thrust (Upper Reaction ↗)."
+			# Lower beam pulls down-left (-X, -Y)
+			dir_fy_down = Vector3(0, -1, 0)
+			dir_fx_down = Vector3(-1, 0, 0)
+			var vec_lower := Vector3(-F_x_down, -F_y_down, 0.0)
+			R_down = vec_lower.length()
+			dir_res_lower = vec_lower.normalized()
+
+			# Physical static friction balances the net difference between upper and lower beams:
+			# F_net = R_upper + R_lower + F_friction = 0 => F_friction = -(R_upper + R_lower)
+			var vec_fric := - (vec_upper + vec_lower)
+			F_s = vec_fric.length()
+			dir_fs = vec_fric.normalized() if F_s > 0.001 else Vector3.ZERO
+
+			if is_moving:
+				F_k = mu * R_down * vel_norm
+				dir_fk = Vector3(-1.0, 0.0, 0.0) * motion_dir
+				F_fric = F_k
+				dir_fric = dir_fk
 			else:
-				dir_fy = Vector3(0, -1, 0) # Opposing structural reaction on pin
-				dir_fx = Vector3(-1, 0, 0) # Outward reaction balancing the pin
-				R = raw_res_lower.length()
-				dir_res = dir_res_lower
-				desc = "Opposing structural reaction on pin (Reaction ↙, satisfying ΣF = 0 on pin by Newton's 3rd Law)."
+				F_fric = F_s
+				dir_fric = dir_fs
 
-			# Joint pin friction: acts horizontally along line of motion of lateral hinge
-			if mu <= 0.0001:
-				F_k = 0.0
-				F_s = 0.0
-				F_fric = 0.0
-				tau_fric = 0.0
-				dir_fk = Vector3.ZERO
-				dir_fs = Vector3.ZERO
-				dir_fric = Vector3.ZERO
-			else:
-				# Left hinge moves inward (+X) under extension; friction resists by pointing outward (-X)
-				var h_motion_unit := Vector3(-1.0, 0.0, 0.0)
-				if is_stiction_enabled:
-					F_s = mu * R
-					dir_fs = h_motion_unit * static_tendency_dir
-				else:
-					F_s = 0.0
-					dir_fs = Vector3.ZERO
-				if is_moving:
-					F_k = mu * R * vel_norm
-					dir_fk = h_motion_unit * motion_dir
-				else:
-					F_k = 0.0
-					dir_fk = Vector3.ZERO
-				F_fric = F_k if is_moving else F_s
-				tau_fric = F_fric * r_pin
-				dir_fric = dir_fk if is_moving else dir_fs
+			tau_fric = F_fric * r_pin
+			F_y = F_y_up if is_upper_force_reaction else F_y_down
+			F_x = F_x_up if is_upper_force_reaction else F_x_down
+			R = R_up if is_upper_force_reaction else R_down
+			dir_fy = dir_fy_up if is_upper_force_reaction else dir_fy_down
+			dir_fx = dir_fx_up if is_upper_force_reaction else dir_fx_down
+			dir_res = dir_res_upper if is_upper_force_reaction else dir_res_lower
 
 			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
+			desc = "Left lateral joint connecting upper and lower scissor arms. ΣF = 0 in static equilibrium."
 
 		elif type == 1:
 			# Right Lateral Hinge
-			F_y = p_stage * 0.5
-			F_x = p_stage / (2.0 * tan_theta)
+			F_y_down = p_stage_down * 0.5
+			F_x_down = p_stage_down / (2.0 * tan_theta)
+			F_y_up = p_stage_up * 0.5
+			F_x_up = p_stage_up / (2.0 * tan_theta)
 
-			var raw_res_upper := Vector3(-F_x, F_y, 0.0)
-			var raw_res_lower := Vector3(F_x, -F_y, 0.0)
-			dir_res_upper = raw_res_upper.normalized()
-			dir_res_lower = raw_res_lower.normalized()
+			# Upper beam pulls up-left (-X, +Y)
+			dir_fy_up = Vector3(0, 1, 0)
+			dir_fx_up = Vector3(-1, 0, 0)
+			var vec_upper := Vector3(-F_x_up, F_y_up, 0.0)
+			R_up = vec_upper.length()
+			dir_res_upper = vec_upper.normalized()
 
-			if is_upper_force_reaction:
-				dir_fy = Vector3(0, 1, 0) # Upper beam tension supporting joint upward
-				dir_fx = Vector3(-1, 0, 0) # Inward horizontal tension from upper beam
-				R = raw_res_upper.length()
-				dir_res = dir_res_upper
-				desc = "Upper beam reaction supporting joint against gravity and lateral thrust (Upper Reaction ↖)."
+			# Lower beam pulls down-right (+X, -Y)
+			dir_fy_down = Vector3(0, -1, 0)
+			dir_fx_down = Vector3(1, 0, 0)
+			var vec_lower := Vector3(F_x_down, -F_y_down, 0.0)
+			R_down = vec_lower.length()
+			dir_res_lower = vec_lower.normalized()
+
+			# Physical static friction balances the net difference between upper and lower beams:
+			# F_net = R_upper + R_lower + F_friction = 0 => F_friction = -(R_upper + R_lower)
+			var vec_fric := - (vec_upper + vec_lower)
+			F_s = vec_fric.length()
+			dir_fs = vec_fric.normalized() if F_s > 0.001 else Vector3.ZERO
+
+			if is_moving:
+				F_k = mu * R_down * vel_norm
+				dir_fk = Vector3(1.0, 0.0, 0.0) * motion_dir
+				F_fric = F_k
+				dir_fric = dir_fk
 			else:
-				dir_fy = Vector3(0, -1, 0) # Opposing structural reaction on pin
-				dir_fx = Vector3(1, 0, 0) # Outward reaction balancing the pin
-				R = raw_res_lower.length()
-				dir_res = dir_res_lower
-				desc = "Opposing structural reaction on pin (Reaction ↘, satisfying ΣF = 0 on pin by Newton's 3rd Law)."
+				F_fric = F_s
+				dir_fric = dir_fs
 
-			# Joint pin friction: acts horizontally along line of motion of lateral hinge
-			if mu <= 0.0001:
-				F_k = 0.0
-				F_s = 0.0
-				F_fric = 0.0
-				tau_fric = 0.0
-				dir_fk = Vector3.ZERO
-				dir_fs = Vector3.ZERO
-				dir_fric = Vector3.ZERO
-			else:
-				# Right hinge moves inward (-X) under extension; friction resists by pointing outward (+X)
-				var h_motion_unit := Vector3(1.0, 0.0, 0.0)
-				if is_stiction_enabled:
-					F_s = mu * R
-					dir_fs = h_motion_unit * static_tendency_dir
-				else:
-					F_s = 0.0
-					dir_fs = Vector3.ZERO
-				if is_moving:
-					F_k = mu * R * vel_norm
-					dir_fk = h_motion_unit * motion_dir
-				else:
-					F_k = 0.0
-					dir_fk = Vector3.ZERO
-				F_fric = F_k if is_moving else F_s
-				tau_fric = F_fric * r_pin
-				dir_fric = dir_fk if is_moving else dir_fs
+			tau_fric = F_fric * r_pin
+			F_y = F_y_up if is_upper_force_reaction else F_y_down
+			F_x = F_x_up if is_upper_force_reaction else F_x_down
+			R = R_up if is_upper_force_reaction else R_down
+			dir_fy = dir_fy_up if is_upper_force_reaction else dir_fy_down
+			dir_fx = dir_fx_up if is_upper_force_reaction else dir_fx_down
+			dir_res = dir_res_upper if is_upper_force_reaction else dir_res_lower
 
 			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
+			desc = "Right lateral joint connecting upper and lower scissor arms. ΣF = 0 in static equilibrium."
 
 		else:
-			# Central Coupling Hinge on Vertical Centerline Axis (Horizontal symmetry: Sum(Fx) = 0)
+			# Central Coupling Hinge on Vertical Centerline Axis
 			F_x = 0.0
+			F_x_up = 0.0
+			F_x_down = 0.0
 			dir_fx = Vector3.ZERO
-			dir_res_upper = Vector3(0, 1, 0)
-			dir_res_lower = Vector3(0, -1, 0)
+			dir_fx_up = Vector3.ZERO
+			dir_fx_down = Vector3.ZERO
 
 			if s == n - 1:
-				# Bottommost pin supporting payload mass directly
-				F_y = m * g_eff
+				F_y_down = m * g_eff
+				F_y_up = F_y_down
+				F_y = F_y_down
+				R_down = F_y_down
+				R_up = F_y_up
 				R = F_y
-				if is_upper_force_reaction:
-					dir_fy = Vector3(0, 1, 0) # Tension from bottom scissor links holding payload
-					dir_res = Vector3(0, 1, 0)
-					desc = "Scissor linkage upward tension holding payload against gravity (Upper Reaction ↑)."
-				else:
-					dir_fy = Vector3(0, -1, 0) # Payload weight pulling downward
-					dir_res = Vector3(0, -1, 0)
-					desc = "Payload gravity pulling directly downward from the bottom suspension pin (Transmitted Load ↓)."
-
+				dir_res_upper = Vector3(0, 1, 0)
+				dir_res_lower = Vector3(0, -1, 0)
+				dir_fy_up = Vector3(0, 1, 0)
+				dir_fy_down = Vector3(0, -1, 0)
+				dir_fy = dir_fy_up if is_upper_force_reaction else dir_fy_down
+				dir_res = dir_res_upper if is_upper_force_reaction else dir_res_lower
 				title = "%s · Bottom Payload Suspension Pin [Pin #%d]" % [rig.rig_name, pin_idx]
+				desc = "Bottom pin carrying suspended payload directly."
 			else:
-				# Intermediate central coupling hinge
+				F_y_down = p_below
+				F_y_up = p_below
 				F_y = p_below
+				R_down = F_y_down
+				R_up = F_y_up
 				R = F_y
-				if is_upper_force_reaction:
-					dir_fy = Vector3(0, 1, 0) # Upper scissor stage holding this joint
-					dir_res = Vector3(0, 1, 0)
-					desc = "Upper scissor stage reaction supporting this joint against gravity (Upper Reaction ↑)."
-				else:
-					dir_fy = Vector3(0, -1, 0) # Lower scissor stages + payload pulling downward
-					dir_res = Vector3(0, -1, 0)
-					desc = "Cumulative weight of lower stages and payload transmitted across joint (Transmitted Load ↓)."
-
+				dir_res_upper = Vector3(0, 1, 0)
+				dir_res_lower = Vector3(0, -1, 0)
+				dir_fy_up = Vector3(0, 1, 0)
+				dir_fy_down = Vector3(0, -1, 0)
+				dir_fy = dir_fy_up if is_upper_force_reaction else dir_fy_down
+				dir_res = dir_res_upper if is_upper_force_reaction else dir_res_lower
 				title = "%s · Stage %d Central Coupling Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
+				desc = "Central pivot pin connecting cross-beams."
+
+			F_k = 0.0
+			F_s = 0.0
+			F_fric = 0.0
+			tau_fric = 0.0
+			dir_fk = Vector3.ZERO
+			dir_fs = Vector3.ZERO
+			dir_fric = Vector3.ZERO
 
 			# Joint pin friction on vertical centerline
 			if mu <= 0.0001:
@@ -3090,6 +3121,10 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"dir_res_upper": dir_res_upper,
 		"dir_res_lower": dir_res_lower,
 		"len_res": len_res,
+		"dir_fy_up": dir_fy_up,
+		"dir_fx_up": dir_fx_up,
+		"dir_fy_down": dir_fy_down,
+		"dir_fx_down": dir_fx_down,
 		"dir_fk": dir_fk,
 		"len_fk": len_fk,
 		"dir_fs": dir_fs,
@@ -3099,12 +3134,24 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		"lbl_fy": "Fy = %.2f N" % absf(F_y),
 		"lbl_fx": "Fx = %.2f N" % absf(F_x),
 		"lbl_res": "R = %.2f N" % absf(R),
+		"lbl_res_up": "R_upper = %.2f N" % absf(R_up),
+		"lbl_res_down": "R_down = %.2f N" % absf(R_down),
+		"lbl_fy_up": "Fy_up = %.2f N" % absf(F_y_up),
+		"lbl_fx_up": "Fx_up = %.2f N" % absf(F_x_up),
+		"lbl_fy_down": "Fy_down = %.2f N" % absf(F_y_down),
+		"lbl_fx_down": "Fx_down = %.2f N" % absf(F_x_down),
 		"lbl_fk": lbl_fk,
 		"lbl_fs": lbl_fs,
 		"lbl_fric": lbl_fric,
 		"F_y": absf(F_y),
 		"F_x": absf(F_x),
 		"R": absf(R),
+		"F_y_up": absf(F_y_up),
+		"F_x_up": absf(F_x_up),
+		"R_up": absf(R_up),
+		"F_y_down": absf(F_y_down),
+		"F_x_down": absf(F_x_down),
+		"R_down": absf(R_down),
 		"F_k": absf(F_k),
 		"F_s": absf(F_s),
 		"F_fric": absf(F_fric),
@@ -3138,6 +3185,12 @@ func _update_force_visualizer() -> void:
 	filtered_fy = lerpf(filtered_fy, absf(data.F_y), filter_alpha)
 	filtered_fx = lerpf(filtered_fx, absf(data.F_x), filter_alpha)
 	filtered_res = lerpf(filtered_res, absf(data.R), filter_alpha)
+	filtered_fy_up = lerpf(filtered_fy_up, absf(data.F_y_up), filter_alpha)
+	filtered_fx_up = lerpf(filtered_fx_up, absf(data.F_x_up), filter_alpha)
+	filtered_res_up = lerpf(filtered_res_up, absf(data.R_up), filter_alpha)
+	filtered_fy_down = lerpf(filtered_fy_down, absf(data.F_y_down), filter_alpha)
+	filtered_fx_down = lerpf(filtered_fx_down, absf(data.F_x_down), filter_alpha)
+	filtered_res_down = lerpf(filtered_res_down, absf(data.R_down), filter_alpha)
 	var mu_val: float = data.get("friction_mu", 0.20)
 	if mu_val <= 0.0001:
 		filtered_fk = 0.0
@@ -3154,16 +3207,26 @@ func _update_force_visualizer() -> void:
 	const FORCE_MIN_DISPLAY: float = 0.015 # Hide only negligible micro-noise (< 0.015 N)
 	const MAX_ARROW_LEN: float = 1.20
 
-	var disp_len_fy: float = clampf(filtered_fy * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fy >= FORCE_MIN_DISPLAY else 0.0
-	var disp_len_fx: float = clampf(filtered_fx * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fx >= FORCE_MIN_DISPLAY else 0.0
-	var disp_len_res: float = clampf(filtered_res * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_res >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_fy_up: float = clampf(filtered_fy_up * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fy_up >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_fx_up: float = clampf(filtered_fx_up * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fx_up >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_res_up: float = clampf(filtered_res_up * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_res_up >= FORCE_MIN_DISPLAY else 0.0
+
+	var disp_len_fy_down: float = clampf(filtered_fy_down * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fy_down >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_fx_down: float = clampf(filtered_fx_down * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_fx_down >= FORCE_MIN_DISPLAY else 0.0
+	var disp_len_res_down: float = clampf(filtered_res_down * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if filtered_res_down >= FORCE_MIN_DISPLAY else 0.0
+
 	var disp_len_fk: float = clampf(filtered_fk * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (filtered_fk >= FORCE_MIN_DISPLAY and mu_val > 0.0001) else 0.0
 	var disp_len_fs: float = clampf(filtered_fs * FORCE_SCALE, 0.0, MAX_ARROW_LEN) if (filtered_fs >= FORCE_MIN_DISPLAY and mu_val > 0.0001) else 0.0
 
 	# Strict non-negative label strings
-	var lbl_fy_str := ("Fy = %.2f N" % absf(filtered_fy)) if filtered_fy >= FORCE_MIN_DISPLAY else ""
-	var lbl_fx_str := ("Fx = %.2f N" % absf(filtered_fx)) if filtered_fx >= FORCE_MIN_DISPLAY else ""
-	var lbl_res_str := ("R = %.2f N" % absf(filtered_res)) if filtered_res >= FORCE_MIN_DISPLAY else ""
+	var lbl_fy_up_str := ("Fy_up = %.2f N" % absf(filtered_fy_up)) if filtered_fy_up >= FORCE_MIN_DISPLAY else ""
+	var lbl_fx_up_str := ("Fx_up = %.2f N" % absf(filtered_fx_up)) if filtered_fx_up >= FORCE_MIN_DISPLAY else ""
+	var lbl_res_up_str := ("R_up = %.2f N" % absf(filtered_res_up)) if filtered_res_up >= FORCE_MIN_DISPLAY else ""
+
+	var lbl_fy_down_str := ("Fy_down = %.2f N" % absf(filtered_fy_down)) if filtered_fy_down >= FORCE_MIN_DISPLAY else ""
+	var lbl_fx_down_str := ("Fx_down = %.2f N" % absf(filtered_fx_down)) if filtered_fx_down >= FORCE_MIN_DISPLAY else ""
+	var lbl_res_down_str := ("R_down = %.2f N" % absf(filtered_res_down)) if filtered_res_down >= FORCE_MIN_DISPLAY else ""
+
 	var is_moving: bool = inspected_rig.oscillations_enabled and (absf(inspected_rig.velocity_H) > 0.0005)
 	var lbl_fk_str := ("fk = %.2f N" % absf(filtered_fk)) if (disp_len_fk >= 0.012 and mu_val > 0.0001) else ""
 	var lbl_fs_str := ("fs = %.2f N" % absf(filtered_fs)) if (disp_len_fs >= 0.012 and mu_val > 0.0001) else ""
@@ -3172,58 +3235,67 @@ func _update_force_visualizer() -> void:
 	var show_proj: bool = vector_show_projections and not is_resultant_only_mode
 	var show_upper: bool = vector_show_upper_beam or vector_show_equilibrium
 	var show_lower: bool = vector_show_lower_beam or vector_show_equilibrium
-	var show_fric: bool = vector_show_friction
+	var show_fric: bool = vector_show_friction or vector_show_equilibrium
 
 	if is_resultant_only_mode:
-		# Mode: Resultant (R Only) - Render ONLY total vector sum R
+		# Mode: Resultant (R Only)
 		arrow_fy_data["root"].visible = false
 		arrow_fx_data["root"].visible = false
-		if show_upper and disp_len_res >= 0.012 and not lbl_res_str.is_empty():
-			var dir_u: Vector3 = data.get("dir_res_upper", data.dir_res)
-			var lbl_u_str := "R_up = %.2f N" % absf(filtered_res)
-			var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if dir_u.y > 0.0 else Vector3(0.12, -0.06, 0.0)
-			_update_arrow_vector(arrow_res_data, pin_pos, dir_u, disp_len_res, lbl_u_str, lbl_res_offset)
+		if arrow_fy_lower_data.has("root"): arrow_fy_lower_data["root"].visible = false
+		if arrow_fx_lower_data.has("root"): arrow_fx_lower_data["root"].visible = false
+
+		if show_upper and disp_len_res_up >= 0.012 and not lbl_res_up_str.is_empty():
+			var dir_u: Vector3 = data.dir_res_upper
+			var lbl_res_offset := Vector3(0.14, 0.08, 0.0) if dir_u.y > 0.0 else Vector3(0.14, -0.08, 0.0)
+			_update_arrow_vector(arrow_res_data, pin_pos, dir_u, disp_len_res_up, lbl_res_up_str, lbl_res_offset)
 		else:
 			arrow_res_data["root"].visible = false
 
-		if show_lower and disp_len_res >= 0.012 and not lbl_res_str.is_empty() and arrow_res_lower_data.has("root"):
-			var dir_l: Vector3 = data.get("dir_res_lower", -data.dir_res)
-			var lbl_l_str := "R_low = %.2f N" % absf(filtered_res)
-			var lbl_l_offset := Vector3(-0.18, -0.08, 0.0) if dir_l.y < 0.0 else Vector3(-0.18, 0.08, 0.0)
-			_update_arrow_vector(arrow_res_lower_data, pin_pos, dir_l, disp_len_res, lbl_l_str, lbl_l_offset)
+		if show_lower and disp_len_res_down >= 0.012 and not lbl_res_down_str.is_empty() and arrow_res_lower_data.has("root"):
+			var dir_l: Vector3 = data.dir_res_lower
+			var lbl_l_offset := Vector3(-0.16, -0.08, 0.0) if dir_l.y < 0.0 else Vector3(-0.16, 0.08, 0.0)
+			_update_arrow_vector(arrow_res_lower_data, pin_pos, dir_l, disp_len_res_down, lbl_res_down_str, lbl_l_offset)
 		elif arrow_res_lower_data.has("root"):
 			arrow_res_lower_data["root"].visible = false
 	else:
 		# Mode: Component Vectors & Resultants
-		# Fy (Vertical Load / Reaction Reaction):
-		if show_proj and disp_len_fy >= 0.012 and not lbl_fy_str.is_empty():
-			var lbl_fy_offset := Vector3(-0.28, 0.02, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.24, -0.08, 0.0)
-			_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
+		# UPPER BEAM:
+		if show_upper and show_proj and disp_len_fy_up >= 0.012 and not lbl_fy_up_str.is_empty():
+			var lbl_fy_offset := Vector3(-0.24, 0.08, 0.0)
+			_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy_up, disp_len_fy_up, lbl_fy_up_str, lbl_fy_offset)
 		else:
 			arrow_fy_data["root"].visible = false
 
-		# Fx (Lateral Thrust): (Only drawn when Fx > 0, e.g. on lateral hinges)
-		if show_proj and disp_len_fx >= 0.012 and not lbl_fx_str.is_empty():
+		if show_upper and show_proj and disp_len_fx_up >= 0.012 and not lbl_fx_up_str.is_empty():
 			var lbl_fx_offset := Vector3(0.0, 0.14, 0.0)
-			_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, lbl_fx_offset)
+			_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx_up, disp_len_fx_up, lbl_fx_up_str, lbl_fx_offset)
 		else:
 			arrow_fx_data["root"].visible = false
 
-		# Resultant Vector R_upper (Emerald Green):
-		if show_upper and disp_len_res >= 0.012 and not lbl_res_str.is_empty():
-			var dir_u: Vector3 = data.get("dir_res_upper", data.dir_res)
-			var lbl_u_str := "R_up = %.2f N" % absf(filtered_res)
+		if show_upper and disp_len_res_up >= 0.012 and not lbl_res_up_str.is_empty():
+			var dir_u: Vector3 = data.dir_res_upper
 			var lbl_res_offset := Vector3(0.18, 0.10, 0.0) if dir_u.y > 0.0 else Vector3(0.18, -0.10, 0.0)
-			_update_arrow_vector(arrow_res_data, pin_pos, dir_u, disp_len_res, lbl_u_str, lbl_res_offset)
+			_update_arrow_vector(arrow_res_data, pin_pos, dir_u, disp_len_res_up, lbl_res_up_str, lbl_res_offset)
 		else:
 			arrow_res_data["root"].visible = false
 
-		# Resultant Vector R_lower (Cyan / Newton's 3rd Law Opposing Reaction):
-		if show_lower and disp_len_res >= 0.012 and not lbl_res_str.is_empty() and arrow_res_lower_data.has("root"):
-			var dir_l: Vector3 = data.get("dir_res_lower", -data.dir_res)
-			var lbl_l_str := "R_low = %.2f N" % absf(filtered_res)
+		# LOWER BEAM:
+		if show_lower and show_proj and disp_len_fy_down >= 0.012 and not lbl_fy_down_str.is_empty() and arrow_fy_lower_data.has("root"):
+			var lbl_fy_offset := Vector3(-0.24, -0.08, 0.0)
+			_update_arrow_vector(arrow_fy_lower_data, pin_pos, data.dir_fy_down, disp_len_fy_down, lbl_fy_down_str, lbl_fy_offset)
+		elif arrow_fy_lower_data.has("root"):
+			arrow_fy_lower_data["root"].visible = false
+
+		if show_lower and show_proj and disp_len_fx_down >= 0.012 and not lbl_fx_down_str.is_empty() and arrow_fx_lower_data.has("root"):
+			var lbl_fx_offset := Vector3(0.0, -0.14, 0.0)
+			_update_arrow_vector(arrow_fx_lower_data, pin_pos, data.dir_fx_down, disp_len_fx_down, lbl_fx_down_str, lbl_fx_offset)
+		elif arrow_fx_lower_data.has("root"):
+			arrow_fx_lower_data["root"].visible = false
+
+		if show_lower and disp_len_res_down >= 0.012 and not lbl_res_down_str.is_empty() and arrow_res_lower_data.has("root"):
+			var dir_l: Vector3 = data.dir_res_lower
 			var lbl_l_offset := Vector3(-0.18, -0.10, 0.0) if dir_l.y < 0.0 else Vector3(-0.18, 0.10, 0.0)
-			_update_arrow_vector(arrow_res_lower_data, pin_pos, dir_l, disp_len_res, lbl_l_str, lbl_l_offset)
+			_update_arrow_vector(arrow_res_lower_data, pin_pos, dir_l, disp_len_res_down, lbl_res_down_str, lbl_l_offset)
 		elif arrow_res_lower_data.has("root"):
 			arrow_res_lower_data["root"].visible = false
 
@@ -3250,7 +3322,7 @@ func _update_force_visualizer() -> void:
 		if arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
 		if is_stiction_enabled and disp_len_fs >= 0.012 and not lbl_fs_str.is_empty() and data.dir_fs.length_squared() > 0.01:
-			var lbl_fs_offset := Vector3(0.16, -0.14, 0.0)
+			var lbl_fs_offset := Vector3(0.16, 0.0, 0.0)
 			_update_arrow_vector(arrow_fs_data, pin_pos, data.dir_fs, disp_len_fs, lbl_fs_str, lbl_fs_offset)
 		elif arrow_fs_data.has("root"):
 			arrow_fs_data["root"].visible = false
@@ -3517,7 +3589,7 @@ func _apply_theme(is_dark: bool) -> void:
 		live_graph.queue_redraw()
 
 	# 6. 3D Vector Arrow Labels and Background Capsules
-	for ad in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_res_lower_data, arrow_fk_data, arrow_fs_data]:
+	for ad in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fy_lower_data, arrow_fx_lower_data, arrow_res_lower_data, arrow_fk_data, arrow_fs_data]:
 		if ad != null and ad.has("label"):
 			var lbl: Label3D = ad["label"]
 			var bg: MeshInstance3D = ad.get("label_bg", null)
@@ -3725,6 +3797,8 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
 		{"data": arrow_fx_data, "col": Color(1.0, 0.35, 0.20) if is_dark else Color(0.95, 0.22, 0.22)},
 		{"data": arrow_res_data, "col": Color(0.25, 1.0, 0.50) if is_dark else Color(0.12, 0.75, 0.35)},
+		{"data": arrow_fy_lower_data, "col": Color(0.35, 0.85, 1.0) if is_dark else Color(0.18, 0.60, 0.90)},
+		{"data": arrow_fx_lower_data, "col": Color(1.0, 0.55, 0.35) if is_dark else Color(0.90, 0.40, 0.25)},
 		{"data": arrow_res_lower_data, "col": Color(0.20, 0.85, 1.0) if is_dark else Color(0.08, 0.58, 0.85)},
 		{"data": arrow_fk_data, "col": Color(0.10, 0.35, 0.95) if is_dark else Color(0.08, 0.25, 0.80)}, # Deep Blue
 		{"data": arrow_fs_data, "col": Color(0.78, 0.20, 0.98) if is_dark else Color(0.65, 0.15, 0.85)}  # Vibrant Purple
@@ -4412,7 +4486,7 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 
 func _adjust_mobile_sizes(vp_size: Vector2) -> void:
 	_apply_mobile_ui_scale(1.0, vp_size)
-	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_res_lower_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
+	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fy_lower_data, arrow_fx_lower_data, arrow_res_lower_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
 		if arrow_data.has("label"):
 			var lbl: Label3D = arrow_data["label"]
 			lbl.pixel_size = 0.0042
@@ -4458,7 +4532,7 @@ func _adjust_desktop_sizes(vp_size: Vector2) -> void:
 	var vp_scale: float = clampf(vp_size.x / 1920.0, 0.7, 1.3)
 	var label_pixel: float = lerpf(0.0036, 0.0030, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0))
 	var label_font: int = int(lerpf(22.0, 20.0, clampf((vp_scale - 0.7) / 0.6, 0.0, 1.0)))
-	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_res_lower_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
+	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fy_lower_data, arrow_fx_lower_data, arrow_res_lower_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
 		if arrow_data.has("label"):
 			var lbl: Label3D = arrow_data["label"]
 			lbl.pixel_size = label_pixel

@@ -588,9 +588,9 @@ func _build_mobile_layout() -> void:
 	var m_cfgs := [
 		{"id": "upper_beam", "label": "Upper ↗", "row": mob_vec_row1},
 		{"id": "lower_beam", "label": "Lower ↙", "row": mob_vec_row1},
-		{"id": "equilibrium", "label": "ΣF = 0", "row": mob_vec_row1},
-		{"id": "projections", "label": "Fx / Fy", "row": mob_vec_row2},
-		{"id": "friction", "label": "Friction (fs)", "row": mob_vec_row2}
+		{"id": "friction", "label": "Friction (fs)", "row": mob_vec_row1},
+		{"id": "equilibrium", "label": "ΣF = 0 (Pin)", "row": mob_vec_row2},
+		{"id": "projections", "label": "Fx / Fy", "row": mob_vec_row2}
 	]
 	for cfg in m_cfgs:
 		var gid: String = cfg["id"]
@@ -650,11 +650,11 @@ func _build_desktop_vector_panel() -> void:
 	hbox.add_child(lbl_tag)
 
 	var cfgs := [
-		{"id": "upper_beam", "label": "Upper ↗", "tooltip": "Show upper scissor arm reaction vector (R_upper)"},
-		{"id": "lower_beam", "label": "Lower ↙", "tooltip": "Show lower scissor arm reaction vector (R_lower)"},
-		{"id": "equilibrium", "label": "ΣF = 0", "tooltip": "Show full pin static equilibrium (Upper + Lower reactions)"},
-		{"id": "projections", "label": "Fx / Fy", "tooltip": "Show vertical (Fy) and horizontal (Fx) component projections"},
-		{"id": "friction", "label": "Friction fs", "tooltip": "Show joint pin friction resisting shear trajectory"}
+		{"id": "upper_beam", "label": "Upper ↗", "tooltip": "Show forces on Upper Beam (R_upper, Fx_up, Fy_up)"},
+		{"id": "lower_beam", "label": "Lower ↙", "tooltip": "Show forces on Lower Beam (R_down, Fx_down, Fy_down)"},
+		{"id": "friction", "label": "Friction fs", "tooltip": "Show static friction vector fs holding the joint"},
+		{"id": "equilibrium", "label": "ΣF = 0 (Pin)", "tooltip": "Show complete static pin equilibrium: R_upper + R_down + fs = 0"},
+		{"id": "projections", "label": "Fx / Fy", "tooltip": "Show orthogonal Fx and Fy projections"}
 	]
 
 	for cfg in cfgs:
@@ -678,13 +678,14 @@ func _toggle_vector_group(group_id: String) -> void:
 	var new_state: bool = not vector_active_groups[group_id]
 	vector_active_groups[group_id] = new_state
 
-	# If equilibrium is enabled, automatically activate both upper and lower
+	# If equilibrium is enabled, automatically activate upper, lower, and friction to show complete balance!
 	if group_id == "equilibrium" and new_state:
 		vector_active_groups["upper_beam"] = true
 		vector_active_groups["lower_beam"] = true
+		vector_active_groups["friction"] = true
 
-	# If user manually disables upper or lower while equilibrium was on, turn off equilibrium
-	if (group_id == "upper_beam" or group_id == "lower_beam") and not new_state:
+	# If user manually disables upper, lower, or friction while equilibrium was on, turn off equilibrium
+	if (group_id == "upper_beam" or group_id == "lower_beam" or group_id == "friction") and not new_state:
 		vector_active_groups["equilibrium"] = false
 
 	_update_vector_group_buttons()
