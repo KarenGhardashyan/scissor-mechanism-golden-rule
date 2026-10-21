@@ -110,6 +110,11 @@ var btn_play_pause: Button
 var btn_jolt: Button
 var btn_deselect_pin: Button
 
+var lbl_damping_tag: Label
+var lbl_damping_val: Label
+var btn_oscillations_toggle: Button
+var slider_damping: HSlider
+
 var btn_beam_toggle: Button
 var btn_friction_toggle: Button
 var btn_slow_mo: Button
