@@ -42,8 +42,8 @@ const COLOR_VECTOR_FX_DARK := Color("#F43F5E")   # Coral Red
 const COLOR_VECTOR_FX_LIGHT := Color("#E11D48")
 const COLOR_VECTOR_FY_DARK := Color("#38BDF8")   # Sky Blue
 const COLOR_VECTOR_FY_LIGHT := Color("#0284C7")
-const COLOR_VECTOR_FRIC_DARK := Color("#F59E0B") # Amber Orange
-const COLOR_VECTOR_FRIC_LIGHT := Color("#D97706")
+const COLOR_VECTOR_FRIC_DARK := Color("#C084FC") # Purple / Violet (fs / fk)
+const COLOR_VECTOR_FRIC_LIGHT := Color("#9333EA")
 
 
 # -----------------------------------------------------------------------------

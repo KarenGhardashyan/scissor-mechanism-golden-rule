@@ -2648,8 +2648,8 @@ func _build_force_visualizer() -> void:
 	arrow_fy_data = _create_arrow_node("ArrowFy", Color(0.0, 0.44, 0.95))
 	arrow_fx_data = _create_arrow_node("ArrowFx", Color(0.95, 0.22, 0.22))
 	arrow_res_data = _create_arrow_node("ArrowResultant", Color(0.12, 0.75, 0.35))
-	arrow_fk_data = _create_arrow_node("ArrowKineticFriction", Color(0.95, 0.65, 0.05))
-	arrow_fs_data = _create_arrow_node("ArrowStaticFriction", Color(0.68, 0.36, 0.16)) # Brown
+	arrow_fk_data = _create_arrow_node("ArrowKineticFriction", Color(0.12, 0.35, 0.90)) # Dark Blue / Deep Indigo
+	arrow_fs_data = _create_arrow_node("ArrowStaticFriction", Color(0.78, 0.25, 0.98)) # Vibrant Purple / Violet
 	arrow_fric_data = arrow_fk_data
 
 
@@ -3653,9 +3653,9 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
 		{"data": arrow_fx_data, "col": Color(1.0, 0.35, 0.20) if is_dark else Color(0.95, 0.22, 0.22)},
 		{"data": arrow_res_data, "col": Color(0.25, 1.0, 0.50) if is_dark else Color(0.12, 0.75, 0.35)},
-		{"data": arrow_fk_data, "col": Color(1.0, 0.82, 0.15) if is_dark else Color(0.95, 0.65, 0.05)},
-		{"data": arrow_fs_data, "col": Color(0.82, 0.48, 0.25) if is_dark else Color(0.68, 0.36, 0.16)},
-		{"data": arrow_fric_data, "col": Color(1.0, 0.82, 0.15) if is_dark else Color(1.0, 0.78, 0.12)}
+		{"data": arrow_fk_data, "col": Color(0.22, 0.45, 0.98) if is_dark else Color(0.10, 0.28, 0.75)}, # Dark Blue
+		{"data": arrow_fs_data, "col": Color(0.85, 0.35, 1.00) if is_dark else Color(0.68, 0.18, 0.88)}, # Purple / Violet
+		{"data": arrow_fric_data, "col": Color(0.85, 0.35, 1.00) if is_dark else Color(0.68, 0.18, 0.88)}
 	]
 
 	for a in arrows:
