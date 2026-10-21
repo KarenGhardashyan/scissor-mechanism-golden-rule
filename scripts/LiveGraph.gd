@@ -24,6 +24,11 @@ signal rig_filter_changed(rig_index: int)
 @export var friction_mu: float = 0.20
 @export var stiction_enabled: bool = true
 
+# Live simulated lengths fed directly from 3D Pantograph rigs
+var real_la: float = -1.0
+var real_lc: float = -1.0
+var real_lb: float = -1.0
+
 # Active Rig Isolation Filter: 0 = All Rigs, 1 = Rig A (3×), 2 = Rig C (6×), 3 = Rig B (5×)
 @export var active_rig_filter: int = 0
 
@@ -184,6 +189,13 @@ func set_friction_mu(val: float) -> void:
 	if not is_equal_approx(friction_mu, clamped_val):
 		friction_mu = clamped_val
 		queue_redraw()
+
+
+func set_real_rig_lengths(la_cm: float, lc_cm: float, lb_cm: float) -> void:
+	real_la = la_cm
+	real_lc = lc_cm
+	real_lb = lb_cm
+	queue_redraw()
 
 
 func set_stiction_enabled(val: bool) -> void:
@@ -392,10 +404,10 @@ func _draw() -> void:
 
 	draw_string(font, Vector2(margin_left - 36.0 * ui_scale, margin_top - 36.0 * ui_scale), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_title, col_text_title)
 
-	# Values evaluated at lerp-smoothed display_mass
-	var cur_la: float = compute_stepped_L_cm(display_mass, 3)
-	var cur_lc: float = compute_stepped_L_cm(display_mass, 6, true)
-	var cur_lb: float = compute_stepped_L_cm(display_mass, 5)
+	# Ground-truth lengths fed directly from 3D Pantograph rigs (or fallback to theoretical)
+	var cur_la: float = real_la if real_la > 0.0 else compute_stepped_L_cm(display_mass, 3)
+	var cur_lc: float = real_lc if real_lc > 0.0 else compute_stepped_L_cm(display_mass, 6, true)
+	var cur_lb: float = real_lb if real_lb > 0.0 else compute_stepped_L_cm(display_mass, 5)
 
 	# Telemetry Readout Badges in Header - aligned rightwards, strictly above top grid line
 	var badge_right_edge: float = margin_left + plot_w + 10.0 * ui_scale

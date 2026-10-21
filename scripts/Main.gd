@@ -2294,6 +2294,13 @@ func _update_ui_telemetry() -> void:
 		var fric_n: float = absf(filtered_fric)
 		main_hud.update_telemetry(h_cm, l_cm, r_n, fx_n, fy_n, fric_n)
 
+	if live_graph != null:
+		live_graph.set_real_rig_lengths(
+			telemetry_a.get("L_cm", 0.0),
+			telemetry_c.get("L_cm", 0.0),
+			telemetry_b.get("L_cm", 0.0)
+		)
+
 	# Update legacy labels if instantiated
 	if label_a_delta_h != null:
 		label_a_delta_h.text = "+%.2f cm" % telemetry_a.get("delta_H_cm", 0.0)

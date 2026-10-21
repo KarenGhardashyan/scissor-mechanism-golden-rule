@@ -520,8 +520,12 @@ func _update_kinematics(delta: float) -> void:
 		a_kinetic = (friction_mu / 0.20) * 0.045 * normal_load_factor
 		# 2. Static holding threshold (fs): only engaged when stiction_enabled is true
 		if stiction_enabled:
-			a_stiction_limit = (friction_mu / 0.20) * 0.40 * normal_load_factor
-			stiction_deadband_H = a_stiction_limit / maxf(omega * omega, 1.0)
+			var n_f: float = 6.0 if is_scaled_123 else float(n_stages)
+			# Exact physical Coulomb stiction deadband:
+			# Along stage height H, holding capacity is Delta P_hold = mu * effective_load_P.
+			# Displacement deadband: Delta H = (n_f * mu * effective_load_P) / spring_k
+			stiction_deadband_H = (n_f * friction_mu * effective_load_P) / maxf(spring_k, 10.0)
+			a_stiction_limit = stiction_deadband_H * (omega * omega)
 
 	if not oscillations_enabled:
 		# Smooth glide mode with Coulomb deadband holding
