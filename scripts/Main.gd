@@ -553,12 +553,59 @@ func _build_liquid_glass_ui() -> void:
 	main_hud = MainHUDClass.new()
 	main_hud.name = "MainHUD"
 	add_child(main_hud)
+	live_graph = main_hud.live_graph
 
 	# Connect MainHUD interactive signals to simulation controller
 	main_hud.mass_changed.connect(func(val: float):
 		if rig_a: rig_a.set_mass(val)
 		if rig_c: rig_c.set_mass(val)
 		if rig_b: rig_b.set_mass(val)
+		if live_graph: live_graph.set_mass(val)
+	)
+	main_hud.stiffness_changed.connect(func(val: float):
+		if rig_a: rig_a.set_stiffness(val)
+		if rig_c: rig_c.set_stiffness(val)
+		if rig_b: rig_b.set_stiffness(val)
+		if live_graph: live_graph.set_stiffness(val)
+	)
+	main_hud.efficiency_changed.connect(func(val: float):
+		var eta_norm: float = val / 100.0
+		if rig_a: rig_a.set_efficiency(eta_norm)
+		if rig_c: rig_c.set_efficiency(eta_norm)
+		if rig_b: rig_b.set_efficiency(eta_norm)
+		if live_graph: live_graph.set_efficiency(eta_norm)
+	)
+	main_hud.friction_changed.connect(func(val: float):
+		if rig_a: rig_a.set_friction_mu(val)
+		if rig_c: rig_c.set_friction_mu(val)
+		if rig_b: rig_b.set_friction_mu(val)
+		if live_graph: live_graph.set_friction_mu(val)
+		if inspected_rig != null and is_instance_valid(inspected_rig):
+			_update_force_visualizer()
+	)
+	main_hud.gravity_changed.connect(func(val: float):
+		if rig_a: rig_a.set_gravity(val)
+		if rig_c: rig_c.set_gravity(val)
+		if rig_b: rig_b.set_gravity(val)
+		if live_graph: live_graph.set_gravity(val)
+	)
+	main_hud.sim_speed_changed.connect(func(val: float):
+		current_sim_speed = val
+		if not is_sim_paused:
+			Engine.time_scale = val
+	)
+	main_hud.sim_pause_toggled.connect(func(is_paused: bool):
+		self.is_sim_paused = is_paused
+		Engine.time_scale = 0.0 if is_paused else current_sim_speed
+	)
+	main_hud.jolt_requested.connect(func():
+		if oscillations_check: oscillations_check.button_pressed = true
+		if rig_a: rig_a.apply_impulse(0.12)
+		if rig_c: rig_c.apply_impulse(0.12)
+		if rig_b: rig_b.apply_impulse(0.12)
+	)
+	main_hud.deselect_pin_requested.connect(func():
+		_deselect_pin()
 	)
 	main_hud.beam_reaction_toggled.connect(func(is_upper: bool):
 		is_upper_force_reaction = is_upper
@@ -569,6 +616,7 @@ func _build_liquid_glass_ui() -> void:
 		if rig_a: rig_a.stiction_enabled = stiction_on
 		if rig_c: rig_c.stiction_enabled = stiction_on
 		if rig_b: rig_b.stiction_enabled = stiction_on
+		if live_graph: live_graph.set_stiction_enabled(stiction_on)
 	)
 	main_hud.slow_mo_toggled.connect(func(slow_mo_on: bool):
 		Engine.time_scale = 0.20 if slow_mo_on else 1.00
@@ -595,6 +643,14 @@ func _build_liquid_glass_ui() -> void:
 		if main_hud != null:
 			main_hud.open_formulas_modal()
 	)
+	if live_graph != null:
+		live_graph.mass_scrubbed.connect(func(new_m: float):
+			if main_hud: main_hud.set_mass(new_m)
+			if rig_a: rig_a.set_mass(new_m)
+			if rig_c: rig_c.set_mass(new_m)
+			if rig_b: rig_b.set_mass(new_m)
+		)
+
 
 	# Keep legacy root for formulas modal dialog only
 	ui_layer = CanvasLayer.new()
@@ -2581,6 +2637,8 @@ func _build_force_visualizer() -> void:
 	mat_ring.emission_energy_multiplier = 2.5
 	mat_ring.roughness = 0.20
 	mat_ring.metallic = 0.85
+	mat_ring.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_ring.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat_ring.no_depth_test = true
 	mat_ring.render_priority = 16
 	pin_highlight_ring.material_override = mat_ring
@@ -2610,7 +2668,7 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.no_depth_test = true # Ensures always visible over 3D model!
 	mat.render_priority = 10 # Renders on top of rig meshes!
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
 	var stem := MeshInstance3D.new()
 	stem.name = "Stem"
@@ -3588,7 +3646,8 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		mat_ring.emission_enabled = true
 		mat_ring.emission = Color(1.0, 0.72, 0.20) if is_dark else Color(1.0, 0.55, 0.12)
 		mat_ring.emission_energy_multiplier = 2.5 if is_dark else 1.8
-
+		mat_ring.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat_ring.cull_mode = BaseMaterial3D.CULL_DISABLED
 
 	var arrows := [
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
@@ -3606,6 +3665,8 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		var mat: StandardMaterial3D = dict["mat"]
 		var col: Color = a["col"]
 		mat.albedo_color = col
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 		mat.emission_enabled = is_dark
 		mat.emission = col * 0.40 if is_dark else Color.BLACK
 		mat.emission_energy_multiplier = 0.45 if is_dark else 0.0

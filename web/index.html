@@ -91,8 +91,141 @@ body {
 }
 		</style>
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
-<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
+		<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
 
+		<!-- KaTeX Official CDN for LaTeX Math Typesetting -->
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+		<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+		<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+		<style>
+		/* KaTeX Interactive Mathematical Modal Overlay */
+		#katex-modal-overlay {
+			position: fixed;
+			inset: 0;
+			z-index: 99999;
+			display: none;
+			align-items: center;
+			justify-content: center;
+			background: rgba(5, 8, 15, 0.78);
+			backdrop-filter: blur(8px);
+			-webkit-backdrop-filter: blur(8px);
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			box-sizing: border-box;
+		}
+		#katex-modal-overlay * {
+			box-sizing: border-box;
+		}
+		#katex-modal-container {
+			width: 92%;
+			max-width: 920px;
+			max-height: 88vh;
+			display: flex;
+			flex-direction: column;
+			border-radius: 14px;
+			box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55);
+			overflow: hidden;
+			transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+		}
+		/* Dark Theme (SpaceX / Astro UXDS) */
+		#katex-modal-overlay.dark-theme #katex-modal-container {
+			background: #0f172a;
+			border: 1px solid rgba(255, 255, 255, 0.16);
+			color: #f1f5f9;
+		}
+		#katex-modal-overlay.dark-theme .modal-header {
+			background: #1e293b;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+		}
+		#katex-modal-overlay.dark-theme .modal-card {
+			background: #172033;
+			border: 1px solid rgba(255, 255, 255, 0.08);
+		}
+		#katex-modal-overlay.dark-theme .modal-subtitle {
+			color: #94a3b8;
+		}
+		#katex-modal-overlay.dark-theme .math-block {
+			background: #090d16;
+			border-left: 3px solid #00d2ff;
+		}
+
+		/* Light Theme (Brilliant / Clean Paper) */
+		#katex-modal-overlay.light-theme #katex-modal-container {
+			background: #ffffff;
+			border: 1px solid #cbd5e1;
+			color: #0f172a;
+		}
+		#katex-modal-overlay.light-theme .modal-header {
+			background: #f8fafc;
+			border-bottom: 1px solid #e2e8f0;
+		}
+		#katex-modal-overlay.light-theme .modal-card {
+			background: #f1f5f9;
+			border: 1px solid #e2e8f0;
+		}
+		#katex-modal-overlay.light-theme .modal-subtitle {
+			color: #64748b;
+		}
+		#katex-modal-overlay.light-theme .math-block {
+			background: #e2e8f0;
+			border-left: 3px solid #0284c7;
+		}
+
+		.modal-header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 16px 24px;
+		}
+		.modal-header-text h2 {
+			margin: 0;
+			font-size: 1.15rem;
+			font-weight: 700;
+			letter-spacing: 0.05em;
+			text-transform: uppercase;
+		}
+		.modal-header-text p {
+			margin: 4px 0 0 0;
+			font-size: 0.82rem;
+		}
+		.modal-close-btn {
+			background: rgba(239, 68, 68, 0.15);
+			border: 1px solid rgba(239, 68, 68, 0.35);
+			color: #ef4444;
+			font-weight: 700;
+			padding: 8px 16px;
+			border-radius: 8px;
+			cursor: pointer;
+			font-size: 0.85rem;
+			transition: background 0.15s, color 0.15s;
+		}
+		.modal-close-btn:hover {
+			background: #ef4444;
+			color: #ffffff;
+		}
+		.modal-body {
+			padding: 24px;
+			overflow-y: auto;
+			display: flex;
+			flex-direction: column;
+			gap: 18px;
+		}
+		.modal-card {
+			border-radius: 10px;
+			padding: 18px 20px;
+		}
+		.modal-card h3 {
+			margin: 0 0 8px 0;
+			font-size: 1.0rem;
+			font-weight: 600;
+		}
+		.math-block {
+			padding: 12px 16px;
+			border-radius: 6px;
+			margin: 12px 0;
+			overflow-x: auto;
+		}
+		</style>
 	</head>
 	<body>
 		<canvas id="canvas">
@@ -111,7 +244,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":370052,"index.wasm":38057390},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":384996,"index.wasm":38057390},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
@@ -214,6 +347,101 @@ const engine = new Engine(GODOT_CONFIG);
 		}, displayFailureNotice);
 	}
 }());
+		</script>
+		<!-- KaTeX Formulas Modal -->
+		<div id="katex-modal-overlay" class="dark-theme" onclick="if(event.target===this) window.closeFormulasModal();">
+			<div id="katex-modal-container">
+				<div class="modal-header">
+					<div class="modal-header-text">
+						<h2>Mathematical Formulation & Theoretical Foundations</h2>
+						<p class="modal-subtitle">Golden Rule of Mechanics · Pantograph Dynamics · Coulomb Friction · Symplectic Physics</p>
+					</div>
+					<button class="modal-close-btn" onclick="window.closeFormulasModal();">[ ✕ CLOSE ]</button>
+				</div>
+				<div class="modal-body">
+					<!-- Section 1 -->
+					<div class="modal-card">
+						<h3>1. The Golden Rule of Mechanics (Золотое правило механики)</h3>
+						<p>In any ideal pantograph linkage with kinematic amplification factor $n$, the displacement gain at the suspended end is strictly coupled with force attenuation:</p>
+						<div class="math-block">
+							$$L = n \cdot H \quad \iff \quad \lambda = \frac{L}{H} = n$$
+							$$\Delta H = \frac{\Delta L}{n}$$
+							$$W_{\text{load}} = W_{\text{spring}} \quad \Longrightarrow \quad F_{\text{eff}} \cdot \Delta L = P_{\text{in}} \cdot \Delta H$$
+						</div>
+						<p style="font-size: 0.88rem; opacity: 0.85;">
+							• <strong>Rig A (uniform $n = 3$):</strong> $L = 3 \cdot H \quad (\lambda = 3.000\times)$<br>
+							• <strong>Rig B (uniform $n = 5$):</strong> $L = 5 \cdot H \quad (\lambda = 5.000\times)$<br>
+							• <strong>Rig C (scaled $1:2:3$):</strong> $L = (1 + 2 + 3) \cdot H_0 = 6 \cdot H_0 \quad (\lambda = 6.000\times)$
+						</p>
+					</div>
+
+					<!-- Section 2 -->
+					<div class="modal-card">
+						<h3>2. Linkage Force Statics & Pin Reactions (Баланс сил в стержнях)</h3>
+						<p>At any scissor rhombus joint pin inclined at angle $\theta$ relative to the horizontal, supporting load $P_k$:</p>
+						<div class="math-block">
+							$$F_y = \frac{P_k}{2}$$
+							$$F_x = \frac{P_k}{2 \tan\theta}$$
+							$$R = \sqrt{F_x^2 + F_y^2} = \frac{P_k}{2 \sin\theta}$$
+							$$\vec{R}_{\text{upper}} = -\vec{R}_{\text{lower}} \quad \text{[Newton's 3rd Law]}$$
+						</div>
+						<p style="font-size: 0.85rem; opacity: 0.8;"><em>Note: At shallow scissor angles ($\theta \to 0$), lateral thrust $F_x$ surges asymptotically, multiplying pin compressive stress.</em></p>
+					</div>
+
+					<!-- Section 3 -->
+					<div class="modal-card">
+						<h3>3. Coulomb Dry Friction & Stick-Slip Hysteresis (Сухое трение Кулона)</h3>
+						<p>Joint pin dry friction introduces non-linear stiction and dissipative damping in the linkage:</p>
+						<div class="math-block">
+							$$f_k = \mu_k \cdot R \cdot (-\text{sign}(v_H)) \quad \text{[Kinetic Damping]}$$
+							$$|f_s| \le \mu_s \cdot R \quad \text{[Static Stiction Limit]}$$
+							$$\left| P_{\text{eff}} - \frac{k \cdot H}{\lambda} \right| \le f_s \cdot \lambda \quad \text{[Stick Deadband]}$$
+						</div>
+						<p style="font-size: 0.85rem; opacity: 0.8;"><em>Static stiction locks the mechanism inside an equilibrium deadband, creating discrete stick-slip steps on the $L(m)$ curve.</em></p>
+					</div>
+
+					<!-- Section 4 -->
+					<div class="modal-card">
+						<h3>4. Stiffness Regression & Reflected Inertia (Регрессия и инерция $n^2 M$)</h3>
+						<p>The suspended mass $M$ produces an equivalent reflected inertia amplified quadratically by the kinematic ratio:</p>
+						<div class="math-block">
+							$$M_{\text{eff}} = n^2 \cdot M$$
+							$$\frac{d^2 H}{dt^2} + 2\zeta\omega \frac{dH}{dt} + \omega^2 (H - H_{\text{target}}) = 0$$
+							$$\omega = \sqrt{\frac{k_{\text{eff}}}{M_{\text{eff}}}} = \sqrt{\frac{k}{n^4 M}}$$
+							$$k = \frac{\lambda \cdot g}{\tan\alpha} \quad \text{[Experimental Slope Extraction]}$$
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+		window.openFormulasModal = function(isDark) {
+			const overlay = document.getElementById('katex-modal-overlay');
+			if (!overlay) return;
+			overlay.className = isDark ? 'dark-theme' : 'light-theme';
+			overlay.style.display = 'flex';
+			if (window.renderMathInElement) {
+				renderMathInElement(overlay, {
+					delimiters: [
+						{left: '$$', right: '$$', display: true},
+						{left: '$', right: '$', display: false}
+					],
+					throwOnError: false
+				});
+			}
+		};
+
+		window.closeFormulasModal = function() {
+			const overlay = document.getElementById('katex-modal-overlay');
+			if (overlay) overlay.style.display = 'none';
+		};
+
+		window.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape') {
+				window.closeFormulasModal();
+			}
+		});
 		</script>
 	</body>
 </html>

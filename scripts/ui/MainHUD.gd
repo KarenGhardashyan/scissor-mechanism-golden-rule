@@ -19,6 +19,10 @@ signal slow_mo_toggled(is_slow_mo: bool)
 signal theme_toggled(is_dark: bool)
 signal formulas_requested()
 signal reset_view_requested()
+signal sim_speed_changed(val: float)
+signal sim_pause_toggled(is_paused: bool)
+signal jolt_requested()
+signal deselect_pin_requested()
 
 # State
 var is_dark_theme: bool = true
@@ -27,6 +31,12 @@ var is_upper_beam: bool = true
 var is_stiction_on: bool = true
 var current_rig_id: String = "ALL"
 var current_mass: float = 0.50
+var current_stiffness: float = 981.0
+var current_efficiency: float = 0.94
+var current_friction: float = 0.20
+var current_gravity: float = 9.81
+var current_sim_speed: float = 1.00
+var is_sim_paused: bool = false
 
 # Root Nodes
 var root_control: Control
@@ -42,11 +52,50 @@ var control_card: PanelContainer
 var graph_card: PanelContainer
 var live_graph: LiveGraph
 
+# Brand & Card Labels
+var lbl_title: Label
+var lbl_sub: Label
+var card_title: Label
+
+# Parameter Sub-Tabs & Panels
+var param_tab_buttons: Array[Button] = []
+var param_panels: Array[Control] = []
+var current_param_tab: int = 0
+var all_param_tag_labels: Array[Label] = []
+var all_param_val_labels: Array[Label] = []
+var all_param_preset_buttons: Array[Button] = []
+
+var lbl_m_tag: Label
+var lbl_fric_tag: Label
+var lbl_k_tag: Label
+var lbl_eta_tag: Label
+var lbl_g_tag: Label
+var lbl_speed_tag: Label
+
 # Desktop Controls
 var lbl_mass_val: Label
 var slider_mass: HSlider
 var btn_mass_dec: Button
 var btn_mass_inc: Button
+
+var lbl_k_val: Label
+var slider_stiffness: HSlider
+
+var lbl_eta_val: Label
+var slider_efficiency: HSlider
+
+var lbl_fric_val: Label
+var slider_friction: HSlider
+
+var lbl_g_val: Label
+var slider_gravity: HSlider
+
+var lbl_speed_val: Label
+var slider_sim_speed: HSlider
+var btn_play_pause: Button
+var btn_jolt: Button
+var btn_deselect_pin: Button
+
 var btn_beam_toggle: Button
 var btn_friction_toggle: Button
 var btn_slow_mo: Button
@@ -142,13 +191,13 @@ func _build_desktop_layout() -> void:
 	brand_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	brand_box.add_theme_constant_override("separation", 1)
 
-	var lbl_title := Label.new()
+	lbl_title = Label.new()
 	lbl_title.text = "PANTOGRAPH LAB // GOLDEN RULE"
 	lbl_title.add_theme_font_size_override("font_size", 13)
 	lbl_title.add_theme_color_override("font_color", ThemeManager.DARK_ACCENT_CYAN)
 	brand_box.add_child(lbl_title)
 
-	var lbl_sub := Label.new()
+	lbl_sub = Label.new()
 	lbl_sub.text = "400 Hz SYMPLECTIC EULER · MISSION TELEMETRY"
 	lbl_sub.add_theme_font_size_override("font_size", 9)
 	lbl_sub.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_MUTED)
@@ -261,92 +310,7 @@ func _build_desktop_layout() -> void:
 	ctrl_vbox.add_theme_constant_override("separation", 10)
 	control_card.add_child(ctrl_vbox)
 
-	# Header of Control Card
-	var card_header := HBoxContainer.new()
-	var card_title := Label.new()
-	card_title.text = "CONTROL & TELEMETRY MATRIX"
-	card_title.add_theme_font_size_override("font_size", 12)
-	card_header.add_child(card_title)
-	ctrl_vbox.add_child(card_header)
-
-	# Mass Control Row
-	var mass_row := HBoxContainer.new()
-	mass_row.add_theme_constant_override("separation", 8)
-
-	var lbl_m_tag := Label.new()
-	lbl_m_tag.text = "SUSPENDED MASS (m):"
-	lbl_m_tag.add_theme_font_size_override("font_size", 11)
-	lbl_m_tag.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_MUTED)
-	mass_row.add_child(lbl_m_tag)
-
-	lbl_mass_val = Label.new()
-	lbl_mass_val.text = "0.50 kg"
-	lbl_mass_val.add_theme_font_size_override("font_size", 15)
-	lbl_mass_val.add_theme_color_override("font_color", ThemeManager.DARK_ACCENT_CYAN)
-	mass_row.add_child(lbl_mass_val)
-
-	var mass_spacer := Control.new()
-	mass_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mass_row.add_child(mass_spacer)
-
-	btn_mass_dec = Button.new()
-	btn_mass_dec.text = "−0.05"
-	btn_mass_dec.custom_minimum_size = Vector2(50, 28)
-	btn_mass_dec.add_theme_font_size_override("font_size", 10)
-	btn_mass_dec.pressed.connect(func(): _adjust_mass(-0.05))
-	mass_row.add_child(btn_mass_dec)
-
-	btn_mass_inc = Button.new()
-	btn_mass_inc.text = "+0.05"
-	btn_mass_inc.custom_minimum_size = Vector2(50, 28)
-	btn_mass_inc.add_theme_font_size_override("font_size", 10)
-	btn_mass_inc.pressed.connect(func(): _adjust_mass(0.05))
-	mass_row.add_child(btn_mass_inc)
-	ctrl_vbox.add_child(mass_row)
-
-	# Mass Slider
-	slider_mass = HSlider.new()
-	slider_mass.min_value = 0.00
-	slider_mass.max_value = 1.20
-	slider_mass.step = 0.01
-	slider_mass.value = current_mass
-	slider_mass.value_changed.connect(_on_mass_slider_changed)
-	ctrl_vbox.add_child(slider_mass)
-
-	# Toggles Row (Beam Mode & Friction)
-	var toggles_row := HBoxContainer.new()
-	toggles_row.add_theme_constant_override("separation", 8)
-
-	btn_beam_toggle = Button.new()
-	btn_beam_toggle.text = "MODE: UPPER BEAM"
-	btn_beam_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_beam_toggle.custom_minimum_size = Vector2(0, 30)
-	btn_beam_toggle.add_theme_font_size_override("font_size", 10)
-	btn_beam_toggle.pressed.connect(_on_beam_toggle_pressed)
-	toggles_row.add_child(btn_beam_toggle)
-
-	btn_friction_toggle = Button.new()
-	btn_friction_toggle.text = "FRICTION: ON (mu=0.20)"
-	btn_friction_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_friction_toggle.custom_minimum_size = Vector2(0, 30)
-	btn_friction_toggle.add_theme_font_size_override("font_size", 10)
-	btn_friction_toggle.pressed.connect(_on_friction_toggle_pressed)
-	toggles_row.add_child(btn_friction_toggle)
-	ctrl_vbox.add_child(toggles_row)
-
-	# 3x2 Telemetry Metric Grid
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 8)
-	grid.add_theme_constant_override("v_separation", 8)
-
-	tile_val_h = _create_metric_tile(grid, "H (TIER EXT)", "7.5 cm")
-	tile_val_l = _create_metric_tile(grid, "L (TOTAL EXT)", "22.5 cm")
-	tile_val_r = _create_metric_tile(grid, "R (RESULTANT)", "3.36 N", ThemeManager.COLOR_VECTOR_R_DARK)
-	tile_val_fx = _create_metric_tile(grid, "Fx (LATERAL)", "2.16 N", ThemeManager.COLOR_VECTOR_FX_DARK)
-	tile_val_fy = _create_metric_tile(grid, "Fy (VERTICAL)", "2.57 N", ThemeManager.COLOR_VECTOR_FY_DARK)
-	tile_val_fric = _create_metric_tile(grid, "fs / fk (FRICTION)", "0.67 N", ThemeManager.COLOR_VECTOR_FRIC_DARK)
-	ctrl_vbox.add_child(grid)
+	_build_control_card_tabs(ctrl_vbox)
 
 	# Lower Card: Realtime Live Graph L(m)
 	graph_card = PanelContainer.new()
@@ -642,6 +606,19 @@ func _adjust_mass(delta_m: float) -> void:
 		slider_mob_mass.value = next_m
 
 
+func set_mass(val: float) -> void:
+	current_mass = clampf(val, 0.00, 1.20)
+	if slider_mass != null and not is_equal_approx(slider_mass.value, current_mass):
+		slider_mass.set_value_no_signal(current_mass)
+	if slider_mob_mass != null and not is_equal_approx(slider_mob_mass.value, current_mass):
+		slider_mob_mass.set_value_no_signal(current_mass)
+	var text_fmt: String = "%.2f kg" % current_mass
+	if lbl_mass_val != null:
+		lbl_mass_val.text = text_fmt
+	if lbl_mob_mass_val != null:
+		lbl_mob_mass_val.text = text_fmt
+
+
 func _on_mass_slider_changed(val: float) -> void:
 	current_mass = val
 	var text_fmt: String = "%.2f kg" % current_mass
@@ -755,6 +732,484 @@ func update_telemetry(h_cm: float, l_cm: float, r_n: float, fx_n: float, fy_n: f
 		lbl_mob_telem_row.text = "H: %.1fcm · L: %.1fcm · R: %.2fN · fric: %.2fN" % [h_cm, l_cm, r_n, fric_n]
 
 
+# -----------------------------------------------------------------------------
+# CONTROL CARD TABS & DETAILED PARAMETERS
+# -----------------------------------------------------------------------------
+
+func _build_control_card_tabs(ctrl_vbox: VBoxContainer) -> void:
+	# Header of Control Card
+	var card_header := HBoxContainer.new()
+	card_title = Label.new()
+	card_title.text = "MISSION CONTROL & PARAMETERS"
+	card_title.add_theme_font_size_override("font_size", 12)
+	card_header.add_child(card_title)
+	ctrl_vbox.add_child(card_header)
+
+	# 1. Segmented Sub-Tabs Bar
+	var tab_bar := HBoxContainer.new()
+	tab_bar.add_theme_constant_override("separation", 4)
+	ctrl_vbox.add_child(tab_bar)
+
+	param_tab_buttons.clear()
+	param_panels.clear()
+	all_param_tag_labels.clear()
+	all_param_val_labels.clear()
+	all_param_preset_buttons.clear()
+
+	var tab_titles := ["MASS (m)", "FRICTION (μ)", "STIFFNESS (k)", "GRAVITY (g)", "TIME / SPEED"]
+	for i in range(tab_titles.size()):
+		var btn := Button.new()
+		btn.text = tab_titles[i]
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size = Vector2(0, 26)
+		btn.add_theme_font_size_override("font_size", 10)
+		var t_idx: int = i
+		btn.pressed.connect(func(): _switch_param_tab(t_idx))
+		tab_bar.add_child(btn)
+		param_tab_buttons.append(btn)
+
+	# 2. Panels Container
+	var panels_box := VBoxContainer.new()
+	panels_box.add_theme_constant_override("separation", 6)
+	ctrl_vbox.add_child(panels_box)
+
+	# --- TAB 0: MASS (m) ---
+	var p_mass := VBoxContainer.new()
+	p_mass.add_theme_constant_override("separation", 6)
+	panels_box.add_child(p_mass)
+	param_panels.append(p_mass)
+
+	var mass_row := HBoxContainer.new()
+	mass_row.add_theme_constant_override("separation", 8)
+
+	lbl_m_tag = Label.new()
+	lbl_m_tag.text = "SUSPENDED MASS (m):"
+	lbl_m_tag.add_theme_font_size_override("font_size", 11)
+	mass_row.add_child(lbl_m_tag)
+	all_param_tag_labels.append(lbl_m_tag)
+
+	lbl_mass_val = Label.new()
+	lbl_mass_val.text = "0.50 kg"
+	lbl_mass_val.add_theme_font_size_override("font_size", 14)
+	mass_row.add_child(lbl_mass_val)
+	all_param_val_labels.append(lbl_mass_val)
+
+	var mass_sp := Control.new()
+	mass_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mass_row.add_child(mass_sp)
+
+	btn_mass_dec = Button.new()
+	btn_mass_dec.text = "−0.05"
+	btn_mass_dec.custom_minimum_size = Vector2(46, 24)
+	btn_mass_dec.add_theme_font_size_override("font_size", 10)
+	btn_mass_dec.pressed.connect(func(): _adjust_mass(-0.05))
+	mass_row.add_child(btn_mass_dec)
+	all_param_preset_buttons.append(btn_mass_dec)
+
+	btn_mass_inc = Button.new()
+	btn_mass_inc.text = "+0.05"
+	btn_mass_inc.custom_minimum_size = Vector2(46, 24)
+	btn_mass_inc.add_theme_font_size_override("font_size", 10)
+	btn_mass_inc.pressed.connect(func(): _adjust_mass(0.05))
+	mass_row.add_child(btn_mass_inc)
+	all_param_preset_buttons.append(btn_mass_inc)
+	p_mass.add_child(mass_row)
+
+	slider_mass = HSlider.new()
+	slider_mass.min_value = 0.00
+	slider_mass.max_value = 1.50
+	slider_mass.step = 0.01
+	slider_mass.value = current_mass
+	slider_mass.value_changed.connect(_on_mass_slider_changed)
+	p_mass.add_child(slider_mass)
+
+	var mass_presets_row := HBoxContainer.new()
+	mass_presets_row.add_theme_constant_override("separation", 4)
+	for m_val in [0.10, 0.25, 0.50, 0.75, 1.00, 1.20]:
+		var pbtn := Button.new()
+		pbtn.text = "%.2f kg" % m_val
+		pbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pbtn.custom_minimum_size = Vector2(0, 24)
+		pbtn.add_theme_font_size_override("font_size", 9)
+		pbtn.pressed.connect(func(): slider_mass.value = m_val)
+		mass_presets_row.add_child(pbtn)
+		all_param_preset_buttons.append(pbtn)
+	p_mass.add_child(mass_presets_row)
+
+	# --- TAB 1: FRICTION (μ) ---
+	var p_fric := VBoxContainer.new()
+	p_fric.add_theme_constant_override("separation", 6)
+	p_fric.visible = false
+	panels_box.add_child(p_fric)
+	param_panels.append(p_fric)
+
+	var fric_row := HBoxContainer.new()
+	lbl_fric_tag = Label.new()
+	lbl_fric_tag.text = "JOINT PIN FRICTION (μ):"
+	lbl_fric_tag.add_theme_font_size_override("font_size", 11)
+	fric_row.add_child(lbl_fric_tag)
+	all_param_tag_labels.append(lbl_fric_tag)
+
+	lbl_fric_val = Label.new()
+	lbl_fric_val.text = "0.20"
+	lbl_fric_val.add_theme_font_size_override("font_size", 14)
+	fric_row.add_child(lbl_fric_val)
+	all_param_val_labels.append(lbl_fric_val)
+	p_fric.add_child(fric_row)
+
+	slider_friction = HSlider.new()
+	slider_friction.min_value = 0.00
+	slider_friction.max_value = 0.50
+	slider_friction.step = 0.01
+	slider_friction.value = current_friction
+	slider_friction.value_changed.connect(_on_friction_slider_changed)
+	p_fric.add_child(slider_friction)
+
+	var fric_presets := HBoxContainer.new()
+	fric_presets.add_theme_constant_override("separation", 4)
+	var f_cfgs := [
+		{"label": "Zero (0.0)", "val": 0.00},
+		{"label": "Steel (0.08)", "val": 0.08},
+		{"label": "PTFE (0.15)", "val": 0.15},
+		{"label": "PLA (0.35)", "val": 0.35}
+	]
+	for cfg in f_cfgs:
+		var fbtn := Button.new()
+		fbtn.text = cfg["label"]
+		fbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fbtn.custom_minimum_size = Vector2(0, 24)
+		fbtn.add_theme_font_size_override("font_size", 9)
+		var f_val: float = cfg["val"]
+		fbtn.pressed.connect(func(): slider_friction.value = f_val)
+		fric_presets.add_child(fbtn)
+		all_param_preset_buttons.append(fbtn)
+	p_fric.add_child(fric_presets)
+
+	var fric_toggles := HBoxContainer.new()
+	fric_toggles.add_theme_constant_override("separation", 6)
+
+	btn_friction_toggle = Button.new()
+	btn_friction_toggle.text = "STATIC FRICTION (fs): ON"
+	btn_friction_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_friction_toggle.custom_minimum_size = Vector2(0, 26)
+	btn_friction_toggle.add_theme_font_size_override("font_size", 10)
+	btn_friction_toggle.pressed.connect(_on_friction_toggle_pressed)
+	fric_toggles.add_child(btn_friction_toggle)
+	all_param_preset_buttons.append(btn_friction_toggle)
+
+	btn_beam_toggle = Button.new()
+	btn_beam_toggle.text = "MODE: UPPER BEAM"
+	btn_beam_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_beam_toggle.custom_minimum_size = Vector2(0, 26)
+	btn_beam_toggle.add_theme_font_size_override("font_size", 10)
+	btn_beam_toggle.pressed.connect(_on_beam_toggle_pressed)
+	fric_toggles.add_child(btn_beam_toggle)
+	all_param_preset_buttons.append(btn_beam_toggle)
+	p_fric.add_child(fric_toggles)
+
+	# --- TAB 2: STIFFNESS & EFFICIENCY (k, η) ---
+	var p_stiff := VBoxContainer.new()
+	p_stiff.add_theme_constant_override("separation", 6)
+	p_stiff.visible = false
+	panels_box.add_child(p_stiff)
+	param_panels.append(p_stiff)
+
+	var k_row := HBoxContainer.new()
+	lbl_k_tag = Label.new()
+	lbl_k_tag.text = "SPRING STIFFNESS (k):"
+	lbl_k_tag.add_theme_font_size_override("font_size", 11)
+	k_row.add_child(lbl_k_tag)
+	all_param_tag_labels.append(lbl_k_tag)
+
+	lbl_k_val = Label.new()
+	lbl_k_val.text = "981 N/m"
+	lbl_k_val.add_theme_font_size_override("font_size", 14)
+	k_row.add_child(lbl_k_val)
+	all_param_val_labels.append(lbl_k_val)
+	p_stiff.add_child(k_row)
+
+	slider_stiffness = HSlider.new()
+	slider_stiffness.min_value = 500.0
+	slider_stiffness.max_value = 2500.0
+	slider_stiffness.step = 10.0
+	slider_stiffness.value = current_stiffness
+	slider_stiffness.value_changed.connect(_on_stiffness_slider_changed)
+	p_stiff.add_child(slider_stiffness)
+
+	var k_presets := HBoxContainer.new()
+	k_presets.add_theme_constant_override("separation", 4)
+	var k_cfgs := [
+		{"label": "Rig A (981)", "val": 981.0},
+		{"label": "Rig B (1090)", "val": 1090.0},
+		{"label": "Stiff (1500)", "val": 1500.0},
+		{"label": "Heavy (2000)", "val": 2000.0}
+	]
+	for cfg in k_cfgs:
+		var kbtn := Button.new()
+		kbtn.text = cfg["label"]
+		kbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		kbtn.custom_minimum_size = Vector2(0, 24)
+		kbtn.add_theme_font_size_override("font_size", 9)
+		var kval: float = cfg["val"]
+		kbtn.pressed.connect(func(): slider_stiffness.value = kval)
+		k_presets.add_child(kbtn)
+		all_param_preset_buttons.append(kbtn)
+	p_stiff.add_child(k_presets)
+
+	var eta_row := HBoxContainer.new()
+	lbl_eta_tag = Label.new()
+	lbl_eta_tag.text = "EFFICIENCY (η):"
+	lbl_eta_tag.add_theme_font_size_override("font_size", 11)
+	eta_row.add_child(lbl_eta_tag)
+	all_param_tag_labels.append(lbl_eta_tag)
+
+	lbl_eta_val = Label.new()
+	lbl_eta_val.text = "94%"
+	lbl_eta_val.add_theme_font_size_override("font_size", 14)
+	eta_row.add_child(lbl_eta_val)
+	all_param_val_labels.append(lbl_eta_val)
+	p_stiff.add_child(eta_row)
+
+	slider_efficiency = HSlider.new()
+	slider_efficiency.min_value = 70.0
+	slider_efficiency.max_value = 100.0
+	slider_efficiency.step = 1.0
+	slider_efficiency.value = current_efficiency * 100.0
+	slider_efficiency.value_changed.connect(_on_efficiency_slider_changed)
+	p_stiff.add_child(slider_efficiency)
+
+	# --- TAB 3: GRAVITY (g) ---
+	var p_grav := VBoxContainer.new()
+	p_grav.add_theme_constant_override("separation", 6)
+	p_grav.visible = false
+	panels_box.add_child(p_grav)
+	param_panels.append(p_grav)
+
+	var g_row := HBoxContainer.new()
+	lbl_g_tag = Label.new()
+	lbl_g_tag.text = "GRAVITATIONAL FIELD (g):"
+	lbl_g_tag.add_theme_font_size_override("font_size", 11)
+	g_row.add_child(lbl_g_tag)
+	all_param_tag_labels.append(lbl_g_tag)
+
+	lbl_g_val = Label.new()
+	lbl_g_val.text = "9.81 m/s² (Earth)"
+	lbl_g_val.add_theme_font_size_override("font_size", 14)
+	g_row.add_child(lbl_g_val)
+	all_param_val_labels.append(lbl_g_val)
+	p_grav.add_child(g_row)
+
+	slider_gravity = HSlider.new()
+	slider_gravity.min_value = 0.00
+	slider_gravity.max_value = 25.00
+	slider_gravity.step = 0.05
+	slider_gravity.value = current_gravity
+	slider_gravity.value_changed.connect(_on_gravity_slider_changed)
+	p_grav.add_child(slider_gravity)
+
+	var g_presets := HBoxContainer.new()
+	g_presets.add_theme_constant_override("separation", 4)
+	var g_cfgs := [
+		{"label": "Zero-G (0.0)", "val": 0.00},
+		{"label": "Moon (1.62)", "val": 1.62},
+		{"label": "Mars (3.71)", "val": 3.71},
+		{"label": "Earth (9.81)", "val": 9.81},
+		{"label": "Jupiter (24.8)", "val": 24.79}
+	]
+	for cfg in g_cfgs:
+		var gbtn := Button.new()
+		gbtn.text = cfg["label"]
+		gbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		gbtn.custom_minimum_size = Vector2(0, 24)
+		gbtn.add_theme_font_size_override("font_size", 9)
+		var gval: float = cfg["val"]
+		gbtn.pressed.connect(func(): slider_gravity.value = gval)
+		g_presets.add_child(gbtn)
+		all_param_preset_buttons.append(gbtn)
+	p_grav.add_child(g_presets)
+
+	# --- TAB 4: TIME / SPEED & SLOW-MO ---
+	var p_time := VBoxContainer.new()
+	p_time.add_theme_constant_override("separation", 6)
+	p_time.visible = false
+	panels_box.add_child(p_time)
+	param_panels.append(p_time)
+
+	var speed_row := HBoxContainer.new()
+	lbl_speed_tag = Label.new()
+	lbl_speed_tag.text = "SIMULATION SPEED:"
+	lbl_speed_tag.add_theme_font_size_override("font_size", 11)
+	speed_row.add_child(lbl_speed_tag)
+	all_param_tag_labels.append(lbl_speed_tag)
+
+	lbl_speed_val = Label.new()
+	lbl_speed_val.text = "1.00x NORMAL"
+	lbl_speed_val.add_theme_font_size_override("font_size", 14)
+	speed_row.add_child(lbl_speed_val)
+	all_param_val_labels.append(lbl_speed_val)
+	p_time.add_child(speed_row)
+
+	slider_sim_speed = HSlider.new()
+	slider_sim_speed.min_value = 0.05
+	slider_sim_speed.max_value = 2.00
+	slider_sim_speed.step = 0.05
+	slider_sim_speed.value = current_sim_speed
+	slider_sim_speed.value_changed.connect(_on_sim_speed_slider_changed)
+	p_time.add_child(slider_sim_speed)
+
+	var time_presets := HBoxContainer.new()
+	time_presets.add_theme_constant_override("separation", 4)
+
+	btn_play_pause = Button.new()
+	btn_play_pause.text = "⏸ PAUSE"
+	btn_play_pause.custom_minimum_size = Vector2(80, 26)
+	btn_play_pause.add_theme_font_size_override("font_size", 10)
+	btn_play_pause.pressed.connect(_on_play_pause_pressed)
+	time_presets.add_child(btn_play_pause)
+	all_param_preset_buttons.append(btn_play_pause)
+
+	var spd_cfgs := [
+		{"label": "0.05x Ultra", "val": 0.05},
+		{"label": "0.20x Slow", "val": 0.20},
+		{"label": "0.50x Half", "val": 0.50},
+		{"label": "1.00x Normal", "val": 1.00}
+	]
+	for cfg in spd_cfgs:
+		var sbtn := Button.new()
+		sbtn.text = cfg["label"]
+		sbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sbtn.custom_minimum_size = Vector2(0, 26)
+		sbtn.add_theme_font_size_override("font_size", 9)
+		var sval: float = cfg["val"]
+		sbtn.pressed.connect(func(): slider_sim_speed.value = sval)
+		time_presets.add_child(sbtn)
+		all_param_preset_buttons.append(sbtn)
+	p_time.add_child(time_presets)
+
+	var action_row := HBoxContainer.new()
+	action_row.add_theme_constant_override("separation", 6)
+
+	btn_jolt = Button.new()
+	btn_jolt.text = "⚡ JOLT IMPULSE (+0.1 m/s)"
+	btn_jolt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_jolt.custom_minimum_size = Vector2(0, 26)
+	btn_jolt.add_theme_font_size_override("font_size", 10)
+	btn_jolt.pressed.connect(_on_jolt_pressed)
+	action_row.add_child(btn_jolt)
+	all_param_preset_buttons.append(btn_jolt)
+
+	btn_deselect_pin = Button.new()
+	btn_deselect_pin.text = "✕ HIDE 3D VECTORS"
+	btn_deselect_pin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_deselect_pin.custom_minimum_size = Vector2(0, 26)
+	btn_deselect_pin.add_theme_font_size_override("font_size", 10)
+	btn_deselect_pin.pressed.connect(_on_deselect_pin_pressed)
+	action_row.add_child(btn_deselect_pin)
+	all_param_preset_buttons.append(btn_deselect_pin)
+	p_time.add_child(action_row)
+
+	# 3. 3x2 Telemetry Metric Grid (Always pinned below active parameters)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+
+	tile_val_h = _create_metric_tile(grid, "H (TIER EXT)", "7.5 cm")
+	tile_val_l = _create_metric_tile(grid, "L (TOTAL EXT)", "22.5 cm")
+	tile_val_r = _create_metric_tile(grid, "R (RESULTANT)", "3.36 N", ThemeManager.COLOR_VECTOR_R_DARK)
+	tile_val_fx = _create_metric_tile(grid, "Fx (LATERAL)", "2.16 N", ThemeManager.COLOR_VECTOR_FX_DARK)
+	tile_val_fy = _create_metric_tile(grid, "Fy (VERTICAL)", "2.57 N", ThemeManager.COLOR_VECTOR_FY_DARK)
+	tile_val_fric = _create_metric_tile(grid, "fs / fk (FRICTION)", "0.67 N", ThemeManager.COLOR_VECTOR_FRIC_DARK)
+	ctrl_vbox.add_child(grid)
+
+
+func _switch_param_tab(idx: int) -> void:
+	current_param_tab = idx
+	for i in range(param_panels.size()):
+		param_panels[i].visible = (i == idx)
+	_update_param_tab_buttons()
+
+
+func _update_param_tab_buttons() -> void:
+	for i in range(param_tab_buttons.size()):
+		var b := param_tab_buttons[i]
+		var is_act := (i == current_param_tab)
+		b.add_theme_stylebox_override("normal", ThemeManager.create_button_style(is_dark_theme, is_act, false, 4))
+		b.add_theme_stylebox_override("hover", ThemeManager.create_button_style(is_dark_theme, is_act, true, 4))
+		b.add_theme_stylebox_override("pressed", ThemeManager.create_button_style(is_dark_theme, true, false, 4))
+		var tc: Color
+		if is_dark_theme:
+			tc = ThemeManager.DARK_ACCENT_CYAN if is_act else ThemeManager.DARK_TEXT_PRIMARY
+		else:
+			tc = Color.WHITE if is_act else ThemeManager.LIGHT_TEXT_PRIMARY
+		b.add_theme_color_override("font_color", tc)
+		b.add_theme_color_override("font_hover_color", tc)
+		b.add_theme_color_override("font_pressed_color", tc)
+		b.add_theme_color_override("font_focus_color", tc)
+
+
+func _on_stiffness_slider_changed(val: float) -> void:
+	current_stiffness = val
+	if lbl_k_val:
+		lbl_k_val.text = "%d N/m" % int(val)
+	stiffness_changed.emit(val)
+
+
+func _on_efficiency_slider_changed(val: float) -> void:
+	current_efficiency = val / 100.0
+	if lbl_eta_val:
+		lbl_eta_val.text = "%d%%" % int(val)
+	efficiency_changed.emit(val)
+
+
+func _on_friction_slider_changed(val: float) -> void:
+	current_friction = val
+	if lbl_fric_val:
+		lbl_fric_val.text = "0.00 (Zero)" if is_equal_approx(val, 0.0) else "%.2f" % val
+	if btn_friction_toggle != null:
+		btn_friction_toggle.text = "STATIC FRICTION: ON" if is_stiction_on else "STATIC FRICTION: OFF"
+	friction_changed.emit(val)
+
+
+func _on_gravity_slider_changed(val: float) -> void:
+	current_gravity = val
+	var desc := ""
+	if is_equal_approx(val, 0.0): desc = " (Zero-G)"
+	elif absf(val - 1.62) < 0.2: desc = " (Moon)"
+	elif absf(val - 3.71) < 0.2: desc = " (Mars)"
+	elif absf(val - 9.81) < 0.2: desc = " (Earth)"
+	elif absf(val - 24.79) < 0.5: desc = " (Jupiter)"
+	if lbl_g_val:
+		lbl_g_val.text = "%.2f m/s²%s" % [val, desc]
+	gravity_changed.emit(val)
+
+
+func _on_sim_speed_slider_changed(val: float) -> void:
+	current_sim_speed = val
+	if lbl_speed_val:
+		var mode := " [PAUSED]" if is_sim_paused else ""
+		lbl_speed_val.text = "%.2fx%s" % [val, mode]
+	sim_speed_changed.emit(val)
+
+
+func _on_play_pause_pressed() -> void:
+	is_sim_paused = not is_sim_paused
+	if btn_play_pause:
+		btn_play_pause.text = "▶ RESUME" if is_sim_paused else "⏸ PAUSE"
+	if lbl_speed_val:
+		var mode := " [PAUSED]" if is_sim_paused else ""
+		lbl_speed_val.text = "%.2fx%s" % [current_sim_speed, mode]
+	sim_pause_toggled.emit(is_sim_paused)
+
+
+func _on_jolt_pressed() -> void:
+	jolt_requested.emit()
+
+
+func _on_deselect_pin_pressed() -> void:
+	deselect_pin_requested.emit()
+
+
 ## Applies theme tokens to all cards and buttons
 func apply_theme(is_dark: bool) -> void:
 	is_dark_theme = is_dark
@@ -768,42 +1223,70 @@ func apply_theme(is_dark: bool) -> void:
 	if mobile_bottom_sheet != null: mobile_bottom_sheet.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 4, 12, true))
 	if formulas_modal != null: formulas_modal.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 4, 18, true))
 
-	# 2. Buttons
+	# 2. Main Brand Labels & Card Headers
+	var brand_c := ThemeManager.DARK_ACCENT_CYAN if is_dark else ThemeManager.LIGHT_ACCENT_COBALT
+	var primary_c := ThemeManager.DARK_TEXT_PRIMARY if is_dark else ThemeManager.LIGHT_TEXT_PRIMARY
+	var muted_c := ThemeManager.DARK_TEXT_MUTED if is_dark else ThemeManager.LIGHT_TEXT_MUTED
+
+	if lbl_title != null: lbl_title.add_theme_color_override("font_color", brand_c)
+	if lbl_sub != null: lbl_sub.add_theme_color_override("font_color", muted_c)
+	if card_title != null: card_title.add_theme_color_override("font_color", primary_c)
+	if lbl_mob_telem_row != null: lbl_mob_telem_row.add_theme_color_override("font_color", brand_c)
+
+	# 3. Parameter Tag Labels and Value Labels
+	for lbl in all_param_tag_labels:
+		if lbl != null:
+			lbl.add_theme_color_override("font_color", muted_c)
+	for lbl in all_param_val_labels:
+		if lbl != null:
+			lbl.add_theme_color_override("font_color", brand_c)
+
+	# 4. Action Buttons
 	if btn_theme != null:
 		btn_theme.text = "THEME: DARK" if is_dark else "THEME: LIGHT"
 
 	var normal_btn_sb := ThemeManager.create_button_style(is_dark, false, false, 4)
 	var hover_btn_sb := ThemeManager.create_button_style(is_dark, false, true, 4)
 	var active_btn_sb := ThemeManager.create_button_style(is_dark, true, false, 4)
-	var text_c := ThemeManager.DARK_TEXT_PRIMARY if is_dark else ThemeManager.LIGHT_TEXT_PRIMARY
 
-	var all_buttons := [btn_slow_mo, btn_theme, btn_formulas, btn_reset_view, btn_mass_dec, btn_mass_inc, btn_beam_toggle, btn_friction_toggle, btn_mob_slow, btn_mob_th, btn_mob_form]
+	var all_buttons := [
+		btn_slow_mo, btn_theme, btn_formulas, btn_reset_view,
+		btn_mass_dec, btn_mass_inc, btn_beam_toggle, btn_friction_toggle,
+		btn_play_pause, btn_jolt, btn_deselect_pin,
+		btn_mob_slow, btn_mob_th, btn_mob_form
+	]
+	all_buttons.append_array(all_param_preset_buttons)
+
 	for btn in all_buttons:
 		if btn != null:
 			btn.add_theme_stylebox_override("normal", normal_btn_sb)
 			btn.add_theme_stylebox_override("hover", hover_btn_sb)
 			btn.add_theme_stylebox_override("pressed", active_btn_sb)
 			btn.add_theme_stylebox_override("focus", normal_btn_sb)
-			btn.add_theme_color_override("font_color", text_c)
-			btn.add_theme_color_override("font_hover_color", text_c)
+			btn.add_theme_color_override("font_color", primary_c)
+			btn.add_theme_color_override("font_hover_color", primary_c)
 			btn.add_theme_color_override("font_pressed_color", Color.WHITE if not is_dark else ThemeManager.DARK_ACCENT_CYAN)
-			btn.add_theme_color_override("font_focus_color", text_c)
+			btn.add_theme_color_override("font_focus_color", primary_c)
 
-	# 3. Sliders
-	if slider_mass != null: ThemeManager.apply_slider_style(slider_mass, is_dark, 22)
-	if slider_mob_mass != null: ThemeManager.apply_slider_style(slider_mob_mass, is_dark, 30)
+	_update_param_tab_buttons()
 
-	# 4. Metric Grid Tiles Style & Colors
+	# 5. Sliders
+	for sl in [slider_mass, slider_stiffness, slider_efficiency, slider_friction, slider_gravity, slider_sim_speed]:
+		if sl != null:
+			ThemeManager.apply_slider_style(sl, is_dark, 20)
+	if slider_mob_mass != null:
+		ThemeManager.apply_slider_style(slider_mob_mass, is_dark, 30)
+
+	# 6. Metric Grid Tiles Style & Colors
 	var tile_sb := ThemeManager.create_metric_tile_style(is_dark, 4)
 	for t in metric_tiles:
 		if t != null:
 			t.add_theme_stylebox_override("panel", tile_sb)
 
-	var tag_color := ThemeManager.DARK_TEXT_MUTED if is_dark else ThemeManager.LIGHT_TEXT_MUTED
 	for lbl in metric_tag_labels:
 		if lbl != null:
 			lbl.add_theme_font_size_override("font_size", 11)
-			lbl.add_theme_color_override("font_color", tag_color)
+			lbl.add_theme_color_override("font_color", muted_c)
 
 	for item in metric_num_labels:
 		var lbl: Label = item["label"]
@@ -811,7 +1294,6 @@ func apply_theme(is_dark: bool) -> void:
 		if lbl != null:
 			lbl.add_theme_font_size_override("font_size", 20)
 			if acc != Color.WHITE:
-				# High contrast semantic vector colors in Light theme
 				if not is_dark:
 					if acc == ThemeManager.COLOR_VECTOR_R_DARK: acc = ThemeManager.COLOR_VECTOR_R_LIGHT
 					elif acc == ThemeManager.COLOR_VECTOR_FX_DARK: acc = ThemeManager.COLOR_VECTOR_FX_LIGHT
@@ -819,9 +1301,10 @@ func apply_theme(is_dark: bool) -> void:
 					elif acc == ThemeManager.COLOR_VECTOR_FRIC_DARK: acc = ThemeManager.COLOR_VECTOR_FRIC_LIGHT
 				lbl.add_theme_color_override("font_color", acc)
 			else:
-				lbl.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_PRIMARY if is_dark else ThemeManager.LIGHT_TEXT_PRIMARY)
+				lbl.add_theme_color_override("font_color", primary_c)
 
 	_update_rig_buttons()
+	_update_formulas_text()
 
 
 # -----------------------------------------------------------------------------
@@ -854,7 +1337,7 @@ func _build_formulas_modal() -> void:
 
 	formulas_modal = PanelContainer.new()
 	formulas_modal.name = "FormulasModalCard"
-	formulas_modal.custom_minimum_size = Vector2(800, 560)
+	formulas_modal.custom_minimum_size = Vector2(820, 580)
 	formulas_modal.mouse_filter = Control.MOUSE_FILTER_STOP
 	center.add_child(formulas_modal)
 
@@ -878,12 +1361,14 @@ func _build_formulas_modal() -> void:
 	head_vbox.add_theme_constant_override("separation", 2)
 
 	var title_lbl := Label.new()
+	title_lbl.name = "ModalTitle"
 	title_lbl.text = "PANTOGRAPH LAB // MATHEMATICAL & PHYSICAL FORMULATION"
 	title_lbl.add_theme_font_size_override("font_size", 13)
 	title_lbl.add_theme_color_override("font_color", ThemeManager.DARK_ACCENT_CYAN)
 	head_vbox.add_child(title_lbl)
 
 	var sub_lbl := Label.new()
+	sub_lbl.name = "ModalSub"
 	sub_lbl.text = "Golden Rule of Mechanics · Newtonian Pin Statics · Coulomb Friction · Symplectic Solver"
 	sub_lbl.add_theme_font_size_override("font_size", 9)
 	sub_lbl.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_MUTED)
@@ -891,6 +1376,7 @@ func _build_formulas_modal() -> void:
 	header.add_child(head_vbox)
 
 	var btn_close := Button.new()
+	btn_close.name = "ModalCloseBtn"
 	btn_close.text = "[ X CLOSE ]"
 	btn_close.custom_minimum_size = Vector2(90, 32)
 	btn_close.add_theme_font_size_override("font_size", 11)
@@ -908,50 +1394,102 @@ func _build_formulas_modal() -> void:
 	modal_vbox.add_child(scroll)
 
 	var rtl := RichTextLabel.new()
+	rtl.name = "FormulasRTL"
 	rtl.bbcode_enabled = true
 	rtl.fit_content = true
 	rtl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rtl.mouse_filter = Control.MOUSE_FILTER_PASS
 	scroll.add_child(rtl)
 
-	var ftext := ""
-	ftext += "[color=#00D2FF][font_size=14][b]1. GOLDEN RULE OF MECHANICS (Золотое правило механики)[/b][/font_size][/color]\n"
-	ftext += "A scissor pantograph operates on the fundamental kinematic transmission ratio λ between input stage height [b]H[/b] and overall suspended displacement [b]L[/b]:\n\n"
-	ftext += "    [b]L = n · H[/b]    ⟹    [b]λ ≡ δL / δH = n[/b]\n\n"
-	ftext += "• [color=#2B88D8]Rig A (uniform n = 3):[/color]   L = 3 · H   (λ = 3.000×, Blue)\n"
-	ftext += "• [color=#F59E0B]Rig B (uniform n = 5):[/color]   L = 5 · H   (λ = 5.000×, Orange)\n"
-	ftext += "• [color=#10B981]Rig C (scaled 1:2:3):[/color]  L = (1 + 2 + 3) · H₀ = 6 · H₀   (λ = 6.000×, Green)\n\n"
-	ftext += "By the [b]Principle of Virtual Work[/b], under static equilibrium with transmission efficiency η:\n"
-	ftext += "    [b]δW_in = T · δH[/b]        [b]δW_out = P_eff · δL[/b]\n"
-	ftext += "    [b]η · δW_in = δW_out   ⟹   T = (λ · P_eff) / η[/b]\n"
-	ftext += "[color=#8B949E]\"What is gained in displacement is strictly lost in required tension force.\"[/color]\n\n"
+	_update_formulas_text()
 
-	ftext += "[color=#00D2FF][font_size=14][b]2. LINKAGE FORCE STATICS & PIN REACTIONS (Баланс сил в стержнях)[/b][/font_size][/color]\n"
-	ftext += "At any scissor rhombus joint pin inclined at angle θ relative to the horizontal, supporting load P_k:\n\n"
-	ftext += "    • [color=#38BDF8]Vertical Reaction:[/color]       [b]Fy = P_k / 2[/b]\n"
-	ftext += "    • [color=#F43F5E]Lateral Outward Thrust:[/color]  [b]Fx = P_k / (2 · tan θ)[/b]\n"
-	ftext += "    • [color=#10B981]Beam Axial Resultant:[/color]    [b]R = √(Fx² + Fy²) = P_k / (2 · sin θ)[/b]\n\n"
-	ftext += "[color=#8B949E]Note: At shallow scissor angles (θ → 0), lateral thrust Fx surges asymptotically, multiplying pin compressive stress.[/color]\n"
-	ftext += "[b]Newton's Third Law:[/b] On any shared pin, the reactions of the upper and lower links are strictly equal and opposite: [b]R_upper = -R_lower[/b].\n\n"
 
-	ftext += "[color=#00D2FF][font_size=14][b]3. COULOMB DRY FRICTION & STICK-SLIP HYSTERESIS (Сухое трение Кулона)[/b][/font_size][/color]\n"
-	ftext += "Joint pin dry friction introduces non-linear stiction and dissipative damping in the linkage:\n\n"
-	ftext += "    • [color=#F59E0B]Kinetic Friction (Moving):[/color]   [b]f_k = μ · R · (-sign(v_H))[/b]\n"
-	ftext += "    • [color=#D97706]Static Stiction (Holding):[/color]   [b]|f_s| ≤ μ_s · R[/b]\n\n"
-	ftext += "Static friction holds the mechanism inside an equilibrium deadband without motion:\n"
-	ftext += "    [b]|P_eff - (k · H / λ)| ≤ f_s · λ[/b]\n"
-	ftext += "This hysteresis creates discrete stick-slip steps visible on the experimental [b]L(m)[/b] curve.\n\n"
+func _update_formulas_text() -> void:
+	if formulas_modal == null:
+		return
+	var rtl: RichTextLabel = formulas_modal.find_child("FormulasRTL", true, false) as RichTextLabel
+	if rtl == null:
+		return
 
-	ftext += "[color=#00D2FF][font_size=14][b]4. STIFFNESS REGRESSION & REFLECTED INERTIA (Регрессия и инерция n²M)[/b][/font_size][/color]\n"
-	ftext += "The suspended mass M produces an equivalent reflected inertia amplified quadratically:\n\n"
-	ftext += "    [b]M_eff = n² · M[/b]\n\n"
-	ftext += "The resulting 2nd-order dynamic damped vibration equation solved by the 400 Hz Symplectic Verlet solver:\n"
-	ftext += "    [b]d²H/dt² + 2ζω · (dH/dt) + ω² · (H - H_target) = 0[/b]\n"
-	ftext += "    [b]ω = √(k_eff / M_eff) = √((k / n²) / M)[/b]\n\n"
-	ftext += "Spring stiffness k is extracted directly from the linear slope tan(α) of the displacement profile:\n"
-	ftext += "    [b]tan(α) = (λ · g) / k   ⟹   k = (λ · g) / tan(α)[/b]\n"
+	var is_dark := is_dark_theme
+	var c_head := "#00D2FF" if is_dark else "#0284C7"
+	var c_subhead := "#38BDF8" if is_dark else "#1E40AF"
+	var c_text := "#F0F6FC" if is_dark else "#0F172A"
+	var c_math := "#E2E8F0" if is_dark else "#0F172A"
+	var c_box_bg := "#111722" if is_dark else "#F1F5F9"
+	var c_muted := "#8B949E" if is_dark else "#475569"
 
-	rtl.text = ftext
+	rtl.add_theme_color_override("default_color", Color(c_text))
+
+	var title_lbl: Label = formulas_modal.find_child("ModalTitle", true, false) as Label
+	if title_lbl != null:
+		title_lbl.add_theme_color_override("font_color", Color(c_head))
+	var sub_lbl: Label = formulas_modal.find_child("ModalSub", true, false) as Label
+	if sub_lbl != null:
+		sub_lbl.add_theme_color_override("font_color", Color(c_muted))
+	var btn_close: Button = formulas_modal.find_child("ModalCloseBtn", true, false) as Button
+	if btn_close != null:
+		btn_close.add_theme_stylebox_override("normal", ThemeManager.create_button_style(is_dark, false, false, 4))
+		btn_close.add_theme_stylebox_override("hover", ThemeManager.create_button_style(is_dark, false, true, 4))
+		btn_close.add_theme_stylebox_override("pressed", ThemeManager.create_button_style(is_dark, true, false, 4))
+		btn_close.add_theme_color_override("font_color", Color(c_text))
+
+	var f := ""
+	f += "[color=" + c_head + "][font_size=15][b]1. GOLDEN RULE OF MECHANICS (Золотое правило механики)[/b][/font_size][/color]\n"
+	f += "[color=" + c_text + "]A scissor pantograph operates on the fundamental kinematic transmission ratio λ between input stage extension [b]H[/b] and overall suspended displacement [b]L[/b]:[/color]\n\n"
+	
+	f += "[indent][bgcolor=" + c_box_bg + "][color=" + c_math + "][font_size=13]"
+	f += "    ┌──────────────────────────────────────────────────────────────┐\n"
+	f += "    │   L(m) = n · H(m)        ⟹        λ ≡ δL / δH = n        (1.1)   │\n"
+	f += "    │   δW_out = η · δW_in     ⟹        T = (λ · P_eff) / η    (1.2)   │\n"
+	f += "    └──────────────────────────────────────────────────────────────┘"
+	f += "[/font_size][/color][/bgcolor][/indent]\n\n"
+
+	f += "[color=" + c_text + "]• [color=#2B88D8][b]Rig A (uniform n = 3):[/b][/color]   L = 3 · H   (λ = 3.000×, Blue Linkage)\n"
+	f += "• [color=#F59E0B][b]Rig B (uniform n = 5):[/b][/color]   L = 5 · H   (λ = 5.000×, Orange Linkage)\n"
+	f += "• [color=#10B981][b]Rig C (scaled 1:2:3):[/b][/color]  L = (1 + 2 + 3) · H₀ = 6 · H₀   (λ = 6.000×, Green Linkage)[/color]\n\n"
+	f += "[color=" + c_muted + "]\"What is gained in displacement is strictly lost in required tension force.\" (Galileo Galilei)[/color]\n\n"
+
+	f += "[color=" + c_head + "][font_size=15][b]2. LINKAGE FORCE STATICS & PIN REACTIONS (Баланс сил в стержнях)[/b][/font_size][/color]\n"
+	f += "[color=" + c_text + "]At any scissor rhombus joint pin inclined at angle θ relative to the horizontal, supporting load P_k:[/color]\n\n"
+
+	f += "[indent][bgcolor=" + c_box_bg + "][color=" + c_math + "][font_size=13]"
+	f += "    ┌──────────────────────────────────────────────────────────────┐\n"
+	f += "    │   Fy = P_k / 2                                        (2.1)   │\n"
+	f += "    │   Fx = P_k / (2 · tan θ)                              (2.2)   │\n"
+	f += "    │   R  = √(Fx² + Fy²) = P_k / (2 · sin θ)               (2.3)   │\n"
+	f += "    │   R_upper = -R_lower       [Newton's 3rd Law]         (2.4)   │\n"
+	f += "    └──────────────────────────────────────────────────────────────┘"
+	f += "[/font_size][/color][/bgcolor][/indent]\n\n"
+
+	f += "[color=" + c_muted + "]Note: At shallow scissor angles (θ → 0), lateral thrust Fx surges asymptotically, multiplying pin compressive stress.[/color]\n\n"
+
+	f += "[color=" + c_head + "][font_size=15][b]3. COULOMB DRY FRICTION & STICK-SLIP HYSTERESIS (Сухое трение Кулона)[/b][/font_size][/color]\n"
+	f += "[color=" + c_text + "]Joint pin dry friction introduces non-linear stiction and dissipative damping in the linkage:[/color]\n\n"
+
+	f += "[indent][bgcolor=" + c_box_bg + "][color=" + c_math + "][font_size=13]"
+	f += "    ┌──────────────────────────────────────────────────────────────┐\n"
+	f += "    │   f_k = μ_k · R · (-sign(v_H))    [Kinetic Damping]   (3.1)   │\n"
+	f += "    │   |f_s| ≤ μ_s · R                 [Static Stiction]   (3.2)   │\n"
+	f += "    │   |P_eff - (k · H / λ)| ≤ f_s · λ [Stick Deadband]    (3.3)   │\n"
+	f += "    └──────────────────────────────────────────────────────────────┘"
+	f += "[/font_size][/color][/bgcolor][/indent]\n\n"
+
+	f += "[color=" + c_muted + "]This static stiction holds the mechanism inside an equilibrium deadband, creating discrete stick-slip steps on the L(m) curve.[/color]\n\n"
+
+	f += "[color=" + c_head + "][font_size=15][b]4. STIFFNESS REGRESSION & REFLECTED INERTIA (Регрессия и инерция n²M)[/b][/font_size][/color]\n"
+	f += "[color=" + c_text + "]The suspended mass M produces an equivalent reflected inertia amplified quadratically by the kinematic ratio:[/color]\n\n"
+
+	f += "[indent][bgcolor=" + c_box_bg + "][color=" + c_math + "][font_size=13]"
+	f += "    ┌──────────────────────────────────────────────────────────────┐\n"
+	f += "    │   M_eff = n² · M                                      (4.1)   │\n"
+	f += "    │   d²H/dt² + 2ζω · (dH/dt) + ω² · (H - H_target) = 0   (4.2)   │\n"
+	f += "    │   ω = √(k_eff / M_eff) = √((k / n²) / M)              (4.3)   │\n"
+	f += "    │   k = (λ · g) / tan(α)    [Slope Extraction]          (4.4)   │\n"
+	f += "    └──────────────────────────────────────────────────────────────┘"
+	f += "[/font_size][/color][/bgcolor][/indent]\n"
+
+	rtl.text = f
 
 
 func open_formulas_modal() -> void:
@@ -959,8 +1497,13 @@ func open_formulas_modal() -> void:
 		formulas_layer.visible = true
 		if formulas_modal != null:
 			formulas_modal.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark_theme, 4, 18, true))
+		_update_formulas_text()
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("window.openFormulasModal && window.openFormulasModal(" + ("true" if is_dark_theme else "false") + ");")
 
 
 func close_formulas_modal() -> void:
 	if formulas_layer != null:
 		formulas_layer.visible = false
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("window.closeFormulasModal && window.closeFormulasModal();")
