@@ -2942,11 +2942,6 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			F_x_down = F_y_down / tan_theta
 			R_down = F_y_down / sin_theta
 
-			# Upward load components along the upper beam:
-			F_y_up = p_stage_up * 0.5
-			F_x_up = F_y_up / tan_theta
-			R_up = F_y_up / sin_theta
-
 			# Collinear unit vectors along scissor arms:
 			# For Right Hinge (side_x_sign = +1):
 			#   Upper beam unit points UP-LEFT (-X, +Y): (-cos_theta, +sin_theta, 0)
@@ -2965,31 +2960,48 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			dir_fy_down = Vector3(0, -1, 0)
 			dir_fx_down = Vector3(side_x_sign, 0, 0)
 
-			# Friction calculation:
+			# Friction and Upper beam load:
+			# When friction is active, joint static friction fs assists the upper beam in carrying the load:
+			# R_upper + fs = R_down  =>  R_upper = R_down - fs < R_down!
 			if mu > 0.0001:
 				if is_moving:
-					# Kinetic friction opposing motion:
+					# Kinetic friction opposing motion during oscillation:
 					F_k = mu * R_down * cos_theta * vel_norm
 					F_s = 0.0
 					dir_fk = Vector3(side_x_sign, 0.0, 0.0) * motion_dir
 					dir_fs = Vector3.ZERO
+					# In motion, dynamic reaction:
+					R_up = R_down
+					F_y_up = F_y_down
+					F_x_up = F_x_down
 				else:
-					# Static friction holds the exact difference between R_down and R_up:
+					# Static equilibrium:
 					F_k = 0.0
+					dir_fk = Vector3.ZERO
 					if is_stiction_enabled:
-						F_s = absf(R_down - R_up)
-						# If R_down >= R_up, friction pulls in upper-beam direction to support upper beam.
-						# If R_up > R_down, friction pulls in lower-beam direction.
-						dir_fs = upper_beam_unit if R_down >= R_up else lower_beam_unit
+						# Static friction shares the load: fs = mu * R_down * cos_theta
+						F_s = mu * R_down * cos_theta
+						# Upper beam reaction is relieved by friction: R_up = R_down - F_s
+						R_up = maxf(R_down - F_s, 0.10 * R_down)
+						F_y_up = R_up * sin_theta
+						F_x_up = R_up * cos_theta
+						# Friction pulls along upper beam, directly helping it balance R_down:
+						dir_fs = upper_beam_unit
 					else:
 						F_s = 0.0
 						dir_fs = Vector3.ZERO
-					dir_fk = Vector3.ZERO
+						R_up = R_down
+						F_y_up = F_y_down
+						F_x_up = F_x_down
 			else:
+				# Ideal zero friction (mu == 0): Both beams carry identical load
 				F_k = 0.0
 				F_s = 0.0
 				dir_fk = Vector3.ZERO
 				dir_fs = Vector3.ZERO
+				R_up = R_down
+				F_y_up = F_y_down
+				F_x_up = F_x_down
 
 			F_fric = F_k if is_moving else F_s
 			dir_fric = dir_fk if is_moving else dir_fs
