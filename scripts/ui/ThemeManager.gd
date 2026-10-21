@@ -22,13 +22,13 @@ const DARK_BTN_BG := Color(0.10, 0.14, 0.20, 0.70)
 const DARK_BTN_ACTIVE_BG := Color(0.0, 0.824, 1.0, 0.18)
 
 # Light Theme: "SpaceX Clean Lab / Brilliant.org"
-const LIGHT_BG_VIEWPORT := Color("#F1F5F9")      # Engineering Slate-100 paper
-const LIGHT_GRID_SUB := Color(0.059, 0.090, 0.165, 0.05) # 1mm paper grid
-const LIGHT_GRID_AXIS := Color(0.008, 0.518, 0.780, 0.18) # Cobalt blue axis
+const LIGHT_BG_VIEWPORT := Color("#CBD5E1")      # Calm engineering slate-300 tone
+const LIGHT_GRID_SUB := Color(0.059, 0.090, 0.165, 0.06) # 1mm paper grid
+const LIGHT_GRID_AXIS := Color(0.008, 0.518, 0.780, 0.22) # Cobalt blue axis
 const LIGHT_CARD_BG := Color(1.0, 1.0, 1.0, 0.94) # Clean white paper
-const LIGHT_CARD_BORDER := Color("#CBD5E1")     # Crisp slate-300 border
+const LIGHT_CARD_BORDER := Color("#94A3B8")     # Crisp slate-400 border
 const LIGHT_TEXT_PRIMARY := Color("#0F172A")     # Slate-900 high contrast
-const LIGHT_TEXT_MUTED := Color("#64748B")       # Slate-500 secondary
+const LIGHT_TEXT_MUTED := Color("#475569")       # Slate-600 secondary readable tag
 const LIGHT_ACCENT_COBALT := Color("#0284C7")    # Deep Sky/Cobalt Blue
 const LIGHT_BTN_BG := Color(0.93, 0.95, 0.98, 0.90)
 const LIGHT_BTN_ACTIVE_BG := Color(0.008, 0.518, 0.780, 0.14)
@@ -51,21 +51,21 @@ const COLOR_VECTOR_FRIC_LIGHT := Color("#D97706")
 # -----------------------------------------------------------------------------
 
 ## Generates a HUD card StyleBoxFlat (Astro UXDS Surface Token)
-static func create_card_style(is_dark: bool, radius: int = 10, pad: int = 14) -> StyleBoxFlat:
+static func create_card_style(is_dark: bool, radius: int = 4, pad: int = 14, accent_top: bool = false) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	if is_dark:
 		sb.bg_color = DARK_CARD_BG
-		sb.border_color = DARK_CARD_BORDER
+		sb.border_color = DARK_ACCENT_CYAN if accent_top else DARK_CARD_BORDER
 		sb.shadow_color = Color(0.0, 0.0, 0.0, 0.40)
-		sb.shadow_size = 8
+		sb.shadow_size = 6
 	else:
 		sb.bg_color = LIGHT_CARD_BG
-		sb.border_color = LIGHT_CARD_BORDER
+		sb.border_color = LIGHT_ACCENT_COBALT if accent_top else LIGHT_CARD_BORDER
 		sb.shadow_color = Color(0.059, 0.090, 0.165, 0.08)
-		sb.shadow_size = 10
+		sb.shadow_size = 8
 
 	sb.border_width_left = 1
-	sb.border_width_top = 1
+	sb.border_width_top = 2 if accent_top else 1
 	sb.border_width_right = 1
 	sb.border_width_bottom = 1
 
@@ -82,11 +82,11 @@ static func create_card_style(is_dark: bool, radius: int = 10, pad: int = 14) ->
 
 
 ## Generates a telemetry mini-metric pill StyleBoxFlat
-static func create_metric_tile_style(is_dark: bool) -> StyleBoxFlat:
+static func create_metric_tile_style(is_dark: bool, radius: int = 4) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	if is_dark:
-		sb.bg_color = Color(0.04, 0.06, 0.09, 0.85)
-		sb.border_color = Color(1.0, 1.0, 1.0, 0.08)
+		sb.bg_color = Color(0.04, 0.06, 0.09, 0.88)
+		sb.border_color = Color(1.0, 1.0, 1.0, 0.12)
 	else:
 		sb.bg_color = Color("#F8FAFC") # Crisp bright Slate-50 background
 		sb.border_color = Color("#CBD5E1") # Slate-300 clean border
@@ -96,20 +96,20 @@ static func create_metric_tile_style(is_dark: bool) -> StyleBoxFlat:
 	sb.border_width_right = 1
 	sb.border_width_bottom = 1
 
-	sb.corner_radius_top_left = 6
-	sb.corner_radius_top_right = 6
-	sb.corner_radius_bottom_left = 6
-	sb.corner_radius_bottom_right = 6
+	sb.corner_radius_top_left = radius
+	sb.corner_radius_top_right = radius
+	sb.corner_radius_bottom_left = radius
+	sb.corner_radius_bottom_right = radius
 
-	sb.content_margin_left = 8
-	sb.content_margin_top = 6
-	sb.content_margin_right = 8
-	sb.content_margin_bottom = 6
+	sb.content_margin_left = 10
+	sb.content_margin_top = 7
+	sb.content_margin_right = 10
+	sb.content_margin_bottom = 7
 	return sb
 
 
 ## Generates an interactive button StyleBoxFlat (Normal, Hover, Active/Toggled)
-static func create_button_style(is_dark: bool, is_active: bool, is_hover: bool = false, radius: int = 8) -> StyleBoxFlat:
+static func create_button_style(is_dark: bool, is_active: bool, is_hover: bool = false, radius: int = 4) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	if is_dark:
 		if is_active:

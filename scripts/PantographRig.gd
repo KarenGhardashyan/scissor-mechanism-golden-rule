@@ -145,12 +145,12 @@ func _init_materials() -> void:
 
 			mat_laser.albedo_color = Color(0.25, 1.0, 0.48, 0.95)
 		else:
-			mat_arm_body.albedo_color = Color(0.19, 0.82, 0.35)
+			mat_arm_body.albedo_color = Color("#047857") # Deep Forest Emerald
 			mat_arm_body.emission_enabled = false
 			mat_arm_body.metallic = 0.58
 			mat_arm_body.roughness = 0.26
 
-			mat_arm_chamfer.albedo_color = Color(0.08, 0.39, 0.16)
+			mat_arm_chamfer.albedo_color = Color("#064E3B")
 			mat_arm_chamfer.metallic = 0.85
 			mat_arm_chamfer.roughness = 0.22
 
@@ -159,7 +159,7 @@ func _init_materials() -> void:
 			mat_pin_accent.metallic = 0.90
 			mat_pin_accent.roughness = 0.16
 
-			mat_laser.albedo_color = Color(0.19, 0.82, 0.35, 0.85)
+			mat_laser.albedo_color = Color("#047857")
 	elif theme == "orange" or (not is_left_rig and not is_scaled_123):
 		# RIG B (Mechanism 2): Ultra Orange / Cyber Amber
 		if dark_theme:
@@ -183,12 +183,12 @@ func _init_materials() -> void:
 
 			mat_laser.albedo_color = Color(1.0, 0.52, 0.10, 0.95)
 		else:
-			mat_arm_body.albedo_color = Color(1.0, 0.42, 0.05)
+			mat_arm_body.albedo_color = Color("#C2410C") # Deep Burnt Amber
 			mat_arm_body.emission_enabled = false
 			mat_arm_body.metallic = 0.58
 			mat_arm_body.roughness = 0.26
 
-			mat_arm_chamfer.albedo_color = Color(0.65, 0.22, 0.02)
+			mat_arm_chamfer.albedo_color = Color("#7C2D12")
 			mat_arm_chamfer.metallic = 0.85
 			mat_arm_chamfer.roughness = 0.22
 
@@ -197,7 +197,7 @@ func _init_materials() -> void:
 			mat_pin_accent.metallic = 0.92
 			mat_pin_accent.roughness = 0.16
 
-			mat_laser.albedo_color = Color(1.0, 0.45, 0.0, 0.85)
+			mat_laser.albedo_color = Color("#B91C1C")
 	else:
 		# RIG A (Mechanism 1): Electric Tech-Blue / Neon Cyan
 		if dark_theme:
@@ -221,12 +221,12 @@ func _init_materials() -> void:
 
 			mat_laser.albedo_color = Color(0.18, 0.72, 1.0, 0.95)
 		else:
-			mat_arm_body.albedo_color = Color(0.06, 0.45, 0.92)
+			mat_arm_body.albedo_color = Color("#1E40AF") # Deep Technical Cobalt
 			mat_arm_body.emission_enabled = false
 			mat_arm_body.metallic = 0.58
 			mat_arm_body.roughness = 0.26
 
-			mat_arm_chamfer.albedo_color = Color(0.03, 0.22, 0.54)
+			mat_arm_chamfer.albedo_color = Color("#0F172A")
 			mat_arm_chamfer.metallic = 0.85
 			mat_arm_chamfer.roughness = 0.22
 
@@ -235,7 +235,7 @@ func _init_materials() -> void:
 			mat_pin_accent.metallic = 0.90
 			mat_pin_accent.roughness = 0.16
 
-			mat_laser.albedo_color = Color(0.0, 0.443, 0.89, 0.85)
+			mat_laser.albedo_color = Color("#1E40AF")
 
 	# Shared hardware materials
 	mat_pin_steel = StandardMaterial3D.new()
@@ -427,6 +427,8 @@ func _build_rig_hierarchy() -> void:
 	mass_label.pixel_size = 0.0045
 	mass_label.font_size = 28
 	mass_label.shaded = false
+	mass_label.no_depth_test = true
+	mass_label.render_priority = 20
 	mass_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	mass_label.outline_size = 8
 	mass_label.outline_modulate = Color(0.06, 0.07, 0.10, 0.98)
@@ -435,7 +437,7 @@ func _build_rig_hierarchy() -> void:
 	# Overhead Rig Header Label
 	rig_title_label = Label3D.new()
 	rig_title_label.name = "RigTitleLabel"
-	rig_title_label.position = Vector3(0, 0.58, 0.12)
+	rig_title_label.position = Vector3(0, 0.85, 0.12)
 	rig_title_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	rig_title_label.pixel_size = 0.0050
 	rig_title_label.font_size = 28
@@ -682,7 +684,8 @@ func _update_visuals() -> void:
 		cyl_mesh.bottom_radius = mass_r
 	mass_cylinder.position = Vector3(0, -0.06 - mass_h * 0.5, 0)
 
-	mass_label.position = Vector3(0, -0.06 - mass_h * 0.5, mass_r + 0.02)
+	# Position mass label strictly below the bottom floor of the weight cylinder
+	mass_label.position = Vector3(0, -0.06 - mass_h - 0.06, 0.0)
 	mass_label.text = "%.2f kg" % suspended_mass
 
 	# 5. Extension Dimension Lasers & Ticks
@@ -793,6 +796,17 @@ func _build_dimension_lasers() -> void:
 	dimension_lines_container.visible = true
 
 
+var is_dimension_compact: bool = false
+
+func set_compact_dimension_mode(compact: bool) -> void:
+	is_dimension_compact = compact
+	if dim_label_h != null and dim_label_l != null:
+		dim_label_h.font_size = 21 if compact else 28
+		dim_label_l.font_size = 21 if compact else 28
+		dim_label_h.pixel_size = 0.0032 if compact else 0.0042
+		dim_label_l.pixel_size = 0.0032 if compact else 0.0042
+
+
 func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 	if not dimension_lines_container or not dimension_lines_container.visible:
 		return
@@ -801,8 +815,10 @@ func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 
 	var side_sign: float = laser_side_sign
 	var max_w: float = (w_vis * 3.0) if is_scaled_123 else w_vis
-	var x_h: float = side_sign * (max_w * 0.5 + 0.32)
-	var x_l: float = side_sign * (max_w * 0.5 + 0.65)
+	var base_h_offset: float = 0.22 if is_dimension_compact else 0.32
+	var base_l_offset: float = 0.46 if is_dimension_compact else 0.65
+	var x_h: float = side_sign * (max_w * 0.5 + base_h_offset)
+	var x_l: float = side_sign * (max_w * 0.5 + base_l_offset)
 
 	# 1. Vertical H Line (Anchor to Stage 0 bottom)
 	line_h.position = Vector3(x_h, -h_vis * 0.5, 0.0)
@@ -839,11 +855,13 @@ func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 
 	# 4. Dimension Callout Text with High-Contrast Outline
 	var prefix_h: String = "H0" if is_scaled_123 else "H"
-	dim_label_h.position = Vector3(x_h + side_sign * 0.16, -h_vis * 0.5, 0.02)
+	var text_h_off: float = 0.11 if is_dimension_compact else 0.16
+	dim_label_h.position = Vector3(x_h + side_sign * text_h_off, -h_vis * 0.5, 0.02)
 	dim_label_h.text = "%s = %.1f cm" % [prefix_h, current_H * 100.0]
 
 	var mult_str: String = " (6x)" if is_scaled_123 else (" (%dx)" % n_stages)
-	dim_label_l.position = Vector3(x_l + side_sign * 0.18, -l_vis * 0.5, 0.02)
+	var text_l_off: float = 0.12 if is_dimension_compact else 0.18
+	dim_label_l.position = Vector3(x_l + side_sign * text_l_off, -l_vis * 0.5, 0.02)
 	dim_label_l.text = "L = %.1f cm%s" % [current_L * 100.0, mult_str]
 
 
@@ -1004,25 +1022,42 @@ func set_dark_theme(is_dark: bool) -> void:
 	var theme: String = rig_color_theme.to_lower()
 	var label_color: Color
 	if theme == "green" or is_scaled_123:
-		label_color = Color(0.20, 1.0, 0.50, 1.0) if dark_theme else Color(0.25, 0.95, 0.45, 1.0)
+		label_color = Color(0.20, 1.0, 0.50, 1.0) if dark_theme else Color("#047857")
 	elif theme == "orange" or not is_left_rig:
-		label_color = Color(1.0, 0.58, 0.15, 1.0) if dark_theme else Color(1.0, 0.52, 0.10, 1.0)
+		label_color = Color(1.0, 0.58, 0.15, 1.0) if dark_theme else Color("#B91C1C")
 	else:
-		label_color = Color(0.25, 0.75, 1.0, 1.0) if dark_theme else Color(0.15, 0.65, 1.0, 1.0)
+		label_color = Color(0.25, 0.75, 1.0, 1.0) if dark_theme else Color("#0F172A")
 
 	if dim_label_h:
 		dim_label_h.modulate = label_color
+		dim_label_h.outline_size = 10
 		dim_label_h.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
 	if dim_label_l:
 		dim_label_l.modulate = label_color
+		dim_label_l.outline_size = 10
 		dim_label_l.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
 
 	if mass_label:
-		mass_label.modulate = Color(0.114, 0.114, 0.122) if not dark_theme else Color(0.95, 0.96, 0.98)
+		mass_label.modulate = Color(0.09, 0.11, 0.15) if not dark_theme else Color(0.95, 0.96, 0.98)
 		mass_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
 
 	if rig_title_label:
-		rig_title_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.98) if not dark_theme else Color(0.02, 0.03, 0.06, 0.98)
+		if not dark_theme:
+			if theme == "green" or is_scaled_123:
+				rig_title_label.modulate = Color("#047857")
+			elif theme == "orange" or not is_left_rig:
+				rig_title_label.modulate = Color("#B91C1C")
+			else:
+				rig_title_label.modulate = Color("#0F172A")
+			rig_title_label.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
+		else:
+			if theme == "green" or is_scaled_123:
+				rig_title_label.modulate = Color(0.19, 0.82, 0.35)
+			elif theme == "orange" or not is_left_rig:
+				rig_title_label.modulate = Color(0.95, 0.36, 0.0)
+			else:
+				rig_title_label.modulate = Color(0.0, 0.443, 0.89)
+			rig_title_label.outline_modulate = Color(0.02, 0.03, 0.06, 0.98)
 
 
 func get_pin_global_position(pin_index: int) -> Vector3:

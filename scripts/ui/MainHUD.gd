@@ -73,14 +73,23 @@ var mobile_tab_controls: VBoxContainer
 var mobile_tab_graph: VBoxContainer
 var btn_mob_tab_ctrl: Button
 var btn_mob_tab_graph: Button
+var btn_mob_slow: Button
+var btn_mob_th: Button
+var btn_mob_form: Button
 var slider_mob_mass: HSlider
 var lbl_mob_mass_val: Label
 var lbl_mob_telem_row: Label
+
+# Formulas & Theory Modal
+var formulas_layer: CanvasLayer
+var formulas_modal: PanelContainer
+var formulas_backdrop: ColorRect
 
 
 func _ready() -> void:
 	layer = 10
 	_build_ui_hierarchy()
+	_build_formulas_modal()
 	apply_theme(is_dark_theme)
 	_connect_events()
 
@@ -196,7 +205,10 @@ func _build_desktop_layout() -> void:
 	btn_formulas.text = "FORMULAS"
 	btn_formulas.custom_minimum_size = Vector2(90, 34)
 	btn_formulas.add_theme_font_size_override("font_size", 11)
-	btn_formulas.pressed.connect(func(): formulas_requested.emit())
+	btn_formulas.pressed.connect(func():
+		open_formulas_modal()
+		formulas_requested.emit()
+	)
 	top_hbox.add_child(btn_formulas)
 
 	btn_reset_view = Button.new()
@@ -373,19 +385,19 @@ func _create_metric_tile(parent: GridContainer, label_text: String, init_val: St
 	metric_tiles.append(tile)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
+	vbox.add_theme_constant_override("separation", 3)
 	tile.add_child(vbox)
 
 	var lbl_tag := Label.new()
 	lbl_tag.text = label_text
-	lbl_tag.add_theme_font_size_override("font_size", 8)
+	lbl_tag.add_theme_font_size_override("font_size", 11)
 	lbl_tag.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_MUTED)
 	vbox.add_child(lbl_tag)
 	metric_tag_labels.append(lbl_tag)
 
 	var lbl_num := Label.new()
 	lbl_num.text = init_val
-	lbl_num.add_theme_font_size_override("font_size", 13)
+	lbl_num.add_theme_font_size_override("font_size", 20)
 	if accent_col != Color.WHITE:
 		lbl_num.add_theme_color_override("font_color", accent_col)
 	else:
@@ -450,19 +462,29 @@ func _build_mobile_layout() -> void:
 	lbl_mob_telem_row.add_theme_color_override("font_color", ThemeManager.DARK_ACCENT_CYAN)
 	mob_telem_row.add_child(lbl_mob_telem_row)
 
-	var btn_mob_slow := Button.new()
+	btn_mob_slow = Button.new()
 	btn_mob_slow.text = "SLOW"
 	btn_mob_slow.custom_minimum_size = Vector2(46, 28)
 	btn_mob_slow.add_theme_font_size_override("font_size", 10)
 	btn_mob_slow.pressed.connect(_on_slow_mo_pressed)
 	mob_telem_row.add_child(btn_mob_slow)
 
-	var btn_mob_th := Button.new()
+	btn_mob_th = Button.new()
 	btn_mob_th.text = "THEME"
 	btn_mob_th.custom_minimum_size = Vector2(50, 28)
 	btn_mob_th.add_theme_font_size_override("font_size", 10)
 	btn_mob_th.pressed.connect(_on_theme_pressed)
 	mob_telem_row.add_child(btn_mob_th)
+
+	btn_mob_form = Button.new()
+	btn_mob_form.text = "FORM"
+	btn_mob_form.custom_minimum_size = Vector2(46, 28)
+	btn_mob_form.add_theme_font_size_override("font_size", 10)
+	btn_mob_form.pressed.connect(func():
+		open_formulas_modal()
+		formulas_requested.emit()
+	)
+	mob_telem_row.add_child(btn_mob_form)
 	mob_vbox.add_child(mob_telem_row)
 
 	# 2. CENTRAL 3D WORKSPACE SPACER (~52% Height)
@@ -737,31 +759,42 @@ func update_telemetry(h_cm: float, l_cm: float, r_n: float, fx_n: float, fy_n: f
 func apply_theme(is_dark: bool) -> void:
 	is_dark_theme = is_dark
 
-	# 1. Cards
-	var card_sb := ThemeManager.create_card_style(is_dark, 10, 14)
-	if top_bar != null: top_bar.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 0, 8))
+	# 1. Cards with SpaceX Top Accent Line (corner_radius = 4)
+	var card_sb := ThemeManager.create_card_style(is_dark, 4, 14, true)
+	if top_bar != null: top_bar.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 0, 8, false))
 	if control_card != null: control_card.add_theme_stylebox_override("panel", card_sb)
 	if graph_card != null: graph_card.add_theme_stylebox_override("panel", card_sb)
-	if mobile_top_bar != null: mobile_top_bar.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 0, 8))
-	if mobile_bottom_sheet != null: mobile_bottom_sheet.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 12, 12))
+	if mobile_top_bar != null: mobile_top_bar.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 0, 8, false))
+	if mobile_bottom_sheet != null: mobile_bottom_sheet.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 4, 12, true))
+	if formulas_modal != null: formulas_modal.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark, 4, 18, true))
 
 	# 2. Buttons
-	var normal_btn_sb := ThemeManager.create_button_style(is_dark, false)
-	var active_btn_sb := ThemeManager.create_button_style(is_dark, true)
-	for btn in [btn_slow_mo, btn_theme, btn_formulas, btn_reset_view, btn_mass_dec, btn_mass_inc, btn_beam_toggle, btn_friction_toggle]:
+	if btn_theme != null:
+		btn_theme.text = "THEME: DARK" if is_dark else "THEME: LIGHT"
+
+	var normal_btn_sb := ThemeManager.create_button_style(is_dark, false, false, 4)
+	var hover_btn_sb := ThemeManager.create_button_style(is_dark, false, true, 4)
+	var active_btn_sb := ThemeManager.create_button_style(is_dark, true, false, 4)
+	var text_c := ThemeManager.DARK_TEXT_PRIMARY if is_dark else ThemeManager.LIGHT_TEXT_PRIMARY
+
+	var all_buttons := [btn_slow_mo, btn_theme, btn_formulas, btn_reset_view, btn_mass_dec, btn_mass_inc, btn_beam_toggle, btn_friction_toggle, btn_mob_slow, btn_mob_th, btn_mob_form]
+	for btn in all_buttons:
 		if btn != null:
 			btn.add_theme_stylebox_override("normal", normal_btn_sb)
-			btn.add_theme_stylebox_override("hover", ThemeManager.create_button_style(is_dark, false, true))
+			btn.add_theme_stylebox_override("hover", hover_btn_sb)
 			btn.add_theme_stylebox_override("pressed", active_btn_sb)
-			var text_c := ThemeManager.DARK_TEXT_PRIMARY if is_dark else ThemeManager.LIGHT_TEXT_PRIMARY
+			btn.add_theme_stylebox_override("focus", normal_btn_sb)
 			btn.add_theme_color_override("font_color", text_c)
+			btn.add_theme_color_override("font_hover_color", text_c)
+			btn.add_theme_color_override("font_pressed_color", Color.WHITE if not is_dark else ThemeManager.DARK_ACCENT_CYAN)
+			btn.add_theme_color_override("font_focus_color", text_c)
 
 	# 3. Sliders
 	if slider_mass != null: ThemeManager.apply_slider_style(slider_mass, is_dark, 22)
 	if slider_mob_mass != null: ThemeManager.apply_slider_style(slider_mob_mass, is_dark, 30)
 
 	# 4. Metric Grid Tiles Style & Colors
-	var tile_sb := ThemeManager.create_metric_tile_style(is_dark)
+	var tile_sb := ThemeManager.create_metric_tile_style(is_dark, 4)
 	for t in metric_tiles:
 		if t != null:
 			t.add_theme_stylebox_override("panel", tile_sb)
@@ -769,12 +802,14 @@ func apply_theme(is_dark: bool) -> void:
 	var tag_color := ThemeManager.DARK_TEXT_MUTED if is_dark else ThemeManager.LIGHT_TEXT_MUTED
 	for lbl in metric_tag_labels:
 		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", 11)
 			lbl.add_theme_color_override("font_color", tag_color)
 
 	for item in metric_num_labels:
 		var lbl: Label = item["label"]
 		var acc: Color = item["accent"]
 		if lbl != null:
+			lbl.add_theme_font_size_override("font_size", 20)
 			if acc != Color.WHITE:
 				# High contrast semantic vector colors in Light theme
 				if not is_dark:
@@ -787,3 +822,145 @@ func apply_theme(is_dark: bool) -> void:
 				lbl.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_PRIMARY if is_dark else ThemeManager.LIGHT_TEXT_PRIMARY)
 
 	_update_rig_buttons()
+
+
+# -----------------------------------------------------------------------------
+# FORMULAS & THEORETICAL DERIVATION MODAL
+# -----------------------------------------------------------------------------
+
+func _build_formulas_modal() -> void:
+	formulas_layer = CanvasLayer.new()
+	formulas_layer.name = "FormulasLayer"
+	formulas_layer.layer = 100
+	formulas_layer.visible = false
+	add_child(formulas_layer)
+
+	# Fullscreen backdrop scrim
+	formulas_backdrop = ColorRect.new()
+	formulas_backdrop.name = "BackdropScrim"
+	formulas_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	formulas_backdrop.color = Color(0.0, 0.0, 0.0, 0.65)
+	formulas_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	formulas_backdrop.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed:
+			close_formulas_modal()
+	)
+	formulas_layer.add_child(formulas_backdrop)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	formulas_layer.add_child(center)
+
+	formulas_modal = PanelContainer.new()
+	formulas_modal.name = "FormulasModalCard"
+	formulas_modal.custom_minimum_size = Vector2(800, 560)
+	formulas_modal.mouse_filter = Control.MOUSE_FILTER_STOP
+	center.add_child(formulas_modal)
+
+	var modal_margin := MarginContainer.new()
+	modal_margin.add_theme_constant_override("margin_left", 22)
+	modal_margin.add_theme_constant_override("margin_right", 22)
+	modal_margin.add_theme_constant_override("margin_top", 16)
+	modal_margin.add_theme_constant_override("margin_bottom", 18)
+	formulas_modal.add_child(modal_margin)
+
+	var modal_vbox := VBoxContainer.new()
+	modal_vbox.add_theme_constant_override("separation", 10)
+	modal_margin.add_child(modal_vbox)
+
+	# Header Bar
+	var header := HBoxContainer.new()
+	header.alignment = BoxContainer.ALIGNMENT_CENTER
+
+	var head_vbox := VBoxContainer.new()
+	head_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_vbox.add_theme_constant_override("separation", 2)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "PANTOGRAPH LAB // MATHEMATICAL & PHYSICAL FORMULATION"
+	title_lbl.add_theme_font_size_override("font_size", 13)
+	title_lbl.add_theme_color_override("font_color", ThemeManager.DARK_ACCENT_CYAN)
+	head_vbox.add_child(title_lbl)
+
+	var sub_lbl := Label.new()
+	sub_lbl.text = "Golden Rule of Mechanics · Newtonian Pin Statics · Coulomb Friction · Symplectic Solver"
+	sub_lbl.add_theme_font_size_override("font_size", 9)
+	sub_lbl.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_MUTED)
+	head_vbox.add_child(sub_lbl)
+	header.add_child(head_vbox)
+
+	var btn_close := Button.new()
+	btn_close.text = "[ X CLOSE ]"
+	btn_close.custom_minimum_size = Vector2(90, 32)
+	btn_close.add_theme_font_size_override("font_size", 11)
+	btn_close.pressed.connect(close_formulas_modal)
+	header.add_child(btn_close)
+	modal_vbox.add_child(header)
+
+	var sep := HSeparator.new()
+	modal_vbox.add_child(sep)
+
+	# Scrollable Content
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	modal_vbox.add_child(scroll)
+
+	var rtl := RichTextLabel.new()
+	rtl.bbcode_enabled = true
+	rtl.fit_content = true
+	rtl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rtl.mouse_filter = Control.MOUSE_FILTER_PASS
+	scroll.add_child(rtl)
+
+	var ftext := ""
+	ftext += "[color=#00D2FF][font_size=14][b]1. GOLDEN RULE OF MECHANICS (Золотое правило механики)[/b][/font_size][/color]\n"
+	ftext += "A scissor pantograph operates on the fundamental kinematic transmission ratio λ between input stage height [b]H[/b] and overall suspended displacement [b]L[/b]:\n\n"
+	ftext += "    [b]L = n · H[/b]    ⟹    [b]λ ≡ δL / δH = n[/b]\n\n"
+	ftext += "• [color=#2B88D8]Rig A (uniform n = 3):[/color]   L = 3 · H   (λ = 3.000×, Blue)\n"
+	ftext += "• [color=#F59E0B]Rig B (uniform n = 5):[/color]   L = 5 · H   (λ = 5.000×, Orange)\n"
+	ftext += "• [color=#10B981]Rig C (scaled 1:2:3):[/color]  L = (1 + 2 + 3) · H₀ = 6 · H₀   (λ = 6.000×, Green)\n\n"
+	ftext += "By the [b]Principle of Virtual Work[/b], under static equilibrium with transmission efficiency η:\n"
+	ftext += "    [b]δW_in = T · δH[/b]        [b]δW_out = P_eff · δL[/b]\n"
+	ftext += "    [b]η · δW_in = δW_out   ⟹   T = (λ · P_eff) / η[/b]\n"
+	ftext += "[color=#8B949E]\"What is gained in displacement is strictly lost in required tension force.\"[/color]\n\n"
+
+	ftext += "[color=#00D2FF][font_size=14][b]2. LINKAGE FORCE STATICS & PIN REACTIONS (Баланс сил в стержнях)[/b][/font_size][/color]\n"
+	ftext += "At any scissor rhombus joint pin inclined at angle θ relative to the horizontal, supporting load P_k:\n\n"
+	ftext += "    • [color=#38BDF8]Vertical Reaction:[/color]       [b]Fy = P_k / 2[/b]\n"
+	ftext += "    • [color=#F43F5E]Lateral Outward Thrust:[/color]  [b]Fx = P_k / (2 · tan θ)[/b]\n"
+	ftext += "    • [color=#10B981]Beam Axial Resultant:[/color]    [b]R = √(Fx² + Fy²) = P_k / (2 · sin θ)[/b]\n\n"
+	ftext += "[color=#8B949E]Note: At shallow scissor angles (θ → 0), lateral thrust Fx surges asymptotically, multiplying pin compressive stress.[/color]\n"
+	ftext += "[b]Newton's Third Law:[/b] On any shared pin, the reactions of the upper and lower links are strictly equal and opposite: [b]R_upper = -R_lower[/b].\n\n"
+
+	ftext += "[color=#00D2FF][font_size=14][b]3. COULOMB DRY FRICTION & STICK-SLIP HYSTERESIS (Сухое трение Кулона)[/b][/font_size][/color]\n"
+	ftext += "Joint pin dry friction introduces non-linear stiction and dissipative damping in the linkage:\n\n"
+	ftext += "    • [color=#F59E0B]Kinetic Friction (Moving):[/color]   [b]f_k = μ · R · (-sign(v_H))[/b]\n"
+	ftext += "    • [color=#D97706]Static Stiction (Holding):[/color]   [b]|f_s| ≤ μ_s · R[/b]\n\n"
+	ftext += "Static friction holds the mechanism inside an equilibrium deadband without motion:\n"
+	ftext += "    [b]|P_eff - (k · H / λ)| ≤ f_s · λ[/b]\n"
+	ftext += "This hysteresis creates discrete stick-slip steps visible on the experimental [b]L(m)[/b] curve.\n\n"
+
+	ftext += "[color=#00D2FF][font_size=14][b]4. STIFFNESS REGRESSION & REFLECTED INERTIA (Регрессия и инерция n²M)[/b][/font_size][/color]\n"
+	ftext += "The suspended mass M produces an equivalent reflected inertia amplified quadratically:\n\n"
+	ftext += "    [b]M_eff = n² · M[/b]\n\n"
+	ftext += "The resulting 2nd-order dynamic damped vibration equation solved by the 400 Hz Symplectic Verlet solver:\n"
+	ftext += "    [b]d²H/dt² + 2ζω · (dH/dt) + ω² · (H - H_target) = 0[/b]\n"
+	ftext += "    [b]ω = √(k_eff / M_eff) = √((k / n²) / M)[/b]\n\n"
+	ftext += "Spring stiffness k is extracted directly from the linear slope tan(α) of the displacement profile:\n"
+	ftext += "    [b]tan(α) = (λ · g) / k   ⟹   k = (λ · g) / tan(α)[/b]\n"
+
+	rtl.text = ftext
+
+
+func open_formulas_modal() -> void:
+	if formulas_layer != null:
+		formulas_layer.visible = true
+		if formulas_modal != null:
+			formulas_modal.add_theme_stylebox_override("panel", ThemeManager.create_card_style(is_dark_theme, 4, 18, true))
+
+
+func close_formulas_modal() -> void:
+	if formulas_layer != null:
+		formulas_layer.visible = false

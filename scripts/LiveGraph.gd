@@ -39,8 +39,8 @@ signal rig_filter_changed(rig_index: int)
 # Margins inside the canvas card
 var margin_left: float = 54.0
 var margin_right: float = 24.0
-var margin_top: float = 38.0
-var margin_bottom: float = 32.0
+var margin_top: float = 68.0
+var margin_bottom: float = 34.0
 
 # Interactive mouse drag & smooth lerp scrub state
 var is_dragging: bool = false
@@ -259,7 +259,7 @@ func set_ui_scale(s: float) -> void:
 	ui_scale = clampf(s, 1.0, 4.5)
 	margin_left = 54.0 * ui_scale
 	margin_right = 24.0 * ui_scale
-	margin_top = 42.0 * ui_scale
+	margin_top = 68.0 * ui_scale
 	margin_bottom = 36.0 * ui_scale
 	queue_redraw()
 
@@ -366,7 +366,7 @@ func _draw() -> void:
 		col_cursor_line = Color(0.18, 0.20, 0.26, 0.75)
 
 	# --- 1. HIGH-CONTRAST INNER PLOT CARD (ZERO-ALLOCATION) ---
-	var card_rect := Rect2(margin_left - 46.0 * ui_scale, margin_top - 30.0 * ui_scale, plot_w + 64.0 * ui_scale, plot_h + 56.0 * ui_scale)
+	var card_rect := Rect2(margin_left - 46.0 * ui_scale, margin_top - 58.0 * ui_scale, plot_w + 64.0 * ui_scale, plot_h + 84.0 * ui_scale)
 	_style_card.bg_color = col_card_bg
 	_style_card.border_color = col_card_border
 	_style_card.shadow_color = Color(0.0, 0.0, 0.0, 0.18) if dark_theme else Color(0.0, 0.0, 0.0, 0.06)
@@ -390,17 +390,17 @@ func _draw() -> void:
 		else:
 			title_text = "PROFILE L(m) [IDEAL]"
 
-	draw_string(font, Vector2(margin_left - 36.0 * ui_scale, margin_top - 12.0 * ui_scale), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_title, col_text_title)
+	draw_string(font, Vector2(margin_left - 36.0 * ui_scale, margin_top - 36.0 * ui_scale), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_title, col_text_title)
 
 	# Values evaluated at lerp-smoothed display_mass
 	var cur_la: float = compute_stepped_L_cm(display_mass, 3)
 	var cur_lc: float = compute_stepped_L_cm(display_mass, 6, true)
 	var cur_lb: float = compute_stepped_L_cm(display_mass, 5)
 
-	# Telemetry Readout Badges in Header - aligned rightwards
+	# Telemetry Readout Badges in Header - aligned rightwards, strictly above top grid line
 	var badge_right_edge: float = margin_left + plot_w + 10.0 * ui_scale
 	var pill_h: float = 20.0 * ui_scale
-	var pill_y: float = margin_top - pill_h - 4.0 * ui_scale
+	var pill_y: float = margin_top - pill_h - 24.0 * ui_scale
 
 	# Badge B (Orange)
 	var txt_b: String = "Rig B: %.1f cm" % cur_lb if (active_rig_filter == 0 or active_rig_filter == 3) else "Rig B"
@@ -449,7 +449,7 @@ func _draw() -> void:
 		var str_w: float = font.get_string_size(tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks).x
 		draw_string(font, Vector2(origin.x - str_w - 8.0 * ui_scale, y_pos + 4.0 * ui_scale), tick_str, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks, col_text_sec)
 
-	draw_string(font, Vector2(origin.x - 38.0 * ui_scale, margin_top - 4.0 * ui_scale), "L (cm)", HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks, col_text_title)
+	draw_string(font, Vector2(origin.x - 38.0 * ui_scale, margin_top - 8.0 * ui_scale), "L (cm)", HORIZONTAL_ALIGNMENT_LEFT, -1, sz_ticks, col_text_title)
 
 	# X-axis Grid Lines
 	var x_ticks := [0.0, 0.3, 0.6, 0.9, 1.2, 1.5]
@@ -710,20 +710,20 @@ func _draw_hud_badge(pos: Vector2, sz: Vector2, text: String, accent_color: Colo
 	if is_active:
 		bg_col = Color(accent_color.r, accent_color.g, accent_color.b, 0.32 if is_dark else 0.22)
 	elif is_dimmed:
-		bg_col = Color(0.10, 0.12, 0.15, 0.40) if is_dark else Color(0.92, 0.93, 0.96, 0.40)
+		bg_col = Color(0.10, 0.12, 0.16, 0.75) if is_dark else Color(0.88, 0.90, 0.94, 0.85)
 	else:
 		bg_col = Color(0.12, 0.14, 0.18, 0.90) if is_dark else Color(0.92, 0.93, 0.96, 0.95)
 
 	_style_badge.bg_color = bg_col
-	_style_badge.border_color = Color(accent_color.r, accent_color.g, accent_color.b, 0.35 if is_dimmed else (1.0 if is_active else 0.85))
+	_style_badge.border_color = Color(accent_color.r, accent_color.g, accent_color.b, 0.55 if is_dimmed else (1.0 if is_active else 0.85))
 	draw_style_box(_style_badge, Rect2(pos, sz))
-	draw_circle(Vector2(pos.x + 8.0, pos.y + sz.y * 0.5), 3.0, Color(accent_color.r, accent_color.g, accent_color.b, 0.4 if is_dimmed else 1.0))
+	draw_circle(Vector2(pos.x + 8.0, pos.y + sz.y * 0.5), 3.0, Color(accent_color.r, accent_color.g, accent_color.b, 0.65 if is_dimmed else 1.0))
 
 	var text_y: float = pos.y + (sz.y - font.get_height(font_size)) * 0.5 + font.get_ascent(font_size)
 	var text_pos := Vector2(pos.x + 15.0, text_y)
 	var text_color: Color
 	if is_dimmed:
-		text_color = Color(0.50, 0.52, 0.58, 0.60)
+		text_color = Color(0.82, 0.85, 0.90, 0.92) if is_dark else Color(0.20, 0.24, 0.32, 0.95)
 	elif is_active:
 		text_color = Color(1.0, 1.0, 1.0) if is_dark else Color(0.05, 0.05, 0.08)
 	else:

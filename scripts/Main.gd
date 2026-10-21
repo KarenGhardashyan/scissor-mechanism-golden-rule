@@ -514,6 +514,11 @@ func _setup_rigs() -> void:
 		rig_b.is_left_rig = false
 		rig_b.laser_side_sign = 1.0
 
+	# Default ALL RIGS mode starts with compact dimension lines
+	rig_a.set_compact_dimension_mode(true)
+	rig_c.set_compact_dimension_mode(true)
+	rig_b.set_compact_dimension_mode(true)
+
 	if camera == null:
 		camera = OrbitCamera.new()
 		camera.name = "OrbitCamera"
@@ -575,16 +580,20 @@ func _build_liquid_glass_ui() -> void:
 		_select_mobile_rig(rig_id)
 		if camera != null and camera.has_method("focus_rig"):
 			camera.focus_rig(rig_id)
+		var is_all: bool = (rig_id == "ALL")
+		if rig_a != null and rig_a.has_method("set_compact_dimension_mode"): rig_a.set_compact_dimension_mode(is_all)
+		if rig_c != null and rig_c.has_method("set_compact_dimension_mode"): rig_c.set_compact_dimension_mode(is_all)
+		if rig_b != null and rig_b.has_method("set_compact_dimension_mode"): rig_b.set_compact_dimension_mode(is_all)
+		if is_all:
+			_deselect_pin()
 	)
 	main_hud.reset_view_requested.connect(func():
 		if camera != null:
 			camera.reset_camera()
 	)
 	main_hud.formulas_requested.connect(func():
-		if OS.has_feature("web"):
-			JavaScriptBridge.eval("window.openFormulasModal && window.openFormulasModal();")
-		elif formulas_modal != null:
-			formulas_modal.visible = not formulas_modal.visible
+		if main_hud != null:
+			main_hud.open_formulas_modal()
 	)
 
 	# Keep legacy root for formulas modal dialog only
@@ -3067,7 +3076,7 @@ func _update_force_visualizer() -> void:
 		# Mode: All Vectors
 		# Fy (Vertical Load / Reaction Reaction):
 		if disp_len_fy >= 0.012 and not lbl_fy_str.is_empty():
-			var lbl_fy_offset := Vector3(-0.16, 0.12, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.16, -0.12, 0.0)
+			var lbl_fy_offset := Vector3(-0.28, 0.02, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.24, -0.08, 0.0)
 			_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
 		else:
 			arrow_fy_data["root"].visible = false
@@ -3312,10 +3321,10 @@ func _apply_theme(is_dark: bool) -> void:
 			sky_proc_mat.ground_bottom_color = Color(0.02, 0.025, 0.04)
 			sky_proc_mat.ground_horizon_color = Color(0.04, 0.05, 0.08)
 		else:
-			sky_proc_mat.sky_top_color = Color(0.945, 0.961, 0.976) # #F1F5F9 Slate-100 paper
-			sky_proc_mat.sky_horizon_color = Color(0.885, 0.905, 0.93)
-			sky_proc_mat.ground_bottom_color = Color(0.84, 0.86, 0.89)
-			sky_proc_mat.ground_horizon_color = Color(0.885, 0.905, 0.93)
+			sky_proc_mat.sky_top_color = Color("#CBD5E1") # Calm engineering slate-300 paper tone
+			sky_proc_mat.sky_horizon_color = Color("#94A3B8")
+			sky_proc_mat.ground_bottom_color = Color("#64748B")
+			sky_proc_mat.ground_horizon_color = Color("#94A3B8")
 
 	if env_res != null:
 		if is_dark:
@@ -3325,21 +3334,23 @@ func _apply_theme(is_dark: bool) -> void:
 			env_res.glow_bloom = 0.08
 			env_res.glow_intensity = 0.30
 			env_res.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+			env_res.tonemap_exposure = 1.00
 		else:
-			env_res.ambient_light_color = Color(0.88, 0.90, 0.94)
-			env_res.ambient_light_energy = 0.70
+			env_res.ambient_light_color = Color(0.62, 0.68, 0.76) # Calm soft ambient fill
+			env_res.ambient_light_energy = 0.35
 			env_res.glow_enabled = false
+			env_res.tonemap_exposure = 0.88
 
 	# 2. Directional Lights
 	if dir_light != null:
 		dir_light.light_color = Color(0.95, 0.96, 1.0) if is_dark else Color(1.0, 0.992, 0.98)
-		dir_light.light_energy = 1.05 if is_dark else 1.35
+		dir_light.light_energy = 1.05 if is_dark else 0.80
 	if fill_light != null:
-		fill_light.light_color = Color(0.20, 0.45, 0.75) if is_dark else Color(0.92, 0.94, 0.98)
-		fill_light.light_energy = 0.35 if is_dark else 0.45
+		fill_light.light_color = Color(0.20, 0.45, 0.75) if is_dark else Color(0.85, 0.88, 0.94)
+		fill_light.light_energy = 0.35 if is_dark else 0.30
 	if rim_light != null:
-		rim_light.light_color = Color(0.0, 0.824, 1.0) if is_dark else Color(0.98, 0.98, 1.0)
-		rim_light.light_energy = 0.60 if is_dark else 0.40
+		rim_light.light_color = Color(0.0, 0.824, 1.0) if is_dark else Color(0.90, 0.92, 0.96)
+		rim_light.light_energy = 0.60 if is_dark else 0.30
 
 	# 3. Showroom Bay Materials
 	if mat_floor_shader != null:
@@ -3348,11 +3359,11 @@ func _apply_theme(is_dark: bool) -> void:
 			mat_floor_shader.set_shader_parameter("grid_color", Color(1.0, 1.0, 1.0, 0.035))
 			mat_floor_shader.set_shader_parameter("axis_color", Color(0.0, 0.824, 1.0, 0.12))
 		else:
-			mat_floor_shader.set_shader_parameter("bg_color", Color("#E2E8F0"))
-			mat_floor_shader.set_shader_parameter("grid_color", Color(0.059, 0.090, 0.165, 0.06))
-			mat_floor_shader.set_shader_parameter("axis_color", Color(0.008, 0.518, 0.780, 0.20))
+			mat_floor_shader.set_shader_parameter("bg_color", Color("#CBD5E1"))
+			mat_floor_shader.set_shader_parameter("grid_color", Color(0.059, 0.090, 0.165, 0.08))
+			mat_floor_shader.set_shader_parameter("axis_color", Color(0.008, 0.518, 0.780, 0.28))
 	elif mat_floor != null:
-		mat_floor.albedo_color = Color(0.031, 0.043, 0.063) if is_dark else Color("#E2E8F0")
+		mat_floor.albedo_color = Color(0.031, 0.043, 0.063) if is_dark else Color("#CBD5E1")
 		mat_floor.metallic = 0.22 if is_dark else 0.02
 		mat_floor.roughness = 0.35 if is_dark else 0.45
 	if mat_gantry != null:
@@ -3374,6 +3385,22 @@ func _apply_theme(is_dark: bool) -> void:
 	if live_graph != null:
 		live_graph.dark_theme = is_dark
 		live_graph.queue_redraw()
+
+	# 6. 3D Vector Arrow Labels and Background Capsules
+	for ad in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fk_data, arrow_fs_data]:
+		if ad != null and ad.has("label"):
+			var lbl: Label3D = ad["label"]
+			var bg: MeshInstance3D = ad.get("label_bg", null)
+			if is_dark:
+				lbl.modulate = Color.WHITE
+				lbl.outline_modulate = Color(0.04, 0.06, 0.09, 0.98)
+				if bg != null and bg.material_override is StandardMaterial3D:
+					(bg.material_override as StandardMaterial3D).albedo_color = Color(0.04, 0.06, 0.09, 0.88)
+			else:
+				lbl.modulate = Color("#0F172A")
+				lbl.outline_modulate = Color(1.0, 1.0, 1.0, 0.98)
+				if bg != null and bg.material_override is StandardMaterial3D:
+					(bg.material_override as StandardMaterial3D).albedo_color = Color(0.96, 0.97, 0.99, 0.94)
 
 	# 6. UI Panels StyleBoxes (Clean Light Theme with subtle #cbd5e1 border & soft drop shadow)
 	var col_dark_charcoal := Color(0.059, 0.090, 0.165) # #0f172a
