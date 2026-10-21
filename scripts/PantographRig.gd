@@ -424,8 +424,8 @@ func _build_rig_hierarchy() -> void:
 	mass_label = Label3D.new()
 	mass_label.name = "MassLabel"
 	mass_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	mass_label.pixel_size = 0.0035
-	mass_label.font_size = 24
+	mass_label.pixel_size = 0.0045
+	mass_label.font_size = 28
 	mass_label.shaded = false
 	mass_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	mass_label.outline_size = 8
@@ -437,8 +437,8 @@ func _build_rig_hierarchy() -> void:
 	rig_title_label.name = "RigTitleLabel"
 	rig_title_label.position = Vector3(0, 0.38, 0.12)
 	rig_title_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	rig_title_label.pixel_size = 0.0040
-	rig_title_label.font_size = 24
+	rig_title_label.pixel_size = 0.0050
+	rig_title_label.font_size = 28
 	rig_title_label.shaded = false
 
 	var theme: String = rig_color_theme.to_lower()
@@ -769,8 +769,8 @@ func _build_dimension_lasers() -> void:
 	dim_label_h = Label3D.new()
 	dim_label_h.name = "DimLabelH"
 	dim_label_h.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	dim_label_h.pixel_size = 0.0035
-	dim_label_h.font_size = 26
+	dim_label_h.pixel_size = 0.0042
+	dim_label_h.font_size = 28
 	dim_label_h.shaded = false
 	dim_label_h.modulate = label_color
 	dim_label_h.outline_size = 10
@@ -781,8 +781,8 @@ func _build_dimension_lasers() -> void:
 	dim_label_l = Label3D.new()
 	dim_label_l.name = "DimLabelL"
 	dim_label_l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	dim_label_l.pixel_size = 0.0035
-	dim_label_l.font_size = 26
+	dim_label_l.pixel_size = 0.0042
+	dim_label_l.font_size = 28
 	dim_label_l.shaded = false
 	dim_label_l.modulate = label_color
 	dim_label_l.outline_size = 10

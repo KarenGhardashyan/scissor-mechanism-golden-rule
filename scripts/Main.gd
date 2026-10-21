@@ -246,7 +246,7 @@ var is_advanced_stress_expanded: bool = false
 # Vector Visualization & Free-Body Diagram Controls
 var btn_toggle_vector_mode: Button
 var btn_toggle_force_dir: Button
-var is_upper_force_reaction: bool = false
+var is_upper_force_reaction: bool = true
 var is_resultant_only_mode: bool = false
 
 
@@ -1260,7 +1260,7 @@ func _build_liquid_glass_ui() -> void:
 	btn_toggle_vector_mode.pressed.connect(_on_toggle_vector_mode)
 	btn_row_modes.add_child(btn_toggle_vector_mode)
 
-	btn_toggle_force_dir = _create_liquid_button("Down Load (Action)", "arrow_down")
+	btn_toggle_force_dir = _create_liquid_button("Upper Beam (Reaction ↗)", "arrow_up")
 	btn_toggle_force_dir.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_toggle_force_dir.custom_minimum_size = Vector2(0, 26)
 	btn_toggle_force_dir.add_theme_font_size_override("font_size", 10)
@@ -2703,21 +2703,21 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			F_x = p_stage / (2.0 * tan_theta)
 
 			if is_upper_force_reaction:
-				dir_fy = Vector3(0, 1, 0) # Upper link supporting joint upward
-				dir_fx = Vector3(1, 0, 0) # Inward reaction from upper scissor arm
+				dir_fy = Vector3(0, 1, 0) # Upper beam tension supporting joint upward
+				dir_fx = Vector3(1, 0, 0) # Inward horizontal tension from upper beam
 				var raw_res := Vector3(F_x, F_y, 0.0)
 				R = raw_res.length()
 				dir_res = raw_res.normalized()
-				desc = "Upper link reaction supporting joint against gravity and lateral thrust (Upper Reaction ↑)."
+				desc = "Upper beam reaction supporting joint against gravity and lateral thrust (Upper Reaction ↗)."
 			else:
-				dir_fy = Vector3(0, -1, 0) # Downward load transmission
-				dir_fx = Vector3(-1, 0, 0) # Outward lateral thrust pointing left
+				dir_fy = Vector3(0, -1, 0) # Opposing structural reaction on pin
+				dir_fx = Vector3(-1, 0, 0) # Outward reaction balancing the pin
 				var raw_res := Vector3(-F_x, -F_y, 0.0)
 				R = raw_res.length()
 				dir_res = raw_res.normalized()
-				desc = "Lateral scissor hinge experiencing outward thrust Fx and downward load transmission Fy (Transmitted Load ↓)."
+				desc = "Opposing structural reaction on pin (Reaction ↙, satisfying ΣF = 0 on pin by Newton's 3rd Law)."
 
-			# Joint pin friction: strictly 0 when mu == 0, dynamic during motion, static capacity at rest
+			# Joint pin friction: acts horizontally along line of motion of lateral hinge
 			if mu <= 0.0001:
 				F_k = 0.0
 				F_s = 0.0
@@ -2727,16 +2727,17 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_fs = Vector3.ZERO
 				dir_fric = Vector3.ZERO
 			else:
-				var tangent_unit := Vector3(-sin(theta_clamped), cos(theta_clamped), 0.0).normalized()
+				# Left hinge moves inward (+X) under extension; friction resists by pointing outward (-X)
+				var h_motion_unit := Vector3(-1.0, 0.0, 0.0)
 				if is_stiction_enabled:
 					F_s = mu * R
-					dir_fs = tangent_unit * static_tendency_dir
+					dir_fs = h_motion_unit * static_tendency_dir
 				else:
 					F_s = 0.0
 					dir_fs = Vector3.ZERO
 				if is_moving:
 					F_k = mu * R * vel_norm
-					dir_fk = tangent_unit * motion_dir
+					dir_fk = h_motion_unit * motion_dir
 				else:
 					F_k = 0.0
 					dir_fk = Vector3.ZERO
@@ -2752,21 +2753,21 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			F_x = p_stage / (2.0 * tan_theta)
 
 			if is_upper_force_reaction:
-				dir_fy = Vector3(0, 1, 0) # Upper link supporting joint upward
-				dir_fx = Vector3(-1, 0, 0) # Inward reaction from upper scissor arm
+				dir_fy = Vector3(0, 1, 0) # Upper beam tension supporting joint upward
+				dir_fx = Vector3(-1, 0, 0) # Inward horizontal tension from upper beam
 				var raw_res := Vector3(-F_x, F_y, 0.0)
 				R = raw_res.length()
 				dir_res = raw_res.normalized()
-				desc = "Upper link reaction supporting joint against gravity and lateral thrust (Upper Reaction ↑)."
+				desc = "Upper beam reaction supporting joint against gravity and lateral thrust (Upper Reaction ↖)."
 			else:
-				dir_fy = Vector3(0, -1, 0) # Downward load transmission
-				dir_fx = Vector3(1, 0, 0) # Outward lateral thrust pointing right
+				dir_fy = Vector3(0, -1, 0) # Opposing structural reaction on pin
+				dir_fx = Vector3(1, 0, 0) # Outward reaction balancing the pin
 				var raw_res := Vector3(F_x, -F_y, 0.0)
 				R = raw_res.length()
 				dir_res = raw_res.normalized()
-				desc = "Lateral scissor hinge experiencing outward thrust Fx and downward load transmission Fy (Transmitted Load ↓)."
+				desc = "Opposing structural reaction on pin (Reaction ↘, satisfying ΣF = 0 on pin by Newton's 3rd Law)."
 
-			# Joint pin friction: strictly 0 when mu == 0, dynamic during motion, static capacity at rest
+			# Joint pin friction: acts horizontally along line of motion of lateral hinge
 			if mu <= 0.0001:
 				F_k = 0.0
 				F_s = 0.0
@@ -2776,16 +2777,17 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_fs = Vector3.ZERO
 				dir_fric = Vector3.ZERO
 			else:
-				var tangent_unit := Vector3(sin(theta_clamped), cos(theta_clamped), 0.0).normalized()
+				# Right hinge moves inward (-X) under extension; friction resists by pointing outward (+X)
+				var h_motion_unit := Vector3(1.0, 0.0, 0.0)
 				if is_stiction_enabled:
 					F_s = mu * R
-					dir_fs = tangent_unit * static_tendency_dir
+					dir_fs = h_motion_unit * static_tendency_dir
 				else:
 					F_s = 0.0
 					dir_fs = Vector3.ZERO
 				if is_moving:
 					F_k = mu * R * vel_norm
-					dir_fk = tangent_unit * motion_dir
+					dir_fk = h_motion_unit * motion_dir
 				else:
 					F_k = 0.0
 					dir_fk = Vector3.ZERO
@@ -2839,16 +2841,16 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 				dir_fs = Vector3.ZERO
 				dir_fric = Vector3.ZERO
 			else:
-				var tangent_unit := Vector3(0, 1.0, 0)
+				var v_motion_unit := Vector3(0.0, 1.0, 0.0)
 				if is_stiction_enabled:
 					F_s = mu * R
-					dir_fs = tangent_unit * static_tendency_dir
+					dir_fs = v_motion_unit * static_tendency_dir
 				else:
 					F_s = 0.0
 					dir_fs = Vector3.ZERO
 				if is_moving:
 					F_k = mu * R * vel_norm
-					dir_fk = tangent_unit * motion_dir
+					dir_fk = v_motion_unit * motion_dir
 				else:
 					F_k = 0.0
 					dir_fk = Vector3.ZERO
@@ -3098,7 +3100,7 @@ func _on_toggle_vector_mode() -> void:
 func _on_toggle_force_dir() -> void:
 	is_upper_force_reaction = not is_upper_force_reaction
 	if btn_toggle_force_dir != null:
-		btn_toggle_force_dir.text = "Upper Support (Reaction)" if is_upper_force_reaction else "Down Load (Action)"
+		btn_toggle_force_dir.text = "Upper Beam (Reaction ↗)" if is_upper_force_reaction else "Pin Reaction (ΣF=0 ↙)"
 		var text_col: Color = Color(0.92, 0.94, 0.98) if is_dark_theme else Color(0.114, 0.114, 0.122)
 		btn_toggle_force_dir.icon = _get_svg_icon("arrow_up" if is_upper_force_reaction else "arrow_down", text_col)
 	_update_force_visualizer()
@@ -4022,12 +4024,25 @@ func _restore_desktop_ui_scale() -> void:
 func _check_responsive_layout() -> void:
 	if not is_inside_tree() or get_viewport() == null:
 		return
+	var win := get_tree().root
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	if vp_size.x <= 0 or vp_size.y <= 0:
 		return
 	if camera != null and camera.has_method("update_aspect_ratio_framing"):
 		camera.update_aspect_ratio_framing(vp_size)
-	var is_mobile := (vp_size.x < 1050.0) or (vp_size.x / maxf(vp_size.y, 1.0) < 1.18)
+	var raw_aspect: float = vp_size.x / maxf(vp_size.y, 1.0)
+	var is_mobile := (raw_aspect < 1.18) or (vp_size.x * win.content_scale_factor < 1050.0)
+
+	# Dynamic Viewport Content Scaling for mobile/high-DPI screens:
+	var target_scale: float = 1.0
+	if is_mobile:
+		var unscaled_w: float = vp_size.x * win.content_scale_factor
+		target_scale = clampf(unscaled_w / 500.0, 1.5, 3.4)
+
+	if absf(win.content_scale_factor - target_scale) > 0.05:
+		win.content_scale_factor = target_scale
+		return
+
 	if is_mobile != is_mobile_layout:
 		_apply_responsive_layout(is_mobile, vp_size)
 	else:
@@ -4068,8 +4083,7 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 			graph_vbox.visible = true
 
 		# 3. Calculate Scale and Apply to Mobile UI
-		var S: float = clampf(vp_size.x / 390.0, 1.0, 1.8)
-		_apply_mobile_ui_scale(S, vp_size)
+		_apply_mobile_ui_scale(1.0, vp_size)
 
 		# 4. Configure Visibilities & Default Framing
 		if mobile_top_bar != null:
@@ -4089,6 +4103,10 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 
 	else:
 		# Desktop Mode:
+		var win := get_tree().root
+		if not is_equal_approx(win.content_scale_factor, 1.0):
+			win.content_scale_factor = 1.0
+
 		# 1. Hide Mobile Controls
 		if mobile_top_bar != null:
 			mobile_top_bar.visible = false
@@ -4132,13 +4150,12 @@ func _apply_responsive_layout(is_mobile: bool, vp_size: Vector2) -> void:
 
 
 func _adjust_mobile_sizes(vp_size: Vector2) -> void:
-	var S: float = clampf(vp_size.x / 390.0, 1.0, 1.8)
-	_apply_mobile_ui_scale(S, vp_size)
+	_apply_mobile_ui_scale(1.0, vp_size)
 	for arrow_data in [arrow_fy_data, arrow_fx_data, arrow_res_data, arrow_fk_data, arrow_fs_data, arrow_fric_data]:
 		if arrow_data.has("label"):
 			var lbl: Label3D = arrow_data["label"]
-			lbl.pixel_size = 0.0035
-			lbl.font_size = 24
+			lbl.pixel_size = 0.0042
+			lbl.font_size = 28
 			lbl.outline_size = 8
 			lbl.outline_modulate = Color(0.04, 0.04, 0.06, 0.98)
 
