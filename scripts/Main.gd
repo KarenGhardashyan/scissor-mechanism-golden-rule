@@ -266,8 +266,8 @@ var is_resultant_only_mode: bool = false
 # Group Visibility Toggles for Bottom-Left Filter Bar
 var vector_show_projections: bool = true
 var vector_show_upper_beam: bool = true
-var vector_show_lower_beam: bool = false
-var vector_show_equilibrium: bool = false
+var vector_show_lower_beam: bool = true
+var vector_show_equilibrium: bool = true
 var vector_show_friction: bool = true
 
 
@@ -2961,9 +2961,19 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 			dir_fy_down = Vector3(0, -1, 0)
 			dir_fx_down = Vector3(side_x_sign, 0, 0)
 
-			# Friction and Upper beam load:
-			# When friction is active, joint static friction fs assists the upper beam in carrying the load:
-			# R_upper + fs = R_down  =>  R_upper = R_down - fs < R_down!
+			# Upward support components along the upper beam:
+			# When stiction is enabled and mu > 0, P_up comes strictly from the PHYSICAL SPRING (current_H).
+			# If mu == 0 or stiction is disabled, the mechanism is in free glide, so P_up = P_down.
+			if is_stiction_enabled and mu > 0.0001:
+				F_y_up = p_stage_up * 0.5
+				F_x_up = F_y_up / tan_theta
+				R_up = F_y_up / sin_theta
+			else:
+				F_y_up = F_y_down
+				F_x_up = F_x_down
+				R_up = R_down
+
+			# Friction calculation:
 			if mu > 0.0001:
 				if is_moving:
 					# Kinetic friction opposing motion during oscillation:
@@ -2971,29 +2981,19 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 					F_s = 0.0
 					dir_fk = Vector3(side_x_sign, 0.0, 0.0) * motion_dir
 					dir_fs = Vector3.ZERO
-					# In motion, dynamic reaction:
-					R_up = R_down
-					F_y_up = F_y_down
-					F_x_up = F_x_down
 				else:
 					# Static equilibrium:
 					F_k = 0.0
 					dir_fk = Vector3.ZERO
 					if is_stiction_enabled:
-						# Static friction shares the load: fs = mu * R_down * cos_theta
-						F_s = mu * R_down * cos_theta
-						# Upper beam reaction is relieved by friction: R_up = R_down - F_s
-						R_up = maxf(R_down - F_s, 0.10 * R_down)
-						F_y_up = R_up * sin_theta
-						F_x_up = R_up * cos_theta
-						# Friction pulls along upper beam, directly helping it balance R_down:
-						dir_fs = upper_beam_unit
+						# Static friction holds the exact difference between lower load and spring support:
+						F_s = absf(R_down - R_up)
+						# If R_down >= R_up, gravity pulls harder than spring -> friction helps spring (pulls along upper beam)
+						# If R_up > R_down, spring pulls harder than gravity -> friction helps lower beam (pulls along lower beam)
+						dir_fs = upper_beam_unit if (R_down >= R_up) else lower_beam_unit
 					else:
 						F_s = 0.0
 						dir_fs = Vector3.ZERO
-						R_up = R_down
-						F_y_up = F_y_down
-						F_x_up = F_x_down
 			else:
 				# Ideal zero friction (mu == 0): Both beams carry identical load
 				F_k = 0.0

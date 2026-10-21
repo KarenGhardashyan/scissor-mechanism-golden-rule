@@ -36,8 +36,8 @@ var current_rig_id: String = "ALL"
 var vector_active_groups := {
 	"projections": true,
 	"upper_beam": true,
-	"lower_beam": false,
-	"equilibrium": false,
+	"lower_beam": true,
+	"equilibrium": true,
 	"friction": true
 }
 var current_mass: float = 0.50
