@@ -3390,8 +3390,9 @@ func _update_force_visualizer() -> void:
 					if not is_stiction_enabled:
 						joint_val_fs.text = "0.00 N  [Disabled / Pure Glide]"
 					else:
+						var fs_max: float = mu_val * absf(filtered_res_down)
 						var st_tag: String = "[Stiction Lock: ±%.1f mm]" % deadband_l_mm if is_stuck else "[Static Hold]"
-						joint_val_fs.text = "%.2f N  %s" % [absf(filtered_fs), st_tag]
+						joint_val_fs.text = "%.2f N (max %.2f N)  %s" % [absf(filtered_fs), fs_max, st_tag]
 				if joint_val_fric != null:
 					joint_val_fric.text = "%.2f N  [Static Hold]" % absf(filtered_fs) if is_stiction_enabled else "0.00 N"
 
