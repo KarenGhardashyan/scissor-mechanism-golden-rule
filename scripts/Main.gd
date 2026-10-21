@@ -26,6 +26,7 @@ var rim_light: DirectionalLight3D
 var mat_floor: StandardMaterial3D
 var mat_gantry: StandardMaterial3D
 var mat_gantry_accent: StandardMaterial3D
+var mat_floor_shader: ShaderMaterial
 
 # Liquid Glass UI Panels & Containers
 var main_hud: CanvasLayer
@@ -417,9 +418,9 @@ func _setup_showroom_bay() -> void:
 	floor_inst.position = Vector3(0, 0.0, 0)
 	var grid_shader := load("res://shaders/grid_floor.gdshader") as Shader
 	if grid_shader != null:
-		var grid_mat := ShaderMaterial.new()
-		grid_mat.shader = grid_shader
-		floor_inst.material_override = grid_mat
+		mat_floor_shader = ShaderMaterial.new()
+		mat_floor_shader.shader = grid_shader
+		floor_inst.material_override = mat_floor_shader
 	else:
 		mat_floor = StandardMaterial3D.new()
 		mat_floor.albedo_color = Color(0.905, 0.91, 0.925)
@@ -2631,17 +2632,34 @@ func _create_arrow_node(arrow_name: String, col: Color) -> Dictionary:
 	lbl.font_size = 22
 	lbl.shaded = false
 	lbl.no_depth_test = true
-	lbl.render_priority = 15
+	lbl.render_priority = 18
 	lbl.modulate = Color.WHITE
 	lbl.outline_size = 8
-	lbl.outline_modulate = Color(0.04, 0.06, 0.09, 0.96)
+	lbl.outline_modulate = Color(0.04, 0.06, 0.09, 0.98)
 	root.add_child(lbl)
+
+	# 2D HUD Background Quad for label capsule
+	var bg_quad := MeshInstance3D.new()
+	bg_quad.name = "LabelBg"
+	var qmesh := QuadMesh.new()
+	qmesh.size = Vector2(0.24, 0.09)
+	bg_quad.mesh = qmesh
+	var bg_mat := StandardMaterial3D.new()
+	bg_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	bg_mat.albedo_color = Color(0.04, 0.06, 0.09, 0.88)
+	bg_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bg_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bg_mat.no_depth_test = true
+	bg_mat.render_priority = 17
+	bg_quad.material_override = bg_mat
+	root.add_child(bg_quad)
 
 	return {
 		"root": root,
 		"stem": stem,
 		"tip": tip,
 		"label": lbl,
+		"label_bg": bg_quad,
 		"mat": mat,
 		"base_color": col
 	}
@@ -2685,6 +2703,11 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 	lbl.global_position = tip_world_pos + label_world_offset
 	# Strict guarantee: NEVER display negative signs on 3D arrows
 	lbl.text = label_text.replace("= -", "= ").replace("=-", "= ").replace("-", "")
+
+	if arrow_dict.has("label_bg"):
+		var bg: MeshInstance3D = arrow_dict["label_bg"]
+		bg.global_position = lbl.global_position
+		bg.visible = true
 
 
 func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
@@ -3044,17 +3067,18 @@ func _update_force_visualizer() -> void:
 		# Mode: All Vectors
 		# Fy (Vertical Load / Reaction Reaction):
 		if disp_len_fy >= 0.012 and not lbl_fy_str.is_empty():
-			var lbl_fy_offset := Vector3(-0.06, 0.08, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.06, -0.08, 0.0)
+			var lbl_fy_offset := Vector3(-0.16, 0.12, 0.0) if data.dir_fy.y > 0.0 else Vector3(-0.16, -0.12, 0.0)
 			_update_arrow_vector(arrow_fy_data, pin_pos, data.dir_fy, disp_len_fy, lbl_fy_str, lbl_fy_offset)
 		else:
 			arrow_fy_data["root"].visible = false
 
 		# Fx (Lateral Thrust): (Only drawn when Fx > 0, e.g. on lateral hinges)
 		if disp_len_fx >= 0.012 and not lbl_fx_str.is_empty():
-			_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, Vector3(0.0, 0.08, 0.0))
+			var lbl_fx_offset := Vector3(0.0, 0.14, 0.0)
+			_update_arrow_vector(arrow_fx_data, pin_pos, data.dir_fx, disp_len_fx, lbl_fx_str, lbl_fx_offset)
 			# On lateral pins, R is diagonal and visually distinct from Fy; render R too
 			if disp_len_res >= 0.012 and not lbl_res_str.is_empty():
-				var lbl_res_offset := Vector3(0.12, 0.06, 0.0) if data.dir_res.y > 0.0 else Vector3(0.12, -0.06, 0.0)
+				var lbl_res_offset := Vector3(0.18, 0.10, 0.0) if data.dir_res.y > 0.0 else Vector3(0.18, -0.10, 0.0)
 				_update_arrow_vector(arrow_res_data, pin_pos, data.dir_res, disp_len_res, lbl_res_str, lbl_res_offset)
 			else:
 				arrow_res_data["root"].visible = false
@@ -3078,7 +3102,7 @@ func _update_force_visualizer() -> void:
 		if arrow_fs_data.has("root"):
 			arrow_fs_data["root"].visible = false
 		if disp_len_fk >= 0.012 and not lbl_fk_str.is_empty() and data.dir_fk.length_squared() > 0.01:
-			var lbl_fk_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fk.y >= 0.0 else Vector3(0.0, -0.08, 0.0)
+			var lbl_fk_offset := Vector3(0.16, -0.14, 0.0)
 			_update_arrow_vector(arrow_fk_data, pin_pos, data.dir_fk, disp_len_fk, lbl_fk_str, lbl_fk_offset)
 		elif arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
@@ -3087,7 +3111,7 @@ func _update_force_visualizer() -> void:
 		if arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
 		if is_stiction_enabled and disp_len_fs >= 0.012 and not lbl_fs_str.is_empty() and data.dir_fs.length_squared() > 0.01:
-			var lbl_fs_offset := Vector3(0.0, 0.08, 0.0) if data.dir_fs.y >= 0.0 else Vector3(0.0, -0.08, 0.0)
+			var lbl_fs_offset := Vector3(0.16, -0.14, 0.0)
 			_update_arrow_vector(arrow_fs_data, pin_pos, data.dir_fs, disp_len_fs, lbl_fs_str, lbl_fs_offset)
 		elif arrow_fs_data.has("root"):
 			arrow_fs_data["root"].visible = false
@@ -3318,8 +3342,17 @@ func _apply_theme(is_dark: bool) -> void:
 		rim_light.light_energy = 0.60 if is_dark else 0.40
 
 	# 3. Showroom Bay Materials
-	if mat_floor != null:
-		mat_floor.albedo_color = Color(0.031, 0.043, 0.063) if is_dark else Color(0.945, 0.961, 0.976)
+	if mat_floor_shader != null:
+		if is_dark:
+			mat_floor_shader.set_shader_parameter("bg_color", Color(0.031, 0.043, 0.063, 1.0))
+			mat_floor_shader.set_shader_parameter("grid_color", Color(1.0, 1.0, 1.0, 0.035))
+			mat_floor_shader.set_shader_parameter("axis_color", Color(0.0, 0.824, 1.0, 0.12))
+		else:
+			mat_floor_shader.set_shader_parameter("bg_color", Color("#E2E8F0"))
+			mat_floor_shader.set_shader_parameter("grid_color", Color(0.059, 0.090, 0.165, 0.06))
+			mat_floor_shader.set_shader_parameter("axis_color", Color(0.008, 0.518, 0.780, 0.20))
+	elif mat_floor != null:
+		mat_floor.albedo_color = Color(0.031, 0.043, 0.063) if is_dark else Color("#E2E8F0")
 		mat_floor.metallic = 0.22 if is_dark else 0.02
 		mat_floor.roughness = 0.35 if is_dark else 0.45
 	if mat_gantry != null:

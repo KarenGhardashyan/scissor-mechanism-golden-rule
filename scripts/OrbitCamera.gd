@@ -246,24 +246,30 @@ func focus_rig(rig_id: String) -> void:
 	match rig_id.to_upper():
 		"A":
 			current_target = Vector3(-1.65, 1.85, 0.0) if is_mobile_mode else Vector3(-1.65, 2.05, 0.0)
-			target_distance = 3.60 if is_mobile_mode else 3.60
+			target_distance = 3.60 if is_mobile_mode else 3.50
 			target_yaw = deg_to_rad(3.0)
 			target_pitch = deg_to_rad(-4.0)
+			h_offset = 0.0 if is_mobile_mode else 0.40
 		"C":
 			current_target = Vector3(0.0, 1.80, 0.0) if is_mobile_mode else Vector3(0.0, 1.95, 0.0)
-			target_distance = 3.60 if is_mobile_mode else 3.60
+			target_distance = 3.60 if is_mobile_mode else 3.50
 			target_yaw = 0.0
 			target_pitch = deg_to_rad(-4.0)
+			h_offset = 0.0 if is_mobile_mode else 0.40
 		"B":
 			current_target = Vector3(1.65, 1.70, 0.0) if is_mobile_mode else Vector3(1.65, 1.85, 0.0)
-			target_distance = 3.80 if is_mobile_mode else 3.80
+			target_distance = 3.80 if is_mobile_mode else 3.60
 			target_yaw = deg_to_rad(-3.0)
 			target_pitch = deg_to_rad(-4.0)
+			h_offset = 0.0 if is_mobile_mode else 0.40
 		_: # "ALL"
-			current_target = Vector3(-0.20, 1.65, 0.0) if is_mobile_mode else default_target
-			target_distance = 7.80 if is_mobile_mode else default_distance
+			current_target = Vector3(-0.20, 1.65, 0.0) if is_mobile_mode else Vector3(0.0, 1.60, 0.0)
+			# On desktop, all 3 rigs span from X = -1.65m to X = +1.65m (width 3.3m + lasers = 4.2m).
+			# They must fit completely into the left 60% of the screen without going under the right panels!
+			target_distance = 8.20 if is_mobile_mode else 9.60
 			target_yaw = 0.0
 			target_pitch = deg_to_rad(-5.0)
+			h_offset = 0.0 if is_mobile_mode else 1.25
 
 
 func set_mobile_mode(is_mobile: bool) -> void:
@@ -277,47 +283,46 @@ func set_mobile_mode(is_mobile: bool) -> void:
 		target_point = Vector3(-1.65, 1.85, 0.0)
 		current_target = Vector3(-1.65, 1.85, 0.0)
 		min_distance = 1.8
-		max_distance = 12.0
+		max_distance = 15.0
+		h_offset = 0.0
 	else:
 		keep_aspect = Camera3D.KEEP_HEIGHT
 		fov = 54.0
-		default_distance = 8.25
-		target_distance = 8.25
-		default_target = Vector3(-0.20, 1.60, 0.0)
+		default_distance = 9.60
+		target_distance = 9.60
+		default_target = Vector3(0.0, 1.60, 0.0)
 		target_point = default_target
 		current_target = default_target
 		min_distance = 2.0
-		max_distance = 14.0
+		max_distance = 16.0
+		h_offset = 1.25
 
 
 ## Auto-framing clamp for desktop/tablet viewports to center mechanism in free space
 func update_aspect_ratio_framing(vp_size: Vector2) -> void:
 	if is_mobile_mode:
+		h_offset = 0.0
 		return
 	var aspect: float = vp_size.x / maxf(vp_size.y, 1.0)
 	# On Desktop Landscape, right 40% is occupied by HUD cards.
 	# The free 3D viewing area is the left 60%.
-	# Center of left 60% is at X = 30% of screen.
-	# To center the rigs horizontally in this left 60% window, the camera focus must shift slightly right (+X),
-	# or camera target offset left (-0.55m).
+	# By shifting h_offset = 1.25, the 3D projection is shifted left into the free 60% window!
 	if aspect < 1.18:
-		default_distance = 8.8
-		default_target = Vector3(-0.55, 1.55, 0.0)
+		default_distance = 10.2
+		h_offset = 0.85
 	elif aspect < 1.45:
-		default_distance = 8.5
-		default_target = Vector3(-0.55, 1.65, 0.0)
+		default_distance = 9.8
+		h_offset = 1.10
 	elif aspect < 1.70:
-		default_distance = 8.2
-		default_target = Vector3(-0.55, 1.65, 0.0)
+		default_distance = 9.6
+		h_offset = 1.25
 	else:
-		default_distance = 8.0
-		default_target = Vector3(-0.55, 1.65, 0.0)
+		default_distance = 9.4
+		h_offset = 1.30
 
 	# If currently close to default, gently adjust target distance to new framing
 	if absf(current_distance - target_distance) < 0.2:
 		target_distance = default_distance
-	if current_target.distance_to(default_target) < 0.5:
-		current_target = default_target
 
 
 ## Centers the camera precisely inside the unobstructed screen window

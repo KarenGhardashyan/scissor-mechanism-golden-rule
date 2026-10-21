@@ -88,8 +88,8 @@ static func create_metric_tile_style(is_dark: bool) -> StyleBoxFlat:
 		sb.bg_color = Color(0.04, 0.06, 0.09, 0.85)
 		sb.border_color = Color(1.0, 1.0, 1.0, 0.08)
 	else:
-		sb.bg_color = Color(0.95, 0.97, 1.0, 0.85)
-		sb.border_color = Color(0.80, 0.85, 0.92, 0.80)
+		sb.bg_color = Color("#F8FAFC") # Crisp bright Slate-50 background
+		sb.border_color = Color("#CBD5E1") # Slate-300 clean border
 
 	sb.border_width_left = 1
 	sb.border_width_top = 1
@@ -135,7 +135,7 @@ static func create_button_style(is_dark: bool, is_active: bool, is_hover: bool =
 			sb.border_width_bottom = 1
 	else:
 		if is_active:
-			sb.bg_color = LIGHT_BTN_ACTIVE_BG
+			sb.bg_color = LIGHT_ACCENT_COBALT # Vivid Cobalt fill for active button
 			sb.border_color = LIGHT_ACCENT_COBALT
 			sb.border_width_left = 1
 			sb.border_width_top = 1
@@ -149,8 +149,8 @@ static func create_button_style(is_dark: bool, is_active: bool, is_hover: bool =
 			sb.border_width_right = 1
 			sb.border_width_bottom = 1
 		else:
-			sb.bg_color = LIGHT_BTN_BG
-			sb.border_color = Color(0.80, 0.85, 0.92, 0.80)
+			sb.bg_color = Color("#F1F5F9") # Crisp Slate-100 paper fill
+			sb.border_color = Color("#94A3B8") # Slate-400 crisp border
 			sb.border_width_left = 1
 			sb.border_width_top = 1
 			sb.border_width_right = 1

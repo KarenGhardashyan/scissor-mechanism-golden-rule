@@ -179,28 +179,28 @@ func _build_desktop_layout() -> void:
 
 	# Right: Action Pills
 	btn_slow_mo = Button.new()
-	btn_slow_mo.text = "⏱ 0.2× Slow-Mo"
+	btn_slow_mo.text = "0.2x SLOW-MO"
 	btn_slow_mo.custom_minimum_size = Vector2(110, 34)
 	btn_slow_mo.add_theme_font_size_override("font_size", 11)
 	btn_slow_mo.pressed.connect(_on_slow_mo_pressed)
 	top_hbox.add_child(btn_slow_mo)
 
 	btn_theme = Button.new()
-	btn_theme.text = "🌗 Dark / Light"
-	btn_theme.custom_minimum_size = Vector2(105, 34)
+	btn_theme.text = "THEME: DARK" if is_dark_theme else "THEME: LIGHT"
+	btn_theme.custom_minimum_size = Vector2(110, 34)
 	btn_theme.add_theme_font_size_override("font_size", 11)
 	btn_theme.pressed.connect(_on_theme_pressed)
 	top_hbox.add_child(btn_theme)
 
 	btn_formulas = Button.new()
-	btn_formulas.text = "ℹ Formulas"
+	btn_formulas.text = "FORMULAS"
 	btn_formulas.custom_minimum_size = Vector2(90, 34)
 	btn_formulas.add_theme_font_size_override("font_size", 11)
 	btn_formulas.pressed.connect(func(): formulas_requested.emit())
 	top_hbox.add_child(btn_formulas)
 
 	btn_reset_view = Button.new()
-	btn_reset_view.text = "↺ Reset"
+	btn_reset_view.text = "RESET"
 	btn_reset_view.custom_minimum_size = Vector2(75, 34)
 	btn_reset_view.add_theme_font_size_override("font_size", 11)
 	btn_reset_view.pressed.connect(func(): reset_view_requested.emit())
@@ -306,7 +306,7 @@ func _build_desktop_layout() -> void:
 	toggles_row.add_theme_constant_override("separation", 8)
 
 	btn_beam_toggle = Button.new()
-	btn_beam_toggle.text = "Upper Beam (Reaction ↗)"
+	btn_beam_toggle.text = "MODE: UPPER BEAM"
 	btn_beam_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_beam_toggle.custom_minimum_size = Vector2(0, 30)
 	btn_beam_toggle.add_theme_font_size_override("font_size", 10)
@@ -314,7 +314,7 @@ func _build_desktop_layout() -> void:
 	toggles_row.add_child(btn_beam_toggle)
 
 	btn_friction_toggle = Button.new()
-	btn_friction_toggle.text = "Dry Friction: ON (μ=0.20)"
+	btn_friction_toggle.text = "FRICTION: ON (mu=0.20)"
 	btn_friction_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_friction_toggle.custom_minimum_size = Vector2(0, 30)
 	btn_friction_toggle.add_theme_font_size_override("font_size", 10)
@@ -361,10 +361,16 @@ func _build_desktop_layout() -> void:
 	graph_margin.add_child(live_graph)
 
 
+var metric_tiles: Array[PanelContainer] = []
+var metric_tag_labels: Array[Label] = []
+var metric_num_labels: Array[Dictionary] = []
+
+
 func _create_metric_tile(parent: GridContainer, label_text: String, init_val: String, accent_col: Color = Color.WHITE) -> Label:
 	var tile := PanelContainer.new()
 	tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	metric_tiles.append(tile)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 2)
@@ -375,6 +381,7 @@ func _create_metric_tile(parent: GridContainer, label_text: String, init_val: St
 	lbl_tag.add_theme_font_size_override("font_size", 8)
 	lbl_tag.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_MUTED)
 	vbox.add_child(lbl_tag)
+	metric_tag_labels.append(lbl_tag)
 
 	var lbl_num := Label.new()
 	lbl_num.text = init_val
@@ -384,6 +391,7 @@ func _create_metric_tile(parent: GridContainer, label_text: String, init_val: St
 	else:
 		lbl_num.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_PRIMARY)
 	vbox.add_child(lbl_num)
+	metric_num_labels.append({"label": lbl_num, "accent": accent_col})
 
 	parent.add_child(tile)
 	return lbl_num
@@ -443,14 +451,16 @@ func _build_mobile_layout() -> void:
 	mob_telem_row.add_child(lbl_mob_telem_row)
 
 	var btn_mob_slow := Button.new()
-	btn_mob_slow.text = "⏱"
-	btn_mob_slow.custom_minimum_size = Vector2(36, 28)
+	btn_mob_slow.text = "SLOW"
+	btn_mob_slow.custom_minimum_size = Vector2(46, 28)
+	btn_mob_slow.add_theme_font_size_override("font_size", 10)
 	btn_mob_slow.pressed.connect(_on_slow_mo_pressed)
 	mob_telem_row.add_child(btn_mob_slow)
 
 	var btn_mob_th := Button.new()
-	btn_mob_th.text = "🌗"
-	btn_mob_th.custom_minimum_size = Vector2(36, 28)
+	btn_mob_th.text = "THEME"
+	btn_mob_th.custom_minimum_size = Vector2(50, 28)
+	btn_mob_th.add_theme_font_size_override("font_size", 10)
 	btn_mob_th.pressed.connect(_on_theme_pressed)
 	mob_telem_row.add_child(btn_mob_th)
 	mob_vbox.add_child(mob_telem_row)
@@ -596,6 +606,10 @@ func _update_rig_buttons() -> void:
 		btn.add_theme_stylebox_override("normal", ThemeManager.create_button_style(is_dark_theme, is_active))
 		btn.add_theme_stylebox_override("hover", ThemeManager.create_button_style(is_dark_theme, is_active, true))
 		btn.add_theme_stylebox_override("pressed", ThemeManager.create_button_style(is_dark_theme, true))
+		if is_dark_theme:
+			btn.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_PRIMARY)
+		else:
+			btn.add_theme_color_override("font_color", Color.WHITE if is_active else ThemeManager.LIGHT_TEXT_PRIMARY)
 
 
 func _adjust_mass(delta_m: float) -> void:
@@ -620,7 +634,7 @@ func _on_mass_slider_changed(val: float) -> void:
 
 func _on_beam_toggle_pressed() -> void:
 	is_upper_beam = not is_upper_beam
-	var text_str: String = "Upper Beam (Reaction ↗)" if is_upper_beam else "Pin Reaction (ΣF=0 ↙)"
+	var text_str: String = "MODE: UPPER BEAM" if is_upper_beam else "MODE: PIN REACTION"
 	if btn_beam_toggle != null:
 		btn_beam_toggle.text = text_str
 	beam_reaction_toggled.emit(is_upper_beam)
@@ -628,7 +642,7 @@ func _on_beam_toggle_pressed() -> void:
 
 func _on_friction_toggle_pressed() -> void:
 	is_stiction_on = not is_stiction_on
-	var text_str: String = "Dry Friction: ON (μ=0.20)" if is_stiction_on else "Dry Friction: OFF (Ideal)"
+	var text_str: String = "FRICTION: ON (mu=0.20)" if is_stiction_on else "FRICTION: OFF (IDEAL)"
 	if btn_friction_toggle != null:
 		btn_friction_toggle.text = text_str
 	stiction_toggled.emit(is_stiction_on)
@@ -639,12 +653,14 @@ func _on_friction_toggle_pressed() -> void:
 func _on_slow_mo_pressed() -> void:
 	is_slow_mo = not is_slow_mo
 	if btn_slow_mo != null:
-		btn_slow_mo.text = "⏱ 1.0× Normal" if is_slow_mo else "⏱ 0.2× Slow-Mo"
+		btn_slow_mo.text = "1.0x NORMAL" if is_slow_mo else "0.2x SLOW-MO"
 	slow_mo_toggled.emit(is_slow_mo)
 
 
 func _on_theme_pressed() -> void:
 	is_dark_theme = not is_dark_theme
+	if btn_theme != null:
+		btn_theme.text = "THEME: DARK" if is_dark_theme else "THEME: LIGHT"
 	apply_theme(is_dark_theme)
 	theme_toggled.emit(is_dark_theme)
 	if live_graph != null:
@@ -743,5 +759,31 @@ func apply_theme(is_dark: bool) -> void:
 	# 3. Sliders
 	if slider_mass != null: ThemeManager.apply_slider_style(slider_mass, is_dark, 22)
 	if slider_mob_mass != null: ThemeManager.apply_slider_style(slider_mob_mass, is_dark, 30)
+
+	# 4. Metric Grid Tiles Style & Colors
+	var tile_sb := ThemeManager.create_metric_tile_style(is_dark)
+	for t in metric_tiles:
+		if t != null:
+			t.add_theme_stylebox_override("panel", tile_sb)
+
+	var tag_color := ThemeManager.DARK_TEXT_MUTED if is_dark else ThemeManager.LIGHT_TEXT_MUTED
+	for lbl in metric_tag_labels:
+		if lbl != null:
+			lbl.add_theme_color_override("font_color", tag_color)
+
+	for item in metric_num_labels:
+		var lbl: Label = item["label"]
+		var acc: Color = item["accent"]
+		if lbl != null:
+			if acc != Color.WHITE:
+				# High contrast semantic vector colors in Light theme
+				if not is_dark:
+					if acc == ThemeManager.COLOR_VECTOR_R_DARK: acc = ThemeManager.COLOR_VECTOR_R_LIGHT
+					elif acc == ThemeManager.COLOR_VECTOR_FX_DARK: acc = ThemeManager.COLOR_VECTOR_FX_LIGHT
+					elif acc == ThemeManager.COLOR_VECTOR_FY_DARK: acc = ThemeManager.COLOR_VECTOR_FY_LIGHT
+					elif acc == ThemeManager.COLOR_VECTOR_FRIC_DARK: acc = ThemeManager.COLOR_VECTOR_FRIC_LIGHT
+				lbl.add_theme_color_override("font_color", acc)
+			else:
+				lbl.add_theme_color_override("font_color", ThemeManager.DARK_TEXT_PRIMARY if is_dark else ThemeManager.LIGHT_TEXT_PRIMARY)
 
 	_update_rig_buttons()

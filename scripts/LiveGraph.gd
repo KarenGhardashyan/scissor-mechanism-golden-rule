@@ -379,16 +379,16 @@ func _draw() -> void:
 	# --- 2. HEADER TITLE & INTERACTIVE HUD PILLS ---
 	var title_text: String
 	if active_rig_filter == 1:
-		title_text = "RIG A: EXPERIMENTAL STEPS & LINEAR REGRESSION (λ = 3.0×)"
+		title_text = "RIG A: REGRESSION (λ = 3.0x)"
 	elif active_rig_filter == 2:
-		title_text = "RIG C: EXPERIMENTAL STEPS & LINEAR REGRESSION (λ = 6.0×)"
+		title_text = "RIG C: REGRESSION (λ = 6.0x)"
 	elif active_rig_filter == 3:
-		title_text = "RIG B: EXPERIMENTAL STEPS & LINEAR REGRESSION (λ = 5.0×)"
+		title_text = "RIG B: REGRESSION (λ = 5.0x)"
 	else:
 		if stiction_enabled and friction_mu > 0.005:
-			title_text = "REALTIME DISPLACEMENT PROFILE: L(m) · [Dry Friction μ = %.2f Active]" % friction_mu
+			title_text = "PROFILE L(m) [μ=%.2f]" % friction_mu
 		else:
-			title_text = "REALTIME DISPLACEMENT PROFILE: L(m) = λ · H(m) · [Pure Theoretical Glide]"
+			title_text = "PROFILE L(m) [IDEAL]"
 
 	draw_string(font, Vector2(margin_left - 36.0 * ui_scale, margin_top - 12.0 * ui_scale), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_title, col_text_title)
 
@@ -397,43 +397,43 @@ func _draw() -> void:
 	var cur_lc: float = compute_stepped_L_cm(display_mass, 6, true)
 	var cur_lb: float = compute_stepped_L_cm(display_mass, 5)
 
-	# Telemetry Readout Badges in Header
+	# Telemetry Readout Badges in Header - aligned rightwards
 	var badge_right_edge: float = margin_left + plot_w + 10.0 * ui_scale
 	var pill_h: float = 20.0 * ui_scale
 	var pill_y: float = margin_top - pill_h - 4.0 * ui_scale
 
 	# Badge B (Orange)
-	var txt_b: String = "Rig B: %.1f cm (5×)" % cur_lb if (active_rig_filter == 0 or active_rig_filter == 3) else "Rig B (5×)"
-	var pill_b_w: float = font.get_string_size(txt_b, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 22.0 * ui_scale
+	var txt_b: String = "Rig B: %.1f cm" % cur_lb if (active_rig_filter == 0 or active_rig_filter == 3) else "Rig B"
+	var pill_b_w: float = font.get_string_size(txt_b, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 14.0 * ui_scale
 	var pill_b_x: float = badge_right_edge - pill_b_w
 	_rect_badge_b = Rect2(pill_b_x, pill_y, pill_b_w, pill_h)
 	_draw_hud_badge(_rect_badge_b.position, _rect_badge_b.size, txt_b, COLOR_RIG_B, font, sz_hud, dark_theme, active_rig_filter == 3, active_rig_filter != 0 and active_rig_filter != 3)
 
 	# Badge C (Green)
-	var txt_c: String = "Rig C: %.1f cm (6×)" % cur_lc if (active_rig_filter == 0 or active_rig_filter == 2) else "Rig C (6×)"
-	var pill_c_w: float = font.get_string_size(txt_c, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 22.0 * ui_scale
-	var pill_c_x: float = pill_b_x - pill_c_w - 6.0 * ui_scale
+	var txt_c: String = "Rig C: %.1f cm" % cur_lc if (active_rig_filter == 0 or active_rig_filter == 2) else "Rig C"
+	var pill_c_w: float = font.get_string_size(txt_c, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 14.0 * ui_scale
+	var pill_c_x: float = pill_b_x - pill_c_w - 4.0 * ui_scale
 	_rect_badge_c = Rect2(pill_c_x, pill_y, pill_c_w, pill_h)
 	_draw_hud_badge(_rect_badge_c.position, _rect_badge_c.size, txt_c, COLOR_RIG_C, font, sz_hud, dark_theme, active_rig_filter == 2, active_rig_filter != 0 and active_rig_filter != 2)
 
 	# Badge A (Blue)
-	var txt_a: String = "Rig A: %.1f cm (3×)" % cur_la if (active_rig_filter == 0 or active_rig_filter == 1) else "Rig A (3×)"
-	var pill_a_w: float = font.get_string_size(txt_a, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 22.0 * ui_scale
-	var pill_a_x: float = pill_c_x - pill_a_w - 6.0 * ui_scale
+	var txt_a: String = "Rig A: %.1f cm" % cur_la if (active_rig_filter == 0 or active_rig_filter == 1) else "Rig A"
+	var pill_a_w: float = font.get_string_size(txt_a, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 14.0 * ui_scale
+	var pill_a_x: float = pill_c_x - pill_a_w - 4.0 * ui_scale
 	_rect_badge_a = Rect2(pill_a_x, pill_y, pill_a_w, pill_h)
 	_draw_hud_badge(_rect_badge_a.position, _rect_badge_a.size, txt_a, COLOR_RIG_A, font, sz_hud, dark_theme, active_rig_filter == 1, active_rig_filter != 0 and active_rig_filter != 1)
 
 	# Badge All Rigs
-	var txt_all: String = "All Rigs"
-	var pill_all_w: float = font.get_string_size(txt_all, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 18.0 * ui_scale
-	var pill_all_x: float = pill_a_x - pill_all_w - 6.0 * ui_scale
+	var txt_all: String = "All"
+	var pill_all_w: float = font.get_string_size(txt_all, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 12.0 * ui_scale
+	var pill_all_x: float = pill_a_x - pill_all_w - 4.0 * ui_scale
 	_rect_badge_all = Rect2(pill_all_x, pill_y, pill_all_w, pill_h)
 	_draw_hud_badge(_rect_badge_all.position, _rect_badge_all.size, txt_all, Color(0.82, 0.85, 0.92), font, sz_hud, dark_theme, active_rig_filter == 0, false)
 
 	# Badge Mass
-	var txt_m := "m = %.2f kg" % display_mass
-	var pill_m_w: float = font.get_string_size(txt_m, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 20.0 * ui_scale
-	var pill_m_x: float = pill_all_x - pill_m_w - 6.0 * ui_scale
+	var txt_m := "m=%.2f kg" % display_mass
+	var pill_m_w: float = font.get_string_size(txt_m, HORIZONTAL_ALIGNMENT_LEFT, -1, sz_hud).x + 14.0 * ui_scale
+	var pill_m_x: float = pill_all_x - pill_m_w - 4.0 * ui_scale
 	_draw_hud_badge(Vector2(pill_m_x, pill_y), Vector2(pill_m_w, pill_h), txt_m, Color(0.70, 0.72, 0.78), font, sz_hud, dark_theme, false, false)
 
 	# --- 3. GRID & AXES ---

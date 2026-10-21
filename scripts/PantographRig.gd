@@ -435,7 +435,7 @@ func _build_rig_hierarchy() -> void:
 	# Overhead Rig Header Label
 	rig_title_label = Label3D.new()
 	rig_title_label.name = "RigTitleLabel"
-	rig_title_label.position = Vector3(0, 0.38, 0.12)
+	rig_title_label.position = Vector3(0, 0.58, 0.12)
 	rig_title_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	rig_title_label.pixel_size = 0.0050
 	rig_title_label.font_size = 28
@@ -801,8 +801,8 @@ func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 
 	var side_sign: float = laser_side_sign
 	var max_w: float = (w_vis * 3.0) if is_scaled_123 else w_vis
-	var x_h: float = side_sign * (max_w * 0.5 + 0.16)
-	var x_l: float = side_sign * (max_w * 0.5 + 0.34)
+	var x_h: float = side_sign * (max_w * 0.5 + 0.32)
+	var x_l: float = side_sign * (max_w * 0.5 + 0.65)
 
 	# 1. Vertical H Line (Anchor to Stage 0 bottom)
 	line_h.position = Vector3(x_h, -h_vis * 0.5, 0.0)
@@ -839,11 +839,11 @@ func _update_dimension_lines(h_vis: float, w_vis: float, l_vis: float) -> void:
 
 	# 4. Dimension Callout Text with High-Contrast Outline
 	var prefix_h: String = "H0" if is_scaled_123 else "H"
-	dim_label_h.position = Vector3(x_h + side_sign * 0.12, -h_vis * 0.5, 0.02)
+	dim_label_h.position = Vector3(x_h + side_sign * 0.16, -h_vis * 0.5, 0.02)
 	dim_label_h.text = "%s = %.1f cm" % [prefix_h, current_H * 100.0]
 
-	var mult_str: String = " (6×)" if is_scaled_123 else (" (%d×)" % n_stages)
-	dim_label_l.position = Vector3(x_l + side_sign * 0.14, -l_vis * 0.5, 0.02)
+	var mult_str: String = " (6x)" if is_scaled_123 else (" (%dx)" % n_stages)
+	dim_label_l.position = Vector3(x_l + side_sign * 0.18, -l_vis * 0.5, 0.02)
 	dim_label_l.text = "L = %.1f cm%s" % [current_L * 100.0, mult_str]
 
 
