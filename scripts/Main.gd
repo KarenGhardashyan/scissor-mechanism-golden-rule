@@ -649,7 +649,11 @@ func _build_liquid_glass_ui() -> void:
 		if inspected_rig != null and is_instance_valid(inspected_rig):
 			_update_force_visualizer()
 	)
-	main_hud.stiction_toggled.connect(func(stiction_on: bool):
+	main_hud.beam_reaction_toggled.connect(func(is_upper: bool):
+		is_upper_force_reaction = is_upper
+		if inspected_rig != null and is_instance_valid(inspected_rig):
+			_update_force_visualizer()
+	)
 		is_stiction_enabled = stiction_on
 		if rig_a: rig_a.stiction_enabled = stiction_on
 		if rig_c: rig_c.stiction_enabled = stiction_on
@@ -2840,6 +2844,8 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 	# Epsilon clamping guard against division-by-zero singularities (theta >= 3° to 87°)
 	var theta_clamped: float = clampf(theta, deg_to_rad(3.0), deg_to_rad(87.0))
 	var tan_theta: float = tan(theta_clamped)
+	var sin_theta: float = sin(theta_clamped)
+	var cos_theta: float = cos(theta_clamped)
 	var mu: float = rig.friction_mu if ("friction_mu" in rig) else 0.20
 	var r_pin: float = 0.003 # Pin contact radius in meters (3.0 mm)
 
@@ -2920,100 +2926,95 @@ func _calculate_joint_forces(rig: PantographRig, pin_idx: int) -> Dictionary:
 		var p_below: float = m * g_eff + stages_below * link_m * g_eff
 		var p_stage_down: float = p_below + link_m * g_eff * 0.5
 
-		# When stiction holds the mechanism at height H != target_H, the upward load from the spring/upper stage
-		# is determined by the actual spring stretch, while the downward load is determined by mass + gravity.
+		# When stiction is on and mu > 0, the upward pull on the stage comes from the ACTUAL spring stretch.
+		# In ideal frictionless statics or when stiction is disabled, p_stage_up = p_stage_down.
 		var p_stage_up: float = p_stage_down
-		if s == 0 and rig.friction_mu > 0.0001 and rig.stiction_enabled and absf(rig.velocity_H) < 0.001:
-			# Stage 0: Direct coupling with spring
-			p_stage_up = clampf(p_spring_per_stage + link_m * g_eff * 0.5, 0.1, p_stage_down * 2.0)
+		if is_stiction_enabled and mu > 0.0001:
+			p_stage_up = p_spring_per_stage + link_m * g_eff * 0.5
 
-		if type == 0:
-			# Left Lateral Hinge
+		if type == 0 or type == 1:
+			# Lateral Hinges: type == 0 is Left, type == 1 is Right
+			var is_right: bool = (type == 1)
+			var side_x_sign: float = 1.0 if is_right else -1.0 # Right is +X, Left is -X
+
+			# Downward load components along the lower beam line of action:
 			F_y_down = p_stage_down * 0.5
-			F_x_down = p_stage_down / (2.0 * tan_theta)
+			F_x_down = F_y_down / tan_theta
+			R_down = F_y_down / sin_theta
 
-			# Lower beam pulls down-left (-X, -Y)
-			dir_fy_down = Vector3(0, -1, 0)
-			dir_fx_down = Vector3(-1, 0, 0)
-			var vec_lower := Vector3(-F_x_down, -F_y_down, 0.0)
-			R_down = vec_lower.length()
-			dir_res_lower = vec_lower.normalized()
+			# Upward load components along the upper beam:
+			F_y_up = p_stage_up * 0.5
+			F_x_up = F_y_up / tan_theta
+			R_up = F_y_up / sin_theta
 
-			# Friction opposes inward sliding / folding:
-			if mu > 0.0001 and is_stiction_enabled:
-				F_s = mu * R_down * clampf(cos(theta_clamped), 0.3, 0.9)
-			else:
-				F_s = 0.0
-			var vec_fric := Vector3(-F_s, 0.0, 0.0) if not is_moving else Vector3(-1.0, 0.0, 0.0) * (mu * R_down * vel_norm * motion_dir)
-			dir_fs = vec_fric.normalized() if vec_fric.length_squared() > 0.0001 else Vector3.ZERO
-			F_k = mu * R_down * vel_norm if is_moving else 0.0
-			F_fric = F_k if is_moving else F_s
-			dir_fk = Vector3(-1.0, 0.0, 0.0) * motion_dir if is_moving else Vector3.ZERO
-			dir_fric = dir_fk if is_moving else dir_fs
+			# Collinear unit vectors along scissor arms:
+			# For Right Hinge (side_x_sign = +1):
+			#   Upper beam unit points UP-LEFT (-X, +Y): (-cos_theta, +sin_theta, 0)
+			#   Lower beam unit points DOWN-RIGHT (+X, -Y): (+cos_theta, -sin_theta, 0)
+			# For Left Hinge (side_x_sign = -1):
+			#   Upper beam unit points UP-RIGHT (+X, +Y): (+cos_theta, +sin_theta, 0)
+			#   Lower beam unit points DOWN-LEFT (-X, -Y): (-cos_theta, -sin_theta, 0)
+			var upper_beam_unit := Vector3(-side_x_sign * cos_theta, sin_theta, 0.0)
+			var lower_beam_unit := Vector3(side_x_sign * cos_theta, -sin_theta, 0.0)
 
-			# Upper beam must balance lower beam AND friction: R_upper = -(R_lower + F_friction) => ΣF = 0
-			var vec_upper := - (vec_lower + (vec_fric if not is_moving else Vector3.ZERO))
-			F_x_up = absf(vec_upper.x)
-			F_y_up = absf(vec_upper.y)
-			R_up = vec_upper.length()
+			dir_res_upper = upper_beam_unit
 			dir_fy_up = Vector3(0, 1, 0)
-			dir_fx_up = Vector3(1, 0, 0)
-			dir_res_upper = vec_upper.normalized()
+			dir_fx_up = Vector3(-side_x_sign, 0, 0)
 
-			tau_fric = F_fric * r_pin
-			F_y = F_y_up if is_upper_force_reaction else F_y_down
-			F_x = F_x_up if is_upper_force_reaction else F_x_down
-			R = R_up if is_upper_force_reaction else R_down
-			dir_fy = dir_fy_up if is_upper_force_reaction else dir_fy_down
-			dir_fx = dir_fx_up if is_upper_force_reaction else dir_fx_down
-			dir_res = dir_res_upper if is_upper_force_reaction else dir_res_lower
-
-			title = "%s · Stage %d Left Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
-			desc = "Left lateral joint connecting upper and lower scissor arms. ΣF = 0 in static equilibrium."
-
-		elif type == 1:
-			# Right Lateral Hinge
-			F_y_down = p_stage_down * 0.5
-			F_x_down = p_stage_down / (2.0 * tan_theta)
-
-			# Lower beam pulls down-right (+X, -Y)
+			dir_res_lower = lower_beam_unit
 			dir_fy_down = Vector3(0, -1, 0)
-			dir_fx_down = Vector3(1, 0, 0)
-			var vec_lower := Vector3(F_x_down, -F_y_down, 0.0)
-			R_down = vec_lower.length()
-			dir_res_lower = vec_lower.normalized()
+			dir_fx_down = Vector3(side_x_sign, 0, 0)
 
-			# Friction opposes inward sliding / folding:
-			if mu > 0.0001 and is_stiction_enabled:
-				F_s = mu * R_down * clampf(cos(theta_clamped), 0.3, 0.9)
+			# Friction calculation:
+			if mu > 0.0001:
+				if is_moving:
+					# Kinetic friction opposing motion:
+					F_k = mu * R_down * cos_theta * vel_norm
+					F_s = 0.0
+					dir_fk = Vector3(side_x_sign, 0.0, 0.0) * motion_dir
+					dir_fs = Vector3.ZERO
+				else:
+					# Static friction holds the exact difference between R_down and R_up:
+					F_k = 0.0
+					if is_stiction_enabled:
+						F_s = absf(R_down - R_up)
+						# If R_down >= R_up, friction pulls in upper-beam direction to support upper beam.
+						# If R_up > R_down, friction pulls in lower-beam direction.
+						dir_fs = upper_beam_unit if R_down >= R_up else lower_beam_unit
+					else:
+						F_s = 0.0
+						dir_fs = Vector3.ZERO
+					dir_fk = Vector3.ZERO
 			else:
+				F_k = 0.0
 				F_s = 0.0
-			var vec_fric := Vector3(F_s, 0.0, 0.0) if not is_moving else Vector3(1.0, 0.0, 0.0) * (mu * R_down * vel_norm * motion_dir)
-			dir_fs = vec_fric.normalized() if vec_fric.length_squared() > 0.0001 else Vector3.ZERO
-			F_k = mu * R_down * vel_norm if is_moving else 0.0
+				dir_fk = Vector3.ZERO
+				dir_fs = Vector3.ZERO
+
 			F_fric = F_k if is_moving else F_s
-			dir_fk = Vector3(1.0, 0.0, 0.0) * motion_dir if is_moving else Vector3.ZERO
 			dir_fric = dir_fk if is_moving else dir_fs
-
-			# Upper beam must balance lower beam AND friction: R_upper = -(R_lower + F_friction) => ΣF = 0
-			var vec_upper := - (vec_lower + (vec_fric if not is_moving else Vector3.ZERO))
-			F_x_up = absf(vec_upper.x)
-			F_y_up = absf(vec_upper.y)
-			R_up = vec_upper.length()
-			dir_fy_up = Vector3(0, 1, 0)
-			dir_fx_up = Vector3(-1, 0, 0)
-			dir_res_upper = vec_upper.normalized()
-
 			tau_fric = F_fric * r_pin
-			F_y = F_y_up if is_upper_force_reaction else F_y_down
-			F_x = F_x_up if is_upper_force_reaction else F_x_down
-			R = R_up if is_upper_force_reaction else R_down
-			dir_fy = dir_fy_up if is_upper_force_reaction else dir_fy_down
-			dir_fx = dir_fx_up if is_upper_force_reaction else dir_fx_down
-			dir_res = dir_res_upper if is_upper_force_reaction else dir_res_lower
 
-			title = "%s · Stage %d Right Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, pin_idx]
-			desc = "Right lateral joint connecting upper and lower scissor arms. ΣF = 0 in static equilibrium."
+			# Set active display components depending on user selection:
+			var show_lower_as_primary: bool = vector_show_lower_beam and not vector_show_upper_beam
+			if show_lower_as_primary or not is_upper_force_reaction:
+				F_y = F_y_down
+				F_x = F_x_down
+				R = R_down
+				dir_fy = dir_fy_down
+				dir_fx = dir_fx_down
+				dir_res = dir_res_lower
+			else:
+				F_y = F_y_up
+				F_x = F_x_up
+				R = R_up
+				dir_fy = dir_fy_up
+				dir_fx = dir_fx_up
+				dir_res = dir_res_upper
+
+			var side_str: String = "Right" if is_right else "Left"
+			title = "%s · Stage %d %s Lateral Joint [Pin #%d]" % [rig.rig_name, s + 1, side_str, pin_idx]
+			desc = "%s lateral joint connecting upper and lower scissor arms. ΣF = 0 in static equilibrium." % side_str
 
 		else:
 			# Central Coupling Hinge on Vertical Centerline Axis
@@ -3316,8 +3317,16 @@ func _update_force_visualizer() -> void:
 		if arrow_fk_data.has("root"):
 			arrow_fk_data["root"].visible = false
 		if is_stiction_enabled and disp_len_fs >= 0.012 and not lbl_fs_str.is_empty() and data.dir_fs.length_squared() > 0.01:
-			var lbl_fs_offset := Vector3(0.16, 0.0, 0.0)
-			_update_arrow_vector(arrow_fs_data, pin_pos, data.dir_fs, disp_len_fs, lbl_fs_str, lbl_fs_offset)
+			var fs_origin := pin_pos
+			# Offset fs slightly perpendicular to beam if upper or lower beam arrow is visible in the same direction
+			if show_upper and disp_len_res_up >= 0.012 and data.dir_fs.dot(data.dir_res_upper) > 0.7:
+				var perp_dir := Vector3(-data.dir_fs.y, data.dir_fs.x, 0.0).normalized()
+				fs_origin += perp_dir * 0.038
+			elif show_lower and disp_len_res_down >= 0.012 and data.dir_fs.dot(data.dir_res_lower) > 0.7:
+				var perp_dir := Vector3(-data.dir_fs.y, data.dir_fs.x, 0.0).normalized()
+				fs_origin += perp_dir * 0.038
+			var lbl_fs_offset := Vector3(0.16, 0.06, 0.0)
+			_update_arrow_vector(arrow_fs_data, fs_origin, data.dir_fs, disp_len_fs, lbl_fs_str, lbl_fs_offset)
 		elif arrow_fs_data.has("root"):
 			arrow_fs_data["root"].visible = false
 
@@ -3439,6 +3448,14 @@ func _on_pin_clicked(rig: PantographRig, pin_idx: int, _pos: Vector3) -> void:
 		filtered_fy = absf(data.F_y)
 		filtered_fx = absf(data.F_x)
 		filtered_res = data.R
+		filtered_fy_up = absf(data.F_y_up)
+		filtered_fx_up = absf(data.F_x_up)
+		filtered_res_up = data.R_up
+		filtered_fy_down = absf(data.F_y_down)
+		filtered_fx_down = absf(data.F_x_down)
+		filtered_res_down = data.R_down
+		filtered_fk = absf(data.F_k)
+		filtered_fs = absf(data.F_s)
 		filtered_fric = data.F_fric
 		filtered_theta = data.theta_deg
 

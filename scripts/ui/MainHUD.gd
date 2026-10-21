@@ -823,7 +823,7 @@ func _on_mass_slider_changed(val: float) -> void:
 
 func _on_beam_toggle_pressed() -> void:
 	is_upper_beam = not is_upper_beam
-	var text_str: String = "MODE: UPPER BEAM" if is_upper_beam else "MODE: PIN REACTION"
+	var text_str: String = "MODE: UPPER BEAM" if is_upper_beam else "MODE: LOWER BEAM"
 	if btn_beam_toggle != null:
 		btn_beam_toggle.text = text_str
 	beam_reaction_toggled.emit(is_upper_beam)
