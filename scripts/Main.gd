@@ -2770,6 +2770,8 @@ func _update_arrow_vector(arrow_dict: Dictionary, origin: Vector3, dir_unit: Vec
 	lbl.global_position = tip_world_pos + label_world_offset
 	# Strict guarantee: NEVER display negative signs on 3D arrows
 	lbl.text = label_text.replace("= -", "= ").replace("=-", "= ").replace("-", "")
+	if arrow_dict.has("mat") and arrow_dict["mat"] is StandardMaterial3D:
+		lbl.modulate = (arrow_dict["mat"] as StandardMaterial3D).albedo_color
 
 	if arrow_dict.has("label_bg"):
 		var bg: MeshInstance3D = arrow_dict["label_bg"]
@@ -3653,9 +3655,8 @@ func _apply_visualizer_theme(is_dark: bool) -> void:
 		{"data": arrow_fy_data, "col": Color(0.15, 0.75, 1.0) if is_dark else Color(0.0, 0.44, 0.95)},
 		{"data": arrow_fx_data, "col": Color(1.0, 0.35, 0.20) if is_dark else Color(0.95, 0.22, 0.22)},
 		{"data": arrow_res_data, "col": Color(0.25, 1.0, 0.50) if is_dark else Color(0.12, 0.75, 0.35)},
-		{"data": arrow_fk_data, "col": Color(0.22, 0.45, 0.98) if is_dark else Color(0.10, 0.28, 0.75)}, # Dark Blue
-		{"data": arrow_fs_data, "col": Color(0.85, 0.35, 1.00) if is_dark else Color(0.68, 0.18, 0.88)}, # Purple / Violet
-		{"data": arrow_fric_data, "col": Color(0.85, 0.35, 1.00) if is_dark else Color(0.68, 0.18, 0.88)}
+		{"data": arrow_fk_data, "col": Color(0.10, 0.35, 0.95) if is_dark else Color(0.08, 0.25, 0.80)}, # Deep Blue
+		{"data": arrow_fs_data, "col": Color(0.78, 0.20, 0.98) if is_dark else Color(0.65, 0.15, 0.85)}  # Vibrant Purple
 	]
 
 	for a in arrows:
