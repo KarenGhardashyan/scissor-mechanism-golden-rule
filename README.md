@@ -17,6 +17,7 @@
 > *Demonstrating empirical bench oscillations against the 400 Hz numerical integrator.*
 
 ![Digital Twin Simulation Benchmark](simulation_render.png)
+*Figure 1: Digital twin simulation benchmark showcasing real-time vector decompositions, live telemetry oscilloscope, and 400 Hz Velocity Verlet kinematics in Godot 4.5.*
 
 ---
 
@@ -32,14 +33,30 @@ In 12th grade (2025–2026), I expanded this experimental project into a full **
 - Distributed structural link mass compensation,
 - Quasistatic deadband envelopes matching my empirical bench data.
 
-```text
-[ Physical Workflow ]
-SolidWorks CAD -> Ultimaker Cura Slicing -> FDM 3D Printing -> Test Stand Experiments -> Desmos Regression
-                                                                                                  |
-                                                                                (Sim-to-Real Discrepancies)
-                                                                                                  v
-[ Digital Twin Pipeline ]
-Custom 400 Hz Velocity Verlet Solver <- Coulomb Stiction Solver <- Joint Equilibrium Decompositions (Godot 4.5)
+```mermaid
+flowchart TD
+    subgraph Physical["Physical Experimental Rig"]
+        direction LR
+        CAD["SolidWorks CAD"] --> Slicing["Ultimaker Cura Slicing"]
+        Slicing --> Printing["FDM 3D Printing (Gyroid)"]
+        Printing --> Bench["Benchtop Load Testing"]
+        Bench --> Regression["Desmos Empirical Regression"]
+    end
+
+    subgraph Discrepancies["Sim-to-Real Discrepancies"]
+        direction TB
+        Disc["Coulomb Joint Friction<br/>Fastener Mass Distribution<br/>Structural Sag & Flat Singularity"]
+    end
+
+    subgraph DigitalTwin["Digital Twin Pipeline (Godot 4.5)"]
+        direction LR
+        Statics["Vector Decompositions (R_upper, R_down)"] --> Stiction["Coulomb Friction Solver (F_s,max = μ R_down)"]
+        Stiction --> Verlet["400 Hz Velocity Verlet Integrator"]
+        Verlet --> Telemetry["Realtime Live Oscilloscope & Data Overlays"]
+    end
+
+    Bench --> Discrepancies
+    Discrepancies --> Statics
 ```
 
 ---
@@ -161,21 +178,17 @@ During dynamic oscillations, whenever the linkage velocity approaches zero ($v \
 
 I modeled all components in SolidWorks 2024, designed specifically for rapid assembly, dimensional repeatability, and low rotational friction.
 
-```text
-       R 5.0 mm Fillet                                      R 5.0 mm Fillet
-         ╭─────────╮                                          ╭─────────╮
-         │   (○)   ├───────────────────(○)────────────────────┤   (○)   │
-         ╰─────────╯            Midpoint Pivot Hole           ╰─────────╯
-        Pivot Hole              (Ø 4.0 mm, H7 fit)            Pivot Hole
-      (Ø 4.0 mm, H7 fit)                                  (Ø 4.0 mm, H7 fit)
-        |<------------------------- 60.0 mm ------------------------->|
-```
+![SolidWorks Parametric Link](docs/images/hardware/cad_link_fillet.png)
+*Figure 2: Parametric SolidWorks CAD model of the 60.0 mm primary scissor arm, incorporating 5.0 mm stress-relieving corner fillets and calibrated 4.0 mm pivot holes.*
+
+![Cura Gyroid Infill Slicing](docs/images/hardware/cura_gyroid_slice.png)
+*Figure 3: Ultimaker Cura toolpath preview highlighting the 35% Gyroid infill cross-section for isotropic shear modulus and torsional stability.*
 
 ### Mechanical Design Details
 - **Primary Scissor Bars ($60.0\text{ mm} \times 10.0\text{ mm} \times 3.6\text{ mm}$):** Features three precision pivot holes ($\varnothing = 4.0\text{ mm}$) drilled at $0.0\text{ mm}$, $30.0\text{ mm}$, and $60.0\text{ mm}$.
 - **Fillet Radii ($R = 5.0\text{ mm}$):** Added to all bar extremities. This geometry prevents link collision when the pantograph compresses to acute angles ($\theta < 20^\circ$) and reduces stress concentrations around the pivot holes.
 - **Material Selection:** Generic Polylactic Acid (PLA) was chosen for its high tensile modulus ($E \approx 3.5\text{ GPa}$) and near-zero thermal shrinkage compared to ABS or PETG, ensuring hole roundness.
-- **Gyroid Infill Topology:** Unlike standard rectilinear or grid infill, the triply periodic minimal surface (TPMS) of gyroid infill provides isotropic shear modulus. This prevented slender scissor arms from twisting under out-of-plane torsional loads when carrying masses $> 1.0\text{ kg}$.
+- **Gyroid Infill Topology:** Unlike standard rectilinear or grid infill, the triply periodic minimal surface (TPMS) of gyroid infill provides isotropic shear modulus. This prevented slender scissor arms from twisting under out-of-plane torsional loads when carrying masses $m > 1.0\text{ kg}$.
 
 ### Additive Manufacturing Specifications
 
@@ -203,18 +216,18 @@ During physical bench testing, I ran into several distinct failure modes. The fo
 
 ### Hardware Implementation Details
 
-```text
-              [ Jam Nut Locking Assembly ]
-        Bolt Head    Link 1    Link 2    Primary Nut    Jam Nut
-           │           │         │            │            │
-         ┌───┐       ┌───┐     ┌───┐        ┌───┐        ┌───┐
-      ═══╡   ╞═══════╡   ╞═════╡   ╞════════╡   ╞════════╡   ╞═══
-         └───┘       └───┘     └───┘        └───┘        └───┘
-                       │<-- Free Rotation -->│    │<-- Locked Thread -->│
-```
+![Dual Jam Nut Locking Mechanism](docs/images/hardware/jam_nut_detail.jpg)
+*Figure 4: Detail of the dual jam nut locking mechanism isolating thread pre-tension from scissor link rotational bearing surfaces.*
 
 - **The Jam Nut Locking System:** The primary nut is tightened until axial end-play is less than $0.05\text{ mm}$ while permitting free rotation. A second thin M4 nut is counter-torqued against the primary nut using two wrenches. This locks the thread pitch permanently in shear without transferring clamping pressure to the plastic links.
+
+![Alternating Fastener Pattern](docs/images/hardware/alternating_bolts.jpg)
+*Figure 5: Physical test assembly featuring alternating fastener directions (Left-Right-Left) to neutralize out-of-plane gravitational moments.*
+
 - **Alternating Fastener Assembly:** To eliminate the out-of-plane bending moment caused by steel hardware ($m_{\text{fasteners}} \approx 12\text{ g}$ per joint), I reversed the bolt insertion direction at each consecutive stage. The parasitic moment from Stage $k$ is cancelled by Stage $k+1$, maintaining vertical planar alignment.
+
+![Stiction Deadband Demonstration](docs/images/hardware/deadband_demonstration.gif)
+*Figure 6: Empirical demonstration of the Coulomb stiction deadband: the linkage remains stationary at multiple static heights under identical suspended payload.*
 
 ---
 
@@ -237,6 +250,9 @@ Theoretical ratio: $\lambda = 5.000\times$. Empirical average: $\overline{\lambd
 | **0.50** | 4.91 | 36.1 | 7.4 | **4.87** |
 | **1.15** | 11.28 | 43.5 | 9.2 | **4.73** |
 
+![Desmos Regression Plot n=5](docs/images/desmos/plot_n5_regression.png)
+*Figure 7: Desmos linear regression of total stroke $L$ and spring stage extension $H$ versus suspended mass $m$ for the $n = 5$ uniform pantograph ($R^2 = 0.996$).*
+
 - **Extracted Spring Stiffness:** From regression slope $\frac{\partial(\Delta H)}{\partial m} \approx 0.045\text{ m/kg}$, $k_{\text{eff}} \approx \mathbf{1090\text{ N/m}}$ ($R^2 = 0.996$).
 - **Geometric Invariance:** Plotting $L$ versus $H$ yields a straight line with slope $5.0$, confirming kinematic stroke amplification is decoupled from load magnitude.
 
@@ -254,6 +270,9 @@ Theoretical ratio: $\lambda = 3.000\times$. Empirical average: $\overline{\lambd
 | **0.40** | 3.92 | 19.0 | 6.5 | **2.92** |
 | **0.50** | 4.91 | 20.0 | 6.8 | **2.94** |
 | **1.00** | 9.81 | 23.9 | 8.0 | **2.99** |
+
+![Desmos Regression Plot n=3](docs/images/desmos/plot_n3_regression.png)
+*Figure 8: Desmos linear regression of stage extension $H$ and total stroke $L$ versus load $m$ for the $n = 3$ pantograph ($R^2 = 0.998$).*
 
 - **Extracted Spring Stiffness:** From regression slope $\frac{\partial(\Delta H)}{\partial m} \approx 0.030\text{ m/kg}$, $k_{\text{eff}} \approx \mathbf{981\text{ N/m}}$ ($R^2 = 0.998$).
 
@@ -274,6 +293,9 @@ To test whether the Golden Rule holds when Hooke's Law is violated, I replaced t
 | **700** | 43.5 | 8.8 | **4.94** |
 | **800** | 44.5 | 9.3 | **4.78** |
 
+![Desmos Rubber Band Non-Linear Fit](docs/images/desmos/plot_rubber_cubic.png)
+*Figure 9: Desmos 3rd-order polynomial regression for hyperelastic polymer band. Kinematic transmission ratio $\lambda \approx 4.96$ remains invariant despite non-linear Hookean departure.*
+
 - **Regression Finding:** While the elongation curves $H(m)$ and $L(m)$ depart from linear behavior (requiring a 3rd-order polynomial fit in Desmos), the ratio $\lambda = L/H \approx 4.96 \pm 0.13$ remains invariant. This empirically proves that **kinematic mechanical advantage is governed strictly by linkage topology, independent of constitutive material linearity**.
 
 ---
@@ -285,7 +307,7 @@ To bridge my physical findings with dynamic simulation, I developed a 3D digital
 ```mermaid
 flowchart TD
     subgraph UI["UI & Telemetry Hub (Main.gd & MainHUD.gd)"]
-        In["User Inputs: m, k, μ, g, ζ"]
+        In["User Inputs: Mass m, Spring k, Friction &mu;, Gravity g, Damping &zeta;"]
         Scope["Realtime 2D Scope (LiveGraph.gd)"]
         Vectors["3D Force Vector Visualizer"]
     end
