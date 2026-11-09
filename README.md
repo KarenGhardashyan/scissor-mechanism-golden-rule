@@ -224,17 +224,28 @@ The physical test assembly incorporates two primary hardware solutions to elimin
 - **The Jam Nut Locking System:** The primary nut is tightened until axial end-play is less than $0.05\text{ mm}$ while permitting free rotation. A second thin M4 nut is counter-torqued against the primary nut using two wrenches. This locks the thread pitch in shear without transferring clamping pressure to the plastic links.
 - **Alternating Fastener Assembly:** To eliminate the out-of-plane bending moment caused by steel hardware ($m_{\text{fasteners}} \approx 12\text{ g}$ per joint), bolt insertion directions were reversed at each consecutive stage (Left-Right-Left). The parasitic moment from Stage $k$ is cancelled by Stage $k+1$, maintaining vertical planar alignment.
 
-![Dual Jam Nut Locking Mechanism](docs/images/hardware/jam_nut_detail.jpg)
-*Figure 5: Macro close-up of the dual jam nut locking system isolating thread pre-tension from scissor link rotational bearing surfaces.*
-
-![Alternating Fastener Pattern](docs/images/hardware/alternating_bolts.jpg)
-*Figure 6: Close-up of alternating Left-Right-Left fastener arrangement along vertical scissor arms to balance fastener mass.*
-
-![Physical Test Stand Apparatus](docs/images/hardware/teststand_n3_spring.jpg)
-*Figure 7: Physical benchtop test stand showing vertically suspended pantograph with calibrated slotted masses and upper extension spring.*
-
-![Stiction Deadband Demonstration](docs/images/hardware/deadband_demonstration.gif)
-*Figure 8: Empirical demonstration of Coulomb static holding: static friction maintains linkage equilibrium across a stroke envelope without motion.*
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/hardware/jam_nut_detail.jpg" width="400" alt="Dual Jam Nut Locking Mechanism" /><br />
+      <em>Figure 5: Macro close-up of the dual jam nut locking system isolating thread pre-tension from scissor link bearing surfaces.</em>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/hardware/alternating_bolts.jpg" width="400" alt="Alternating Fastener Pattern" /><br />
+      <em>Figure 6: Alternating Left-Right-Left fastener arrangement along vertical scissor arms to balance fastener mass.</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/hardware/teststand_n3_spring.jpg" width="400" alt="Physical Test Stand Apparatus" /><br />
+      <em>Figure 7: Physical benchtop test stand showing vertically suspended pantograph with calibrated slotted masses and upper extension spring.</em>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/hardware/deadband_demonstration.gif" width="400" alt="Stiction Deadband Demonstration" /><br />
+      <em>Figure 8: Empirical demonstration of Coulomb static holding: linkage maintains equilibrium across multiple static heights without motion.</em>
+    </td>
+  </tr>
+</table>
 
 ---
 
