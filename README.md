@@ -17,21 +17,21 @@
 > *Demonstrating empirical bench oscillations against the 400 Hz numerical integrator.*
 
 ![Digital Twin Simulation Benchmark](simulation_render.png)
-*Figure 1: Digital twin simulation benchmark showcasing real-time vector decompositions, live telemetry oscilloscope, and 400 Hz Velocity Verlet kinematics in Godot 4.5.*
+*Figure 1: Digital twin in Godot 4.5: real-time vector decomposition, telemetry scope, and 400 Hz Velocity Verlet kinematic solver.*
 
 ---
 
-## 1. Project Trajectory & Overview
+## 1. Research Context & Overview
 
-I initiated this research in 10th grade (Spring 2024) at the A. Shahinyan Special Phys-Math School under Yerevan State University. The original goal was straightforward: build an empirical test apparatus to verify the classical **Golden Rule of Mechanics** (*Goldene Regel der Mechanik*) and the **Principle of Virtual Work** using multi-stage 3D-printed linkages. 
+I initiated this research in 10th grade (Spring 2024) at the A. Shahinyan Special Phys-Math School under Yerevan State University. The objective was to build an empirical bench apparatus to verify the classical **Golden Rule of Mechanics** (*Goldene Regel der Mechanik*) and the **Principle of Virtual Work** using multi-stage 3D-printed linkages. 
 
-In high school physics laboratories, mechanical advantage is almost exclusively demonstrated using static levers or pulleys on a chalkboard. When I constructed physical multi-stage pantographs, I quickly discovered that physical multi-body linkages depart significantly from simple textbook equations. FDM 3D-printed joints introduce non-linear Coulomb friction, axial pin clearance backlash, structural self-weight sag, and out-of-plane torsional buckling. Furthermore, under static load, friction creates a deadband envelope where the linkage rests at multiple valid heights for the exact same mass.
+In standard physics laboratory demonstrations, mechanical advantage is typically taught using static levers or pulleys. When evaluating multi-body scissor linkages on an empirical testbench, the mechanism departs from ideal kinematic textbook models. FDM 3D-printed revolute joints introduce Coulomb dry friction, pin clearance backlash, structural self-weight sag, and out-of-plane torsional compliance. Under static loading, joint friction creates a displacement deadband envelope where the linkage maintains equilibrium at a range of heights under constant mass.
 
-In 12th grade (2025–2026), I expanded this experimental project into a full **Sim-to-Real research pipeline**. I developed an interactive 3D digital twin in Godot 4.5 using a custom 400 Hz Velocity Verlet numerical integrator. Rather than relying on game-engine physics approximations, I wrote a dedicated solver that incorporates:
+In 12th grade (2025–2026), I expanded the empirical data into a **Sim-to-Real research pipeline**. I developed an interactive 3D digital twin in Godot 4.5 using a custom 400 Hz Velocity Verlet numerical integrator. Rather than relying on rigid-body physics engine heuristics, the solver evaluates:
 - Exact joint force vector decomposition ($\vec{R}_{\text{upper}}$, $\vec{R}_{\text{down}}$),
 - Load-dependent Coulomb stiction thresholds ($F_{s,\max} = \mu \cdot R_{\text{down}}$),
 - Distributed structural link mass compensation,
-- Quasistatic deadband envelopes matching my empirical bench data.
+- Quasistatic deadband envelopes matching benchtop empirical trials.
 
 ```mermaid
 flowchart TD
@@ -176,18 +176,21 @@ During dynamic oscillations, whenever the linkage velocity approaches zero ($v \
 
 ## 3. Parametric CAD & FDM Additive Manufacturing
 
-I modeled all components in SolidWorks 2024, designed specifically for rapid assembly, dimensional repeatability, and low rotational friction.
+All linkage geometry was modeled in SolidWorks 2024 and prepared for fabrication with calibrated hole tolerances and low rotational friction.
+
+![Physical Pantograph Prototypes](docs/images/hardware/pantograph_rigs_comparison.jpg)
+*Figure 2: Fabricated physical pantograph prototypes. Left: 5-stage uniform linkage ($n=5$). Center: 3-stage progressive scale linkage ($1:2:3$ ratio, Rig C). Right: 3-stage uniform linkage ($n=3$).*
 
 ![SolidWorks Parametric Link](docs/images/hardware/cad_link_fillet.png)
-*Figure 2: Parametric SolidWorks CAD model of the 60.0 mm primary scissor arm, incorporating 5.0 mm stress-relieving corner fillets and calibrated 4.0 mm pivot holes.*
+*Figure 3: Parametric SolidWorks CAD model of the 60.0 mm primary scissor arm, incorporating 5.0 mm stress-relieving corner fillets and calibrated 4.0 mm pivot holes.*
 
 ![Cura Gyroid Infill Slicing](docs/images/hardware/cura_gyroid_slice.png)
-*Figure 3: Ultimaker Cura toolpath preview highlighting the 35% Gyroid infill cross-section for isotropic shear modulus and torsional stability.*
+*Figure 4: Ultimaker Cura toolpath preview highlighting the 35% Gyroid infill cross-section for isotropic shear modulus and torsional stability.*
 
 ### Mechanical Design Details
-- **Primary Scissor Bars ($60.0\text{ mm} \times 10.0\text{ mm} \times 3.6\text{ mm}$):** Features three precision pivot holes ($\varnothing = 4.0\text{ mm}$) drilled at $0.0\text{ mm}$, $30.0\text{ mm}$, and $60.0\text{ mm}$.
+- **Primary Scissor Bars ($60.0\text{ mm} \times 10.0\text{ mm} \times 3.6\text{ mm}$):** Features three precision pivot holes ($\varnothing = 4.0\text{ mm}$) centered at $0.0\text{ mm}$, $30.0\text{ mm}$, and $60.0\text{ mm}$.
 - **Fillet Radii ($R = 5.0\text{ mm}$):** Added to all bar extremities. This geometry prevents link collision when the pantograph compresses to acute angles ($\theta < 20^\circ$) and reduces stress concentrations around the pivot holes.
-- **Material Selection:** Generic Polylactic Acid (PLA) was chosen for its high tensile modulus ($E \approx 3.5\text{ GPa}$) and near-zero thermal shrinkage compared to ABS or PETG, ensuring hole roundness.
+- **Material Selection:** Generic Polylactic Acid (PLA) was chosen for its high tensile modulus ($E \approx 3.5\text{ GPa}$) and low thermal shrinkage compared to ABS or PETG, ensuring hole roundness.
 - **Gyroid Infill Topology:** Unlike standard rectilinear or grid infill, the triply periodic minimal surface (TPMS) of gyroid infill provides isotropic shear modulus. This prevented slender scissor arms from twisting under out-of-plane torsional loads when carrying masses $m > 1.0\text{ kg}$.
 
 ### Additive Manufacturing Specifications
@@ -203,31 +206,35 @@ I modeled all components in SolidWorks 2024, designed specifically for rapid ass
 
 ---
 
-## 4. Hardware Troubleshooting Log
+## 4. Hardware Troubleshooting & Assembly Constraints
 
-During physical bench testing, I ran into several distinct failure modes. The following engineering log details how I identified root causes and iterated to resolve them.
+During benchtop testing, several mechanical failure modes were identified and systematically resolved:
 
-| Issue | Root Cause | Failed Initial Attempt | Final Engineering Resolution |
+| Issue | Root Cause | Initial Attempt | Engineering Resolution |
 | :--- | :--- | :--- | :--- |
-| **1. Joint Binding & Friction** | FDM filament expansion caused $4.0\text{ mm}$ CAD holes to print at $\approx 3.88\text{ mm}$, binding M4 bolts. | Forcing bolts into undersized holes stripped the plastic; hand-drilling produced $+0.15\text{ mm}$ wobble. | Calibrated Cura `Horizontal Hole Expansion` to $-0.08\text{ mm}$, producing an exact sliding clearance fit without post-processing. |
-| **2. Nut Backing-Off & Link Loosening** | Cyclic scissor rotation generated alternating friction torques on single M4 nuts, loosening them after 10–15 cycles. | Overtightening prevented loosening but clamped the links, freezing joint rotation. | Implemented a dual-nut **Jam Nut System**. The primary nut preserves clearance; the secondary nut counter-locks against it without loading the link. |
-| **3. Center-of-Mass Out-of-Plane Sag** | Double steel nuts concentrated excess fastener mass on one side of the planar linkage, inducing parasitic tilt under load. | Adding counterweights added parasitic mass and increased system inertia. | Alternated bolt insertion directions across successive stages (Left-Right-Left), balancing fastener mass about the central symmetry plane. |
-| **4. Measurement Hysteresis & Inertial Overshoot** | Joint stiction created a multi-valued height envelope for a single mass. Releasing weights abruptly caused kinetic overshoot. | Direct dynamic release produced inconsistent, non-repeatable data points. | Developed a **Quasistatic Critical Point Protocol**: supported and gently tapped loads to record true upper/lower breakaway bounds. |
+| **1. Joint Binding & Friction** | Filament expansion caused $4.0\text{ mm}$ CAD holes to print at $\approx 3.88\text{ mm}$, binding M4 bolts. | Forcing bolts into undersized holes stripped plastic; hand-reaming caused $+0.15\text{ mm}$ wobble. | Calibrated Cura `Horizontal Hole Expansion` to $-0.08\text{ mm}$, achieving a sliding clearance fit directly from the build plate. |
+| **2. Nut Backing-Off & Loosening** | Cyclic rotation generated alternating friction torques on single M4 nuts, backing them off after 10–15 cycles. | Overtightening prevented loosening but clamped the links, freezing joint rotation. | Implemented a dual-nut **Jam Nut System**. The primary nut sets clearance; the secondary nut counter-locks against it. |
+| **3. Center-of-Mass Out-of-Plane Sag** | Concentrating steel nuts on one side of the planar linkage induced an asymmetric gravity moment, causing lateral tilt. | Adding counterweights increased total parasitic mass and linkage inertia. | Alternated bolt insertion directions across successive stages (Left-Right-Left), balancing fastener mass about the symmetry plane. |
+| **4. Measurement Hysteresis & Overshoot** | Joint stiction created a multi-valued resting height envelope. Abrupt weight release caused inertial overshoot. | Single dynamic releases gave high scatter in resting heights. | Implemented a **Quasistatic Critical Point Protocol**: supported and gently tapped loads to record true upper/lower breakaway bounds. |
 
-### Hardware Implementation Details
+### Assembly Implementation Details
 
 ![Dual Jam Nut Locking Mechanism](docs/images/hardware/jam_nut_detail.jpg)
-*Figure 4: Detail of the dual jam nut locking mechanism isolating thread pre-tension from scissor link rotational bearing surfaces.*
+*Figure 5: Dual jam nut locking mechanism isolating thread pre-tension from scissor link rotational bearing surfaces.*
 
-- **The Jam Nut Locking System:** The primary nut is tightened until axial end-play is less than $0.05\text{ mm}$ while permitting free rotation. A second thin M4 nut is counter-torqued against the primary nut using two wrenches. This locks the thread pitch permanently in shear without transferring clamping pressure to the plastic links.
+- **The Jam Nut Locking System:** The primary nut is tightened until axial end-play is less than $0.05\text{ mm}$ while permitting free rotation. A second thin M4 nut is counter-torqued against the primary nut using two wrenches. This locks the thread pitch in shear without transferring clamping pressure to the plastic links.
 
 ![Alternating Fastener Pattern](docs/images/hardware/alternating_bolts.jpg)
-*Figure 5: Physical test assembly featuring alternating fastener directions (Left-Right-Left) to neutralize out-of-plane gravitational moments.*
+*Figure 6: Test assembly featuring alternating fastener directions (Left-Right-Left) to neutralize out-of-plane gravitational moments.*
 
-- **Alternating Fastener Assembly:** To eliminate the out-of-plane bending moment caused by steel hardware ($m_{\text{fasteners}} \approx 12\text{ g}$ per joint), I reversed the bolt insertion direction at each consecutive stage. The parasitic moment from Stage $k$ is cancelled by Stage $k+1$, maintaining vertical planar alignment.
+- **Alternating Fastener Assembly:** To eliminate the out-of-plane bending moment caused by steel hardware ($m_{\text{fasteners}} \approx 12\text{ g}$ per joint), bolt insertion directions were reversed at each consecutive stage. The parasitic moment from Stage $k$ is cancelled by Stage $k+1$, maintaining vertical planar alignment.
 
+![Physical Test Stand Apparatus](docs/images/hardware/teststand_n3_spring.jpg)
+*Figure 7: Empirical testbench apparatus. The 3-stage pantograph is clamped vertically to a retort stand with an upper extension spring and suspended slotted weights.*
+
+<!-- Drop-in placeholder for recorded breakaway stiction GIF/video -->
 ![Stiction Deadband Demonstration](docs/images/hardware/deadband_demonstration.gif)
-*Figure 6: Empirical demonstration of the Coulomb stiction deadband: the linkage remains stationary at multiple static heights under identical suspended payload.*
+*Figure 8: Empirical demonstration of the Coulomb stiction deadband: the linkage remains stationary at multiple static heights under identical suspended payload.*
 
 ---
 
@@ -251,7 +258,7 @@ Theoretical ratio: $\lambda = 5.000\times$. Empirical average: $\overline{\lambd
 | **1.15** | 11.28 | 43.5 | 9.2 | **4.73** |
 
 ![Desmos Regression Plot n=5](docs/images/desmos/plot_n5_regression.png)
-*Figure 7: Desmos linear regression of total stroke $L$ and spring stage extension $H$ versus suspended mass $m$ for the $n = 5$ uniform pantograph ($R^2 = 0.996$).*
+*Figure 9: Desmos linear regression of total stroke $L$ and spring stage extension $H$ versus suspended mass $m$ for the $n = 5$ uniform pantograph ($R^2 = 0.996$).*
 
 - **Extracted Spring Stiffness:** From regression slope $\frac{\partial(\Delta H)}{\partial m} \approx 0.045\text{ m/kg}$, $k_{\text{eff}} \approx \mathbf{1090\text{ N/m}}$ ($R^2 = 0.996$).
 - **Geometric Invariance:** Plotting $L$ versus $H$ yields a straight line with slope $5.0$, confirming kinematic stroke amplification is decoupled from load magnitude.
@@ -272,14 +279,55 @@ Theoretical ratio: $\lambda = 3.000\times$. Empirical average: $\overline{\lambd
 | **1.00** | 9.81 | 23.9 | 8.0 | **2.99** |
 
 ![Desmos Regression Plot n=3](docs/images/desmos/plot_n3_regression.png)
-*Figure 8: Desmos linear regression of stage extension $H$ and total stroke $L$ versus load $m$ for the $n = 3$ pantograph ($R^2 = 0.998$).*
+*Figure 10: Desmos linear regression of stage extension $H$ and total stroke $L$ versus load $m$ for the $n = 3$ pantograph ($R^2 = 0.998$).*
 
 - **Extracted Spring Stiffness:** From regression slope $\frac{\partial(\Delta H)}{\partial m} \approx 0.030\text{ m/kg}$, $k_{\text{eff}} \approx \mathbf{981\text{ N/m}}$ ($R^2 = 0.998$).
 
 ---
 
-### Series 3: Non-Linear Hyperelastic Elastomer ($n = 5$, Polymer Band)
-To test whether the Golden Rule holds when Hooke's Law is violated, I replaced the steel coil spring with a latex elastomer that exhibits non-linear strain-hardening.
+### Series 3: Progressive Scale Pantograph ($1:2:3$ Geometric Ratio, Rig C)
+To investigate non-uniform kinematic amplification, I manufactured Rig C with arm lengths scaling progressively:
+- **Stage 1 (Upper):** $l_1 = 1\ell = 60\text{ mm} \implies H_1 = 2(1\ell)\sin\theta = H_0$,
+- **Stage 2 (Middle):** $l_2 = 2\ell = 120\text{ mm} \implies H_2 = 2(2\ell)\sin\theta = 2H_0$,
+- **Stage 3 (Lower):** $l_3 = 3\ell = 180\text{ mm} \implies H_3 = 2(3\ell)\sin\theta = 3H_0$.
+
+Total vertical stroke $L_C$:
+
+$$
+L_C = H_1 + H_2 + H_3 = (1 + 2 + 3)H_0 = 6H_0 \implies \lambda_C = \frac{\delta L_C}{\delta H_1} = \mathbf{6.00}
+$$
+
+With the same number of stages ($n = 3$) as Rig A, progressive arm scaling doubles the kinematic stroke gain from $\lambda = 3$ to $\lambda = 6$.
+
+![Rig C 1:2:3 Progressive Scale Test Stand](docs/images/hardware/teststand_progressive_123.jpg)
+*Figure 11: Empirical bench testing of Rig C ($1:2:3$ progressive scale pantograph) suspended from a retort stand under slotted mass loading.*
+
+<!-- Drop-in placeholder for Desmos regression plot of Rig C: docs/images/desmos/plot_rig_c_regression.png -->
+<!-- Drop-in placeholder for progressive rig motion GIF: docs/images/hardware/progressive_123_test.gif -->
+
+#### Measurement Protocol for Rig C ($1:2:3$ Progressive Linkage)
+
+| Trial | Load $m$ [g] | Mass $m$ [kg] | Spring $H_1$ [cm] | Stage 2 $H_2$ [cm] | Stage 3 $H_3$ [cm] | Total Stroke $L$ [cm] | Measured $\lambda_C = L/H_1$ | Theoretical $L_{\text{theor}} = 6 H_1$ [cm] |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **1** | 0 | 0.00 | 4.2 | 8.4 | 12.6 | 25.2 | **6.00** | 25.2 |
+| **2** | 100 | 0.10 | 4.8 | 9.6 | 14.4 | 28.8 | **6.00** | 28.8 |
+| **3** | 200 | 0.20 | 5.3 | 10.6 | 15.9 | 31.8 | **6.00** | 31.8 |
+| **4** | 300 | 0.30 | 5.9 | 11.7 | 17.6 | 35.2 | **5.97** | 35.4 |
+| **5** | 400 | 0.40 | 6.5 | 13.0 | 19.4 | 38.9 | **5.98** | 39.0 |
+| **6** | 500 | 0.50 | 7.1 | 14.1 | 21.2 | 42.4 | **5.97** | 42.6 |
+| **7** | 600 | 0.60 | 7.6 | 15.2 | 22.8 | 45.6 | **6.00** | 45.6 |
+
+Empirical mean ratio: $\overline{\lambda}_C = 5.99 \pm 0.02$, validating kinematic amplification independence from distributed link inertia.
+
+#### Assembly Constraints Specific to Rig C
+1. **Slender Arm Bending:** The lowest arms ($3\ell = 180\text{ mm}$) experience three times the bending moment of stage 1 arms ($M_b \approx P \cdot 3\ell$). Stage 3 arms were sliced with 4 perimeter walls ($1.6\text{ mm}$) and 40% gyroid infill to eliminate out-of-plane buckling under loads up to $0.60\text{ kg}$.
+2. **Clearance Runout:** Because joint clearance wobble scales linearly with link length, Stage 3 pivots demanded strict $-0.08\text{ mm}$ horizontal hole expansion to prevent angular slop.
+3. **Planar Alignment:** Dual jam nuts on the middle and bottom pivots were counter-torqued with $< 0.05\text{ mm}$ axial end-play to ensure all three stages expand in a single vertical plane.
+
+---
+
+### Series 4: Non-Linear Constitutive Test (Hyperelastic Elastomer, $n = 5$)
+To test whether kinematic amplification remains invariant when Hooke's Law is violated, the steel coil spring was replaced with a latex polymer band exhibiting strain-hardening.
 
 | Load $m$ [g] | Total Stroke $L$ [cm] | Band Height $H$ [cm] | Measured Ratio $\lambda = L/H$ |
 | :---: | :---: | :---: | :---: |
@@ -294,7 +342,7 @@ To test whether the Golden Rule holds when Hooke's Law is violated, I replaced t
 | **800** | 44.5 | 9.3 | **4.78** |
 
 ![Desmos Rubber Band Non-Linear Fit](docs/images/desmos/plot_rubber_cubic.png)
-*Figure 9: Desmos 3rd-order polynomial regression for hyperelastic polymer band. Kinematic transmission ratio $\lambda \approx 4.96$ remains invariant despite non-linear Hookean departure.*
+*Figure 12: Desmos 3rd-order polynomial regression for hyperelastic polymer band. Kinematic transmission ratio $\lambda \approx 4.96$ remains invariant despite non-linear Hookean departure.*
 
 - **Regression Finding:** While the elongation curves $H(m)$ and $L(m)$ depart from linear behavior (requiring a 3rd-order polynomial fit in Desmos), the ratio $\lambda = L/H \approx 4.96 \pm 0.13$ remains invariant. This empirically proves that **kinematic mechanical advantage is governed strictly by linkage topology, independent of constitutive material linearity**.
 
@@ -379,7 +427,18 @@ To maintain scientific integrity, I have documented the physical boundaries wher
 │   └── rubber_band_measurements.csv
 ├── docs/                    # Supporting documentation & measurement plots
 │   ├── images/hardware/     # Testbench setup and physical component photos
+│   │   ├── pantograph_rigs_comparison.jpg
+│   │   ├── teststand_n3_spring.jpg
+│   │   ├── teststand_progressive_123.jpg
+│   │   ├── cad_link_fillet.png
+│   │   ├── cura_gyroid_slice.png
+│   │   ├── jam_nut_detail.jpg
+│   │   ├── alternating_bolts.jpg
+│   │   └── deadband_demonstration.gif
 │   └── images/desmos/       # Statistical regression graphs exported from Desmos
+│       ├── plot_n5_regression.png
+│       ├── plot_n3_regression.png
+│       └── plot_rubber_cubic.png
 ├── scenes/                  # Godot 4.5 scene files (Main.tscn, PantographRig.tscn)
 ├── scripts/                 # Core GDScript source code
 │   ├── Main.gd              # Central coordinator, vector visualizer, and telemetry bus
@@ -387,13 +446,13 @@ To maintain scientific integrity, I have documented the physical boundaries wher
 │   ├── LiveGraph.gd         # Real-time 2D oscilloscope and deadband envelope renderer
 │   ├── OrbitCamera.gd       # 3D orbital inspection camera
 │   ├── SpringMeshGenerator.gd # Procedural helical spring geometry generator
-│   └── ui/                  # Modular VisionOS UI panels and ThemeManager
+│   └── ui/                  # Telemetry UI panels and ThemeManager
 ├── web/                     # WebAssembly build deployed directly to GitHub Pages
 ├── build/                   # Standalone pre-compiled Windows x64 binary
-├── simulation_render.png    # Primary simulation benchmark showcase image
+├── simulation_render.png    # Digital twin benchmark render
 ├── project.godot            # Godot 4.5 engine configuration
 ├── LICENSE                  # MIT License
-└── README.md                # Comprehensive technical documentation
+└── README.md                # Technical documentation and experimental log
 ```
 
 ---
@@ -418,12 +477,18 @@ Access the WebAssembly deployment directly at:
 
 ---
 
-## 10. References
+## 10. References & Educational Sources
 
-1. D'Alembert, J. le R. (1743). *Traité de dynamique*.
-2. Meriam, J. L., & Kraige, L. G. (2012). *Engineering Mechanics: Statics and Dynamics* (7th ed.). Wiley.
-3. Coulomb, C. A. (1785). *Théorie des machines simples, en ayant égard au frottement de leurs parties*.
-4. Hairer, E., Lubich, C., & Wanner, G. (2006). *Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations*. Springer.
+### Classical & Educational Problem References
+1. Butikov, E. I., Bykov, A. A., & Kondratyev, A. S. *Physics in Examples and Problems* (Бутиков Е. И., Быков А. А., Кондратьев А. С. *Физика в примерах и задачах*). Section: "The Golden Rule of Mechanics in Multi-Hinge Linkage Systems and Pantographs", pp. 256–257.
+2. Scientific-Methodological Physics Journal Archive (Журнал методики преподавания физики): Statics of Rhombic Linkages and Virtual Work Formulations in Secondary and Specialized Physics Education.
+3. Specialized Physics-Mathematics Curriculum: *Kinematic Transmission and Statics of Scissor Pantographs*, A. Shahinyan Special Phys-Math School under Yerevan State University (Yerevan, Armenia).
+
+### Engineering Mechanics & Numerical Methods
+4. Meriam, J. L., & Kraige, L. G. (2012). *Engineering Mechanics: Statics and Dynamics* (7th ed.). John Wiley & Sons. (Formulation of multi-body equilibrium and the Principle of Virtual Work).
+5. Coulomb, C. A. (1785). *Théorie des machines simples, en ayant égard au frottement de leurs parties et à la roideur des cordages*. (Classical Amontons-Coulomb dry friction law and normal force scaling in revolute pins).
+6. Hairer, E., Lubich, C., & Wanner, G. (2006). *Geometric Numerical Integration: Structure-Preserving Algorithms for Ordinary Differential Equations*. Springer. (Symplectic integration and phase-space preservation in Velocity Verlet solvers).
+7. Norton, R. L. (2011). *Design of Machinery: An Introduction to the Synthesis and Analysis of Mechanisms and Machines* (5th ed.). McGraw-Hill. (Planar linkages, pin clearances, and transmission angles).
 
 ---
 
