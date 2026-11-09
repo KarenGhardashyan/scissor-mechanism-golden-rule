@@ -326,29 +326,32 @@ flowchart TD
 ```
 
 ### Numerical Implementation Details
-1. **Sub-Stepped Velocity Verlet Integrator:**
-   The stage coordinate $H$ is updated using 400 Hz sub-steps ($\Delta t = 2.5\text{ ms}$) to prevent energy drift during un-damped oscillations:
 
-   $$
-   H_{t + \Delta t} = H_t + v_t \Delta t + \frac{1}{2} a_t \Delta t^2
-   $$
+#### 1. Sub-Stepped Velocity Verlet Integrator
+The stage coordinate $H$ is updated using 400 Hz sub-steps ($\Delta t = 2.5\text{ ms}$) to prevent energy drift during un-damped oscillations:
 
-   $$
-   v_{t + \Delta t} = v_t + \frac{1}{2} (a_t + a_{t + \Delta t}) \Delta t
-   $$
+$$
+H_{t + \Delta t} = H_t + v_t \Delta t + \frac{1}{2} a_t \Delta t^2
+$$
 
-2. **Physically Derived Coulomb Stiction Logic:**
-   The solver checks both kinetic velocity and static restoring acceleration against the physical threshold:
+$$
+v_{t + \Delta t} = v_t + \frac{1}{2} (a_t + a_{t + \Delta t}) \Delta t
+$$
 
-   $$
-   a_{\text{stiction}} = \frac{n \cdot \mu \cdot P_{\text{eff}}}{m_{\text{eff}}}
-   $$
+#### 2. Physically Derived Coulomb Stiction Logic
+The solver checks both kinetic velocity and static restoring acceleration against the physical threshold:
 
-   If $|v| < 2.5\text{ mm/s}$ and $|a_{\text{restoring}}| \le a_{\text{stiction}}$, the mechanism locks instantly, zeroing velocity and acceleration.
-3. **Pure Static Glide Mode:**
-   I implemented an `OSCILLATIONS: OFF` toggle. In this mode, inertial accelerations are bypassed, allowing the mechanism to glide directly to static equilibrium with Coulomb deadband holding. This enables direct inspection of static friction limits without waiting for oscillations to settle.
-4. **Synchronized 2D Oscilloscope (`LiveGraph.gd`):**
-   The real-time graph receives telemetry directly from the simulated rigs. It plots the theoretical regression curve alongside the shaded Coulomb uncertainty corridor ($\pm \Delta L_{\text{deadband}}$), showing students exactly where the physical linkage rests relative to ideal equilibrium.
+$$
+a_{\text{stiction}} = \frac{n \cdot \mu \cdot P_{\text{eff}}}{m_{\text{eff}}}
+$$
+
+If $|v| < 2.5\text{ mm/s}$ and $|a_{\text{restoring}}| \le a_{\text{stiction}}$, the mechanism locks instantly, zeroing velocity and acceleration.
+
+#### 3. Pure Static Glide Mode
+I implemented an `OSCILLATIONS: OFF` toggle. In this mode, inertial accelerations are bypassed, allowing the mechanism to glide directly to static equilibrium with Coulomb deadband holding. This enables direct inspection of static friction limits without waiting for oscillations to settle.
+
+#### 4. Synchronized 2D Oscilloscope (`LiveGraph.gd`)
+The real-time graph receives telemetry directly from the simulated rigs. It plots the theoretical regression curve alongside the shaded Coulomb uncertainty corridor ($\pm \Delta L_{\text{deadband}}$), showing students exactly where the physical linkage rests relative to ideal equilibrium.
 
 ---
 
