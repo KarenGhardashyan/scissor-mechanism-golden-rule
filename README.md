@@ -11,10 +11,16 @@
 ---
 
 > [▶ Launch Interactive Browser Simulation](https://karenghardashyan.github.io/scissor-mechanism-golden-rule/)  
-> *Runs in-browser via WebAssembly. Features real-time parameter sweeps ($m$, $k$, $\mu$, $g$), vector decomposition, dynamic vibration damping, and live experimental data overlays.*
+> Runs client-side in-browser via WebAssembly (Godot 4.5) without installation.
+>
+> ### 🎮 Web Simulation Quickstart Guide
+> - **Select Mechanism Topology:** Switch between **Rig A** ($n=3$ uniform), **Rig B** ($n=5$ uniform), and **Rig C** ($1:2:3$ progressive scale) using the top navigation bar.
+> - **Sweep Suspended Mass:** Drag the mass slider $m$ to inspect real-time kinematic extension and joint force vector scaling ($\mathbf{F}_y, \mathbf{R}$).
+> - **Inspect Coulomb Stiction Deadband:** Toggle **OSCILLATIONS: OFF** and adjust joint friction $\mu$ to inspect static friction holding and deadband envelopes without waiting for oscillations to settle.
+> - **Read Real-Time 2D Telemetry Scope:** Track dynamic stroke trajectories on `LiveGraph.gd`, comparing numerical simulation data directly against theoretical regression curves and empirical error corridors.
 
 > [Side-by-Side Video: Physical Rig vs. Digital Twin (Coming Soon)]  
-> *Demonstrating empirical bench oscillations against the 400 Hz numerical integrator.*
+> Demonstrating empirical bench oscillations against the 400 Hz numerical integrator.
 
 ![Digital Twin Simulation Benchmark](simulation_render.png)
 *Figure 1: Digital twin in Godot 4.5: real-time vector decomposition, telemetry scope, and 400 Hz Velocity Verlet kinematic solver.*
@@ -28,8 +34,8 @@ I initiated this research in 10th grade (Spring 2024) at the A. Shahinyan Specia
 In standard physics laboratory demonstrations, mechanical advantage is typically taught using static levers or pulleys. When evaluating multi-body scissor linkages on an empirical testbench, the mechanism departs from ideal kinematic textbook models. FDM 3D-printed revolute joints introduce Coulomb dry friction, pin clearance backlash, structural self-weight sag, and out-of-plane torsional compliance. Under static loading, joint friction creates a displacement deadband envelope where the linkage maintains equilibrium at a range of heights under constant mass.
 
 In 12th grade (2025–2026), I expanded the empirical data into a **Sim-to-Real research pipeline**. I developed an interactive 3D digital twin in Godot 4.5 using a custom 400 Hz Velocity Verlet numerical integrator. Rather than relying on rigid-body physics engine heuristics, the solver evaluates:
-- Exact joint force vector decomposition ($\vec{R}_{\text{upper}}$, $\vec{R}_{\text{down}}$),
-- Load-dependent Coulomb stiction thresholds ($F_{s,\max} = \mu \cdot R_{\text{down}}$),
+- Exact joint force vector decomposition for upper and lower stage reaction vectors ($\vec{R}_1, \vec{R}_2$),
+- Load-dependent Coulomb stiction threshold criteria ($F_{\text{friction}} \le \mu N$),
 - Distributed structural link mass compensation,
 - Quasistatic deadband envelopes matching benchtop empirical trials.
 
@@ -151,7 +157,13 @@ $$
 F_{\text{hold, vert}} = 2 \cdot (F_s \sin\theta) \le 2 \cdot \left(\mu \cdot \frac{P_{\text{eff}}}{2 \sin\theta}\right) \sin\theta = \mu \cdot P_{\text{eff}}
 $$
 
-The $\sin\theta$ term cancels identically. The total vertical force deadband is $\Delta P_{\text{hold}} = \mu \cdot P_{\text{eff}}$. Translating this load difference into stage displacement $\Delta H$ via spring stiffness $k$:
+The $\sin\theta$ term cancels identically, yielding a total vertical force deadband:
+
+$$
+\Delta P_{\text{hold}} = \mu \cdot P_{\text{eff}}
+$$
+
+Translating this load difference into stage displacement $\Delta H$ via spring stiffness $k$:
 
 $$
 \Delta H_{\text{deadband}} = \frac{n \cdot \mu \cdot P_{\text{eff}}}{k}
@@ -386,7 +398,7 @@ $$
 a_{\text{stiction}} = \frac{n \cdot \mu \cdot P_{\text{eff}}}{m_{\text{eff}}}
 $$
 
-If $|v| < 2.5\text{ mm/s}$ and $|a_{\text{restoring}}| \le a_{\text{stiction}}$, the mechanism locks instantly, zeroing velocity and acceleration.
+If velocity $|v| < 2.5\text{ mm/s}$ and restoring acceleration $|a| \le a_{\text{stiction}}$, the mechanism locks instantly, zeroing velocity and acceleration.
 
 #### 3. Pure Static Glide Mode
 I implemented an `OSCILLATIONS: OFF` toggle. In this mode, inertial accelerations are bypassed, allowing the mechanism to glide directly to static equilibrium with Coulomb deadband holding. This enables direct inspection of static friction limits without waiting for oscillations to settle.
