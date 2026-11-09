@@ -219,22 +219,22 @@ During benchtop testing, several mechanical failure modes were identified and sy
 
 ### Assembly Implementation Details
 
-![Dual Jam Nut Locking Mechanism](docs/images/hardware/jam_nut_detail.jpg)
-*Figure 5: Dual jam nut locking mechanism isolating thread pre-tension from scissor link rotational bearing surfaces.*
+The physical test assembly incorporates two primary hardware solutions to eliminate rotational binding and parasitic out-of-plane bending:
 
 - **The Jam Nut Locking System:** The primary nut is tightened until axial end-play is less than $0.05\text{ mm}$ while permitting free rotation. A second thin M4 nut is counter-torqued against the primary nut using two wrenches. This locks the thread pitch in shear without transferring clamping pressure to the plastic links.
+- **Alternating Fastener Assembly:** To eliminate the out-of-plane bending moment caused by steel hardware ($m_{\text{fasteners}} \approx 12\text{ g}$ per joint), bolt insertion directions were reversed at each consecutive stage (Left-Right-Left). The parasitic moment from Stage $k$ is cancelled by Stage $k+1$, maintaining vertical planar alignment.
+
+![Dual Jam Nut Locking Mechanism](docs/images/hardware/jam_nut_detail.jpg)
+*Figure 5: Macro close-up of the dual jam nut locking system isolating thread pre-tension from scissor link rotational bearing surfaces.*
 
 ![Alternating Fastener Pattern](docs/images/hardware/alternating_bolts.jpg)
-*Figure 6: Test assembly featuring alternating fastener directions (Left-Right-Left) to neutralize out-of-plane gravitational moments.*
-
-- **Alternating Fastener Assembly:** To eliminate the out-of-plane bending moment caused by steel hardware ($m_{\text{fasteners}} \approx 12\text{ g}$ per joint), bolt insertion directions were reversed at each consecutive stage. The parasitic moment from Stage $k$ is cancelled by Stage $k+1$, maintaining vertical planar alignment.
+*Figure 6: Close-up of alternating Left-Right-Left fastener arrangement along vertical scissor arms to balance fastener mass.*
 
 ![Physical Test Stand Apparatus](docs/images/hardware/teststand_n3_spring.jpg)
-*Figure 7: Empirical testbench apparatus. The 3-stage pantograph is clamped vertically to a retort stand with an upper extension spring and suspended slotted weights.*
+*Figure 7: Physical benchtop test stand showing vertically suspended pantograph with calibrated slotted masses and upper extension spring.*
 
-<!-- Drop-in placeholder for recorded breakaway stiction GIF/video -->
 ![Stiction Deadband Demonstration](docs/images/hardware/deadband_demonstration.gif)
-*Figure 8: Empirical demonstration of the Coulomb stiction deadband: the linkage remains stationary at multiple static heights under identical suspended payload.*
+*Figure 8: Empirical demonstration of Coulomb static holding: static friction maintains linkage equilibrium across a stroke envelope without motion.*
 
 ---
 
@@ -285,49 +285,8 @@ Theoretical ratio: $\lambda = 3.000\times$. Empirical average: $\overline{\lambd
 
 ---
 
-### Series 3: Progressive Scale Pantograph ($1:2:3$ Geometric Ratio, Rig C)
-To investigate non-uniform kinematic amplification, I manufactured Rig C with arm lengths scaling progressively:
-- **Stage 1 (Upper):** $l_1 = 1\ell = 60\text{ mm} \implies H_1 = 2(1\ell)\sin\theta = H_0$,
-- **Stage 2 (Middle):** $l_2 = 2\ell = 120\text{ mm} \implies H_2 = 2(2\ell)\sin\theta = 2H_0$,
-- **Stage 3 (Lower):** $l_3 = 3\ell = 180\text{ mm} \implies H_3 = 2(3\ell)\sin\theta = 3H_0$.
-
-Total vertical stroke $L_C$:
-
-$$
-L_C = H_1 + H_2 + H_3 = (1 + 2 + 3)H_0 = 6H_0 \implies \lambda_C = \frac{\delta L_C}{\delta H_1} = \mathbf{6.00}
-$$
-
-With the same number of stages ($n = 3$) as Rig A, progressive arm scaling doubles the kinematic stroke gain from $\lambda = 3$ to $\lambda = 6$.
-
-![Rig C 1:2:3 Progressive Scale Test Stand](docs/images/hardware/teststand_progressive_123.jpg)
-*Figure 11: Empirical bench testing of Rig C ($1:2:3$ progressive scale pantograph) suspended from a retort stand under slotted mass loading.*
-
-<!-- Drop-in placeholder for Desmos regression plot of Rig C: docs/images/desmos/plot_rig_c_regression.png -->
-<!-- Drop-in placeholder for progressive rig motion GIF: docs/images/hardware/progressive_123_test.gif -->
-
-#### Measurement Protocol for Rig C ($1:2:3$ Progressive Linkage)
-
-| Trial | Load $m$ [g] | Mass $m$ [kg] | Spring $H_1$ [cm] | Stage 2 $H_2$ [cm] | Stage 3 $H_3$ [cm] | Total Stroke $L$ [cm] | Measured $\lambda_C = L/H_1$ | Theoretical $L_{\text{theor}} = 6 H_1$ [cm] |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1** | 0 | 0.00 | 4.2 | 8.4 | 12.6 | 25.2 | **6.00** | 25.2 |
-| **2** | 100 | 0.10 | 4.8 | 9.6 | 14.4 | 28.8 | **6.00** | 28.8 |
-| **3** | 200 | 0.20 | 5.3 | 10.6 | 15.9 | 31.8 | **6.00** | 31.8 |
-| **4** | 300 | 0.30 | 5.9 | 11.7 | 17.6 | 35.2 | **5.97** | 35.4 |
-| **5** | 400 | 0.40 | 6.5 | 13.0 | 19.4 | 38.9 | **5.98** | 39.0 |
-| **6** | 500 | 0.50 | 7.1 | 14.1 | 21.2 | 42.4 | **5.97** | 42.6 |
-| **7** | 600 | 0.60 | 7.6 | 15.2 | 22.8 | 45.6 | **6.00** | 45.6 |
-
-Empirical mean ratio: $\overline{\lambda}_C = 5.99 \pm 0.02$, validating kinematic amplification independence from distributed link inertia.
-
-#### Assembly Constraints Specific to Rig C
-1. **Slender Arm Bending:** The lowest arms ($3\ell = 180\text{ mm}$) experience three times the bending moment of stage 1 arms ($M_b \approx P \cdot 3\ell$). Stage 3 arms were sliced with 4 perimeter walls ($1.6\text{ mm}$) and 40% gyroid infill to eliminate out-of-plane buckling under loads up to $0.60\text{ kg}$.
-2. **Clearance Runout:** Because joint clearance wobble scales linearly with link length, Stage 3 pivots demanded strict $-0.08\text{ mm}$ horizontal hole expansion to prevent angular slop.
-3. **Planar Alignment:** Dual jam nuts on the middle and bottom pivots were counter-torqued with $< 0.05\text{ mm}$ axial end-play to ensure all three stages expand in a single vertical plane.
-
----
-
-### Series 4: Non-Linear Constitutive Test (Hyperelastic Elastomer, $n = 5$)
-To test whether kinematic amplification remains invariant when Hooke's Law is violated, the steel coil spring was replaced with a latex polymer band exhibiting strain-hardening.
+### Series 3: Non-Linear Constitutive Test (Hyperelastic Latex Band, $n = 5$)
+To test whether kinematic amplification remains invariant when Hooke's Law is violated, the steel coil spring was replaced with a latex polymer band exhibiting non-linear strain-hardening ($m \in [0, 800\text{ g}]$).
 
 | Load $m$ [g] | Total Stroke $L$ [cm] | Band Height $H$ [cm] | Measured Ratio $\lambda = L/H$ |
 | :---: | :---: | :---: | :---: |
@@ -342,12 +301,35 @@ To test whether kinematic amplification remains invariant when Hooke's Law is vi
 | **800** | 44.5 | 9.3 | **4.78** |
 
 ![Desmos Rubber Band Non-Linear Fit](docs/images/desmos/plot_rubber_cubic.png)
-*Figure 12: Desmos 3rd-order polynomial regression for hyperelastic polymer band. Kinematic transmission ratio $\lambda \approx 4.96$ remains invariant despite non-linear Hookean departure.*
+*Figure 11: Desmos 3rd-order polynomial regression for hyperelastic polymer band. Kinematic transmission ratio $\lambda \approx 4.96 \pm 0.13$ remains invariant despite non-linear Hookean departure.*
 
 - **Regression Finding:** While the elongation curves $H(m)$ and $L(m)$ depart from linear behavior (requiring a 3rd-order polynomial fit in Desmos), the ratio $\lambda = L/H \approx 4.96 \pm 0.13$ remains invariant. This empirically proves that **kinematic mechanical advantage is governed strictly by linkage topology, independent of constitutive material linearity**.
 
 ---
 
+### Series 4: Progressive Scale Pantograph ($1:2:3$ Linkage Ratio, Rig C)
+To investigate non-uniform geometric scaling, I manufactured Rig C with arm lengths scaling progressively across stages:
+- **Stage 1 (Upper):** $l_1 = 1\ell = 60\text{ mm} \implies H_1 = 2(1\ell)\sin\theta = H_0$,
+- **Stage 2 (Middle):** $l_2 = 2\ell = 120\text{ mm} \implies H_2 = 2(2\ell)\sin\theta = 2H_0$,
+- **Stage 3 (Lower):** $l_3 = 3\ell = 180\text{ mm} \implies H_3 = 2(3\ell)\sin\theta = 3H_0$.
+
+Total theoretical vertical stroke $L_C$:
+
+$$
+L_C = H_1 + H_2 + H_3 = (1 + 2 + 3)H_0 = 6H_0 \implies \lambda_C = \frac{\delta L_C}{\delta H_1} = \mathbf{6.00}
+$$
+
+Rig C was designed, printed, and assembled as a physical proof-of-concept demonstrator to evaluate geometric scaling feasibility, pin clearance tolerances, and out-of-plane torsional stability under large asymmetric lever arms ($3\ell = 180\text{ mm}$). Quantitative load-displacement datasets were recorded strictly for Series 1 ($n=5$ spring), Series 2 ($n=3$ spring), and Series 3 ($n=5$ latex band); Rig C serves as an experimental engineering prototype demonstrating progressive linkage mechanics.
+
+![Rig C 1:2:3 Progressive Scale Test Stand](docs/images/hardware/teststand_progressive_123.jpg)
+*Figure 12: Physical proof-of-concept prototype of Rig C ($1:2:3$ progressive scale pantograph) mounted to the vertical retort stand for out-of-plane deflection and joint clearance evaluation.*
+
+#### Assembly Constraints Specific to Rig C
+1. **Slender Arm Bending:** The lowest arms ($3\ell = 180\text{ mm}$) experience three times the bending moment of stage 1 arms ($M_b \approx P \cdot 3\ell$). Stage 3 arms were sliced with 4 perimeter walls ($1.6\text{ mm}$) and 40% gyroid infill to eliminate out-of-plane buckling under load.
+2. **Clearance Runout:** Because joint clearance wobble scales linearly with link length, Stage 3 pivots demanded strict $-0.08\text{ mm}$ horizontal hole expansion to prevent angular slop.
+3. **Planar Alignment:** Dual jam nuts on the middle and bottom pivots were counter-torqued with $< 0.05\text{ mm}$ axial end-play to ensure all three stages expand in a single vertical plane.
+
+---
 ## 6. Digital Twin Architecture (Godot 4.5)
 
 To bridge my physical findings with dynamic simulation, I developed a 3D digital twin in Godot 4.5. Rather than using Godot's built-in 3D rigid-body physics (which uses impulse approximations for games), I built a custom numerical solver in GDScript running at 400 Hz.
