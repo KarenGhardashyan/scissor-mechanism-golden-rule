@@ -103,9 +103,9 @@ Now let an elastic tension element (a steel coil spring) be attached across the 
 
 Applying the Principle of Virtual Work to a virtual displacement $\delta \theta$:
 \begin{equation}
-    \delta W = \delta W_{\text{in}} - \delta W_{\text{out}} = 0
+    \delta W = \delta W_{\mathrm{in}} - \delta W_{\mathrm{out}} = 0
 \end{equation}
-where $\delta W_{\text{in}} = T \cdot \delta H$ is the virtual work performed by the internal tension spring as the top stage compresses/extends by $\delta H$, and $\delta W_{\text{out}} = P \cdot \delta L$ is the virtual work done on the suspended payload over the total mechanism stroke $\delta L$.
+where $\delta W_{\mathrm{in}} = T \cdot \delta H$ is the virtual work performed by the internal tension spring as the top stage compresses/extends by $\delta H$, and $\delta W_{\mathrm{out}} = P \cdot \delta L$ is the virtual work done on the suspended payload over the total mechanism stroke $\delta L$.
 
 Differentiating Eq.~\eqref{eq:total_span} with respect to $H$:
 \begin{equation}
@@ -125,39 +125,39 @@ Equation~\eqref{eq:ideal_force_ratio} represents the ideal Golden Rule of Mechan
 
 In any physical apparatus, the structural mass of the 3D-printed plastic linkages cannot be neglected. Standard textbook treatments treat linkages as massless lines, leading to significant systematic discrepancies between theory and experimental measurements.
 
-Let $m_{\text{link}}$ denote the mass of a single cross-arm. Each rhombic stage consists of two full overlapping cross-bars (or four perimeter links), yielding an effective mass per stage of:
+Let $m_{\mathrm{link}}$ denote the mass of a single cross-arm. Each rhombic stage consists of two full overlapping cross-bars (or four perimeter links), yielding an effective mass per stage of:
 \begin{equation}
-    m_{\text{stage}} \approx 2 m_{\text{link}}
+    m_{\mathrm{stage}} \approx 2 m_{\mathrm{link}}
 \end{equation}
-The total structural weight of an $n$-stage pantograph is $P_w = n \cdot m_{\text{stage}} \cdot g$.
+The total structural weight of an $n$-stage pantograph is $P_w = n \cdot m_{\mathrm{stage}} \cdot g$.
 
 Because the linkage is distributed along the vertical coordinate $z$, each individual stage $i$ (indexed from top $i=1$ to bottom $i=n$) possesses a local center of mass located at:
 \begin{equation}
     z_i = \left( i - \frac{1}{2} \right) H
 \end{equation}
 
-The total gravitational potential energy $U_{\text{links}}$ stored in the linkage assembly is the sum over all $n$ stages:
+The total gravitational potential energy $U_{\mathrm{links}}$ stored in the linkage assembly is the sum over all $n$ stages:
 \begin{align}
-    U_{\text{links}} &= \sum_{i=1}^n m_{\text{stage}} g z_i \nonumber \\
-    &= m_{\text{stage}} g H \sum_{i=1}^n \left( i - \frac{1}{2} \right) \nonumber \\
-    &= m_{\text{stage}} g H \left[ \frac{n(n+1)}{2} - \frac{n}{2} \right] \nonumber \\
-    &= m_{\text{stage}} g H \frac{n^2}{2}
+    U_{\mathrm{links}} &= \sum_{i=1}^n m_{\mathrm{stage}} g z_i \nonumber \\
+    &= m_{\mathrm{stage}} g H \sum_{i=1}^n \left( i - \frac{1}{2} \right) \nonumber \\
+    &= m_{\mathrm{stage}} g H \left[ \frac{n(n+1)}{2} - \frac{n}{2} \right] \nonumber \\
+    &= m_{\mathrm{stage}} g H \frac{n^2}{2}
     \label{eq:u_links_sum}
 \end{align}
-Recalling that $n \cdot m_{\text{stage}} g = P_w$ and $n H = L$:
+Recalling that $n \cdot m_{\mathrm{stage}} g = P_w$ and $n H = L$:
 \begin{equation}
-    U_{\text{links}} = P_w \frac{n H}{2} = P_w \frac{L}{2}
+    U_{\mathrm{links}} = P_w \frac{n H}{2} = P_w \frac{L}{2}
     \label{eq:u_links_final}
 \end{equation}
-Equation~\eqref{eq:u_links_final} yields an extraordinarily elegant result: the distributed self-weight of the entire multi-stage pantograph acts identically to a single point mass equal to $P_w$ positioned at the exact mid-stroke of the mechanism ($S_{\text{cm}} = L/2$).
+Equation~\eqref{eq:u_links_final} yields an extraordinarily elegant result: the distributed self-weight of the entire multi-stage pantograph acts identically to a single point mass equal to $P_w$ positioned at the exact mid-stroke of the mechanism ($S_{\mathrm{cm}} = L/2$).
 
-Including $U_{\text{links}}$ in the work-energy balance:
+Including $U_{\mathrm{links}}$ in the work-energy balance:
 \begin{equation}
-    T \cdot \delta H = P \cdot \delta L + \frac{\partial U_{\text{links}}}{\partial H} \delta H
+    T \cdot \delta H = P \cdot \delta L + \frac{\partial U_{\mathrm{links}}}{\partial H} \delta H
 \end{equation}
 Differentiating Eq.~\eqref{eq:u_links_final} with respect to $H$:
 \begin{equation}
-    \frac{\partial U_{\text{links}}}{\partial H} = \frac{n P_w}{2}
+    \frac{\partial U_{\mathrm{links}}}{\partial H} = \frac{n P_w}{2}
 \end{equation}
 Hence:
 \begin{equation}
@@ -297,14 +297,14 @@ All physical linkages were modeled parametrically in SolidWorks 2024 (Fig.~\ref{
     \label{fig:cad_and_slicing}
 \end{figure}
 
-A critical design feature is the application of $R = 5.0\text{ mm}$ full-radius fillets at all link ends. Without filleting, sharp square corners collide during scissor compression, severely limiting minimum stroke and creating high stress concentrations ($\sigma_{\text{max}}$) around the pivot holes under high loads.
+A critical design feature is the application of $R = 5.0\text{ mm}$ full-radius fillets at all link ends. Without filleting, sharp square corners collide during scissor compression, severely limiting minimum stroke and creating high stress concentrations ($\sigma_{\mathrm{max}}$) around the pivot holes under high loads.
 
 \subsection{Cura Slicing Strategy \& DFAM Constraints}
 
 Toolpaths were generated using Ultimaker Cura 5.x targeted for generic Polylactic Acid (PLA) on a desktop FDM printer (Fig.~\ref{fig:cad_and_slicing}b). To ensure physical fidelity with theoretical assumptions, several parameters were specifically tuned:
 \begin{itemize}
     \item \textbf{Layer Resolution ($0.1\text{ mm}$):} Fine layer height was selected to minimize surface stair-stepping on the flat faces, drastically reducing plastic-on-plastic Coulomb friction between overlapping links.
-    \item \textbf{Wall Thickness ($1.2\text{ mm}$, 3 perimeters):} Pure tensile and compressive loads induce out-of-plane buckling moments. Three full concentric perimeters provide high structural bending rigidity ($E I_{yy}$).
+    \item \textbf{Wall Thickness ($1.2\text{ mm}$, 3 perimeters):} Pure tensile and compressive loads induce out-of-plane buckling moments. Three full concentric perimeters provide high structural bending rigidity ($E I_{\mathrm{yy}}$).
     \item \textbf{Infill Density ($50\%$, Gyroid pattern):} Selected for isotropic shear resistance and internal mass balance.
     \item \textbf{Hole Clearance Calibration ($-0.08\text{ mm}$):} FDM printers commonly experience thermoplastic shrinkage and nozzle over-extrusion inside circular boundaries. Horizontal hole expansion was tuned to ensure pivot holes printed at precisely $\varnothing 4.05\text{ mm}$, providing an ideal clearance fit over standard $4.0\text{ mm}$ steel axle bolts.
 \end{itemize}
@@ -356,8 +356,8 @@ Metrology instrumentation comprised:
 
 To maintain rigorous scientific standards, three distinct physical sources of measurement error were identified, isolated, and quantified:
 \begin{enumerate}
-    \item \textbf{Joint Backlash ($\delta_{\text{clearance}}$):} The pin-hole clearance ($\approx +0.15\text{ mm}$) allows micro-play at each pivot. Over $n=5$ stacked rhombuses (comprising 16 pin joints), cumulative vertical backlash produces a baseline resting sag of approximately $\pm 1.2\text{ mm}$.
-    \item \textbf{Coulomb Sliding Friction Hysteresis ($\delta_{\text{friction}}$):} Despite $0.1\text{ mm}$ layer resolution and PTFE lubrication, dry friction between adjacent PLA faces creates an energy deadband. Measurements during loading versus unloading exhibited a small hysteretic loop of $\pm 1.5\text{ mm}$. All reported data points represent the mean of three loading/unloading cycles after gentle mechanical tapping to settle the system into true static equilibrium.
+    \item \textbf{Joint Backlash ($\delta_{\mathrm{clearance}}$):} The pin-hole clearance ($\approx +0.15\text{ mm}$) allows micro-play at each pivot. Over $n=5$ stacked rhombuses (comprising 16 pin joints), cumulative vertical backlash produces a baseline resting sag of approximately $\pm 1.2\text{ mm}$.
+    \item \textbf{Coulomb Sliding Friction Hysteresis ($\delta_{\mathrm{friction}}$):} Despite $0.1\text{ mm}$ layer resolution and PTFE lubrication, dry friction between adjacent PLA faces creates an energy deadband. Measurements during loading versus unloading exhibited a small hysteretic loop of $\pm 1.5\text{ mm}$. All reported data points represent the mean of three loading/unloading cycles after gentle mechanical tapping to settle the system into true static equilibrium.
     \item \textbf{Viscoelastic Creep in Elastomers:} Under loads exceeding $0.7\text{ kg}$, latex rubber bands exhibited time-dependent creep strain ($0.2\text{ mm/min}$). Readings for the rubber rig were therefore strictly standardized at $t = 15\text{ s}$ post-loading.
 \end{enumerate}
 
@@ -534,7 +534,7 @@ To validate the progressive cascade theory developed in Section~II-D, Mechanism~
 \centering
 \footnotesize
 \setlength{\tabcolsep}{3.2pt}
-\caption{Evaluation Matrix for Progressive Cascade Mechanism~C ($\lambda_{\text{theor}} = 6.00$).}
+\caption{Evaluation Matrix for Progressive Cascade Mechanism~C ($\lambda_{\mathrm{theor}} = 6.00$).}
 \label{tab:progressive_c}
 \begin{tabular}{@{}cccc@{}}
 \toprule
@@ -569,28 +569,28 @@ To complete the Sim-to-Real loop and make this work universally accessible to st
 
 The simulator executes a unified physical pipeline:
 \begin{enumerate}
-    \item \textbf{Parametric Kinematic Solver:} Evaluates instantaneous stage height $H$ and total span $L$ directly matching the physical SolidWorks dimensions ($l_0 = 0.06\text{ m}$, $H_0 = 0.075\text{ m}$, $m_{\text{stage}} = 0.05\text{ kg}$).
-    \item \textbf{Dynamic Work Telemetry:} In every frame, the simulator calculates the effective load $P_{\text{eff}} = (m + \frac{n}{2} m_{\text{link}})g$, tensile force $T = \frac{n P_{\text{eff}}}{\eta}$, and verifies the virtual work balance $\delta A_{\text{in}} \cdot \eta = \delta A_{\text{out}}$.
+    \item \textbf{Parametric Kinematic Solver:} Evaluates instantaneous stage height $H$ and total span $L$ directly matching the physical SolidWorks dimensions ($l_0 = 0.06\text{ m}$, $H_0 = 0.075\text{ m}$, $m_{\mathrm{stage}} = 0.05\text{ kg}$).
+    \item \textbf{Dynamic Work Telemetry:} In every frame, the simulator calculates the effective load $P_{\mathrm{eff}} = (m + \frac{n}{2} m_{\mathrm{link}})g$, tensile force $T = \frac{n P_{\mathrm{eff}}}{\eta}$, and verifies the virtual work balance $\delta A_{\mathrm{in}} \cdot \eta = \delta A_{\mathrm{out}}$.
     \item \textbf{Real-Time Desmos Graphing Engine:} A 2D procedural plotting module graphs analytical $L(m)$ curves overlaid against real laboratory experimental scatter points.
 \end{enumerate}
 
-\subsection{400 Hz Velocity Verlet Symplectic Numerical Integrator}
+\subsection{400~Hz Velocity Verlet Symplectic Numerical Integrator}
 
-A recurring limitation in commercial educational physics simulations is numerical instability or energy drift when modeling stiff oscillatory linkages. To ensure strict physical fidelity, the dynamic solver implements a sub-stepped \textbf{Velocity Verlet} symplectic scheme running at an internal rate of 400~Hz ($\Delta t_{\text{sub}} = 2.5\text{ ms}$).
+A recurring limitation in commercial educational physics simulations is numerical instability or energy drift when modeling stiff oscillatory linkages. To ensure strict physical fidelity, the dynamic solver implements a sub-stepped \textbf{Velocity Verlet} symplectic scheme running at an internal rate of 400~Hz ($\Delta t_{\mathrm{sub}} = 2.5\text{ ms}$).
 
 The dynamic equation of motion governing the top-stage coordinate $H(t)$ is formulated as a 2nd-order damped differential equation:
 \begin{equation}
 \begin{split}
-    \ddot{H}(t) + 2 \zeta \omega_n \dot{H}(t) &+ a_{\text{coulomb}} \tanh\left(\frac{\dot{H}}{\epsilon}\right) \\
-    &+ \omega_n^2 [H(t) - H_{\text{eq}}] = 0
+    \ddot{H}(t) + 2 \zeta \omega_n \dot{H}(t) &+ a_{\mathrm{coulomb}} \tanh\left(\frac{\dot{H}}{\epsilon}\right) \\
+    &+ \omega_n^2 [H(t) - H_{\mathrm{eq}}] = 0
 \end{split}
 \label{eq:ode_dynamic}
 \end{equation}
 where:
 \begin{itemize}
-    \item $\omega_n = \sqrt{k_{\text{eff}} / m_{\text{eff}}}$ is the natural angular frequency, incorporating the distributed linkage mass inertia $m_{\text{eff}} = m + \frac{1}{3} M_{\text{links}} \lambda$.
+    \item $\omega_n = \sqrt{k_{\mathrm{eff}} / m_{\mathrm{eff}}}$ is the natural angular frequency, incorporating the distributed linkage mass inertia $m_{\mathrm{eff}} = m + \frac{1}{3} M_{\mathrm{links}} \lambda$.
     \item $\zeta$ is the non-dimensional viscous damping ratio.
-    \item $a_{\text{coulomb}} \tanh(\dot{H} / \epsilon)$ represents a smooth, continuous regularization of dry Coulomb friction, eliminating discontinuous numeric chatter around zero velocity.
+    \item $a_{\mathrm{coulomb}} \tanh(\dot{H} / \epsilon)$ represents a smooth, continuous regularization of dry Coulomb friction, eliminating discontinuous numeric chatter around zero velocity.
 \end{itemize}
 
 The numerical integration executes as:

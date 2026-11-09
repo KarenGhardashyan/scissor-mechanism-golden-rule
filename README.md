@@ -14,7 +14,7 @@
 > Runs client-side in-browser via WebAssembly (Godot 4.5) without installation.
 >
 > ### 🎮 Web Simulation Quickstart Guide
-> - **Select Mechanism Topology:** Switch between **Rig A** ($n=3$ uniform), **Rig B** ($n=5$ uniform), and **Rig C** ($1:2:3$ progressive scale) using the top navigation bar.
+> - **Select Mechanism Topology:** Switch between **Rig A** ($n=3$ uniform), **Rig B** ($n=5$ uniform), and **Rig C** (1:2:3 progressive scale) using the top navigation bar.
 > - **Sweep Suspended Mass:** Drag the mass slider $m$ to inspect real-time kinematic extension and joint force vector scaling ($\mathbf{F}_y, \mathbf{R}$).
 > - **Inspect Coulomb Stiction Deadband:** Toggle **OSCILLATIONS: OFF** and adjust joint friction $\mu$ to inspect static friction holding and deadband envelopes without waiting for oscillations to settle.
 > - **Read Real-Time 2D Telemetry Scope:** Track dynamic stroke trajectories on `LiveGraph.gd`, comparing numerical simulation data directly against theoretical regression curves and empirical error corridors.
@@ -23,7 +23,7 @@
 > Demonstrating empirical bench oscillations against the 400 Hz numerical integrator.
 
 ![Digital Twin Simulation Benchmark](simulation_render.png)
-*Figure 1: Digital twin in Godot 4.5: real-time vector decomposition, telemetry scope, and 400 Hz Velocity Verlet kinematic solver.*
+*Figure 1:* Digital twin in Godot 4.5: real-time vector decomposition, telemetry scope, and $400\text{ Hz}$ Velocity Verlet kinematic solver.
 
 ---
 
@@ -107,7 +107,7 @@ $$
 P_{\text{eff}} = \left(m + m_{\text{struct}}\right) g = \left(m + \frac{n}{2} m_{\text{link}}\right) g
 $$
 
-For Rig C ($1:2:3$ progressive scale), where link lengths scale as $\{1\ell, 2\ell, 3\ell\}$:
+For Rig C (1:2:3 progressive scale), where link lengths scale as $\{1\ell, 2\ell, 3\ell\}$:
 
 $$
 P_{\text{eff}} = (m + 3.0 m_{\text{link}}) g
@@ -191,13 +191,13 @@ During dynamic oscillations, whenever the linkage velocity approaches zero ($v \
 All linkage geometry was modeled in SolidWorks 2024 and prepared for fabrication with calibrated hole tolerances and low rotational friction.
 
 ![Physical Pantograph Prototypes](docs/images/hardware/pantograph_rigs_comparison.jpg)
-*Figure 2: Fabricated physical pantograph prototypes. Left: 5-stage uniform linkage ($n=5$). Center: 3-stage progressive scale linkage ($1:2:3$ ratio, Rig C). Right: 3-stage uniform linkage ($n=3$).*
+*Figure 2:* Fabricated physical pantograph prototypes. Left: 5-stage uniform linkage ($n = 5$). Center: 3-stage progressive scale linkage ($1:2:3$ ratio, Rig C). Right: 3-stage uniform linkage ($n = 3$).
 
 ![SolidWorks Parametric Link](docs/images/hardware/cad_link_fillet.png)
-*Figure 3: Parametric SolidWorks CAD model of the 60.0 mm primary scissor arm, incorporating 5.0 mm stress-relieving corner fillets and calibrated 4.0 mm pivot holes.*
+*Figure 3:* Parametric SolidWorks CAD model of the $60.0\text{ mm}$ primary scissor arm, incorporating $5.0\text{ mm}$ stress-relieving corner fillets and calibrated $4.0\text{ mm}$ pivot holes.
 
 ![Cura Gyroid Infill Slicing](docs/images/hardware/cura_gyroid_slice.png)
-*Figure 4: Ultimaker Cura toolpath preview highlighting the 35% Gyroid infill cross-section for isotropic shear modulus and torsional stability.*
+*Figure 4:* Ultimaker Cura toolpath preview highlighting the 35% Gyroid infill cross-section for isotropic shear modulus and torsional stability.
 
 ### Mechanical Design Details
 - **Primary Scissor Bars ($60.0\text{ mm} \times 10.0\text{ mm} \times 3.6\text{ mm}$):** Features three precision pivot holes ($\varnothing = 4.0\text{ mm}$) centered at $0.0\text{ mm}$, $30.0\text{ mm}$, and $60.0\text{ mm}$.
@@ -281,7 +281,7 @@ Theoretical ratio: $\lambda = 5.000\times$. Empirical average: $\overline{\lambd
 | **1.15** | 11.28 | 43.5 | 9.2 | **4.73** |
 
 ![Desmos Regression Plot n=5](docs/images/desmos/plot_n5_regression.png)
-*Figure 9: Desmos linear regression of total stroke $L$ and spring stage extension $H$ versus suspended mass $m$ for the $n = 5$ uniform pantograph ($R^2 = 0.996$).*
+*Figure 9:* Desmos linear regression of total stroke $L$ and spring stage extension $H$ versus suspended mass $m$ for the $n = 5$ uniform pantograph ($R^2 = 0.996$).
 
 - **Extracted Spring Stiffness:** From regression slope $\frac{\partial(\Delta H)}{\partial m} \approx 0.045\text{ m/kg}$, $k_{\text{eff}} \approx \mathbf{1090\text{ N/m}}$ ($R^2 = 0.996$).
 - **Geometric Invariance:** Plotting $L$ versus $H$ yields a straight line with slope $5.0$, confirming kinematic stroke amplification is decoupled from load magnitude.
@@ -302,7 +302,7 @@ Theoretical ratio: $\lambda = 3.000\times$. Empirical average: $\overline{\lambd
 | **1.00** | 9.81 | 23.9 | 8.0 | **2.99** |
 
 ![Desmos Regression Plot n=3](docs/images/desmos/plot_n3_regression.png)
-*Figure 10: Desmos linear regression of stage extension $H$ and total stroke $L$ versus load $m$ for the $n = 3$ pantograph ($R^2 = 0.998$).*
+*Figure 10:* Desmos linear regression of stage extension $H$ and total stroke $L$ versus load $m$ for the $n = 3$ pantograph ($R^2 = 0.998$).
 
 - **Extracted Spring Stiffness:** From regression slope $\frac{\partial(\Delta H)}{\partial m} \approx 0.030\text{ m/kg}$, $k_{\text{eff}} \approx \mathbf{981\text{ N/m}}$ ($R^2 = 0.998$).
 
@@ -324,13 +324,13 @@ To test whether kinematic amplification remains invariant when Hooke's Law is vi
 | **800** | 44.5 | 9.3 | **4.78** |
 
 ![Desmos Rubber Band Non-Linear Fit](docs/images/desmos/plot_rubber_cubic.png)
-*Figure 11: Desmos 3rd-order polynomial regression for hyperelastic polymer band. Kinematic transmission ratio $\lambda \approx 4.96 \pm 0.13$ remains invariant despite non-linear Hookean departure.*
+*Figure 11:* Desmos 3rd-order polynomial regression for hyperelastic polymer band. Kinematic transmission ratio $\lambda \approx 4.96 \pm 0.13$ remains invariant despite non-linear Hookean departure.
 
 - **Regression Finding:** While the elongation curves $H(m)$ and $L(m)$ depart from linear behavior (requiring a 3rd-order polynomial fit in Desmos), the ratio $\lambda = L/H \approx 4.96 \pm 0.13$ remains invariant. This empirically proves that **kinematic mechanical advantage is governed strictly by linkage topology, independent of constitutive material linearity**.
 
 ---
 
-### Series 4: Progressive Scale Pantograph ($1:2:3$ Linkage Ratio, Rig C)
+### Series 4: Progressive Scale Pantograph (1:2:3 Linkage Ratio, Rig C)
 To investigate non-uniform geometric scaling, I manufactured Rig C with arm lengths scaling progressively across stages:
 - **Stage 1 (Upper):** $l_1 = 1\ell = 60\text{ mm} \implies H_1 = 2(1\ell)\sin\theta = H_0$,
 - **Stage 2 (Middle):** $l_2 = 2\ell = 120\text{ mm} \implies H_2 = 2(2\ell)\sin\theta = 2H_0$,
@@ -345,12 +345,12 @@ $$
 Rig C was designed, printed, and assembled as a physical proof-of-concept demonstrator to evaluate geometric scaling feasibility, pin clearance tolerances, and out-of-plane torsional stability under large asymmetric lever arms ($3\ell = 180\text{ mm}$). Quantitative load-displacement datasets were recorded strictly for Series 1 ($n=5$ spring), Series 2 ($n=3$ spring), and Series 3 ($n=5$ latex band); Rig C serves as an experimental engineering prototype demonstrating progressive linkage mechanics.
 
 ![Rig C 1:2:3 Progressive Scale Test Stand](docs/images/hardware/teststand_progressive_123.jpg)
-*Figure 12: Physical proof-of-concept prototype of Rig C ($1:2:3$ progressive scale pantograph) mounted to the vertical retort stand for out-of-plane deflection and joint clearance evaluation.*
+*Figure 12:* Physical proof-of-concept prototype of Rig C ($1:2:3$ progressive scale pantograph) mounted to the vertical retort stand for out-of-plane deflection and joint clearance evaluation.
 
 #### Assembly Constraints Specific to Rig C
-1. **Slender Arm Bending:** The lowest arms ($3\ell = 180\text{ mm}$) experience three times the bending moment of stage 1 arms ($M_b \approx P \cdot 3\ell$). Stage 3 arms were sliced with 4 perimeter walls ($1.6\text{ mm}$) and 40% gyroid infill to eliminate out-of-plane buckling under load.
-2. **Clearance Runout:** Because joint clearance wobble scales linearly with link length, Stage 3 pivots demanded strict $-0.08\text{ mm}$ horizontal hole expansion to prevent angular slop.
-3. **Planar Alignment:** Dual jam nuts on the middle and bottom pivots were counter-torqued with $< 0.05\text{ mm}$ axial end-play to ensure all three stages expand in a single vertical plane.
+- **Slender Arm Bending:** The lowest arms ($3\ell = 180\text{ mm}$) experience three times the bending moment of stage 1 arms ($M_b \approx P \cdot 3\ell$). Stage 3 arms were sliced with 4 perimeter walls ($1.6\text{ mm}$) and 40% gyroid infill to eliminate out-of-plane buckling under load.
+- **Clearance Runout:** Because joint clearance wobble scales linearly with link length, Stage 3 pivots demanded strict $-0.08\text{ mm}$ horizontal hole expansion to prevent angular slop.
+- **Planar Alignment:** Dual jam nuts on the middle and bottom pivots were counter-torqued with $< 0.05\text{ mm}$ axial end-play to ensure all three stages expand in a single vertical plane.
 
 ---
 ## 6. Digital Twin Architecture (Godot 4.5)
@@ -412,12 +412,9 @@ The real-time graph receives telemetry directly from the simulated rigs. It plot
 
 To maintain scientific integrity, I have documented the physical boundaries where the current simulation and physical models lose accuracy:
 
-1. **Singularity at Flat Angles ($\theta < 10^\circ$):**
-   As $\theta \to 0^\circ$, the axial load $R = F_y / \sin\theta$ approaches infinity. In physical hardware, pin binding and link flexure prevent operation below $\theta \approx 8^\circ$. The simulation clamps $\theta \ge 3^\circ$ to prevent division-by-zero singularities.
-2. **Viscoelastic Polymer Creep:**
-   Under sustained loads exceeding $1.0\text{ kg}$ for periods $> 48\text{ hours}$, PLA exhibits room-temperature viscoelastic creep, causing a permanent baseline elongation of $\approx 0.5\text{ mm}$ per stage. The current numerical model assumes elastic behavior and does not model long-term plastic deformation.
-3. **Out-of-Plane Torsional Compliance:**
-   The simulation assumes strict 2D planar motion ($z = 0$). In physical testing, high lateral disturbances can excite out-of-plane torsional twisting modes that are not captured in the 1-DOF differential equation.
+- **Singularity at Flat Angles ($\theta < 10^\circ$):** As $\theta \to 0^\circ$, the axial load $R = F_y / \sin\theta$ approaches infinity. In physical hardware, pin binding and link flexure prevent operation below $\theta \approx 8^\circ$. The simulation clamps $\theta \ge 3^\circ$ to prevent division-by-zero singularities.
+- **Viscoelastic Polymer Creep:** Under sustained loads exceeding $1.0\text{ kg}$ for periods $> 48\text{ hours}$, PLA exhibits room-temperature viscoelastic creep, causing a permanent baseline elongation of $\approx 0.5\text{ mm}$ per stage. The current numerical model assumes elastic behavior and does not model long-term plastic deformation.
+- **Out-of-Plane Torsional Compliance:** The simulation assumes strict 2D planar motion ($z = 0$). In physical testing, high lateral disturbances can excite out-of-plane torsional twisting modes that are not captured in the 1-DOF differential equation.
 
 ---
 
