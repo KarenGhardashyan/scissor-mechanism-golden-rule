@@ -17,7 +17,13 @@
 > - **Select Mechanism Topology:** Switch between **Rig A** ($n=3$ uniform), **Rig B** ($n=5$ uniform), and **Rig C** (1:2:3 progressive scale) using the top navigation bar.
 > - **Sweep Suspended Mass:** Drag the mass slider $m$ to inspect real-time kinematic extension and joint force vector scaling ($\mathbf{F}_y, \mathbf{R}$).
 > - **Inspect Coulomb Stiction Deadband:** Toggle **OSCILLATIONS: OFF** and adjust joint friction $\mu$ to inspect static friction holding and deadband envelopes without waiting for oscillations to settle.
+> - **Toggle Force Vectors & Decomposition:** Click the bottom-dock buttons (`Upper`, `Lower`, `Friction fs`, `ΣF = 0`, `Fx / Fy`) to visualize 3D joint reaction vectors and free-body balance on the active rig.
 > - **Read Real-Time 2D Telemetry Scope:** Track dynamic stroke trajectories on `LiveGraph.gd`, comparing numerical simulation data directly against theoretical regression curves and empirical error corridors.
+> - **Camera & Viewport Controls (Desktop, Laptop & Trackpad):**
+>   - **Rotate / Orbit:** Left-Click Drag (or single-finger drag on touchscreens).
+>   - **Pan / Move Viewport:** Right-Click Drag, Middle-Click Drag, or **Shift + Left-Click Drag** (ideal for laptop touchpads). Also pans smoothly with **`W` / `A` / `S` / `D`** or Arrow keys ($\leftarrow \uparrow \downarrow \rightarrow$).
+>   - **Zoom:** Mouse Scroll Wheel, on-screen **`+` / `-`** top-bar buttons, **`E`** (zoom in) / **`Q`** (zoom out), or pinch-to-zoom on touchscreens.
+>   - **Reset Camera:** Press **`R`** or click **`RESET VIEW`** on the top bar.
 
 > [Side-by-Side Video: Physical Rig vs. Digital Twin (Coming Soon)]  
 > Demonstrating empirical bench oscillations against the 400 Hz numerical integrator.
