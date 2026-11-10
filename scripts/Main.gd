@@ -668,9 +668,9 @@ func _build_liquid_glass_ui() -> void:
 
 		if inspected_rig == null or not is_instance_valid(inspected_rig):
 			var target_rig: PantographRig = rig_a
-			if current_rig_id == "RIG_B" and rig_b:
+			if (current_mobile_rig_id == "RIG_B" or current_mobile_rig_id == "B") and rig_b:
 				target_rig = rig_b
-			elif current_rig_id == "RIG_C" and rig_c:
+			elif (current_mobile_rig_id == "RIG_C" or current_mobile_rig_id == "C") and rig_c:
 				target_rig = rig_c
 			if target_rig != null:
 				_on_pin_clicked(target_rig, 1, target_rig.get_pin_global_position(1))
