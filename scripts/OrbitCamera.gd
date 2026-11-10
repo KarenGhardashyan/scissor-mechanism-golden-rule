@@ -147,13 +147,17 @@ func _unhandled_input(event: InputEvent) -> void:
 			prev_pinch_dist = curr_dist
 			prev_touch_mid = curr_mid
 
-	# 3. Desktop Mouse Button Events
+	# 3. Desktop Mouse Button Events (Laptop & Mouse friendly)
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_RIGHT or mb.button_index == MOUSE_BUTTON_LEFT:
-			is_orbiting = mb.pressed
-		elif mb.button_index == MOUSE_BUTTON_MIDDLE:
+		var shift_held: bool = mb.shift_pressed or Input.is_key_pressed(KEY_SHIFT)
+		# Pan with Middle-click, Right-click, or Shift + Left-click
+		if mb.button_index == MOUSE_BUTTON_MIDDLE or mb.button_index == MOUSE_BUTTON_RIGHT or (mb.button_index == MOUSE_BUTTON_LEFT and shift_held):
 			is_panning = mb.pressed
+			if mb.pressed: is_orbiting = false
+		elif mb.button_index == MOUSE_BUTTON_LEFT:
+			is_orbiting = mb.pressed
+			if mb.pressed: is_panning = false
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
 			target_distance = clampf(target_distance - zoom_speed, min_distance, max_distance)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
@@ -162,20 +166,53 @@ func _unhandled_input(event: InputEvent) -> void:
 	# 4. Desktop Mouse Motion Events
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
-		if is_orbiting:
-			target_yaw -= mm.relative.x * orbit_speed
-			target_pitch = clampf(target_pitch - mm.relative.y * orbit_speed, deg_to_rad(-40.0), deg_to_rad(60.0))
-		elif is_panning:
+		var shift_held: bool = mm.shift_pressed or Input.is_key_pressed(KEY_SHIFT)
+		if is_panning or (is_orbiting and shift_held):
 			var right_vec := global_transform.basis.x
 			var up_vec := global_transform.basis.y
 			current_target -= right_vec * (mm.relative.x * pan_speed)
 			current_target += up_vec * (mm.relative.y * pan_speed)
-			current_target.x = clampf(current_target.x, -3.2, 3.2)
-			current_target.y = clampf(current_target.y, 0.6, 3.4)
+			current_target.x = clampf(current_target.x, -3.8, 3.8)
+			current_target.y = clampf(current_target.y, 0.4, 3.8)
 			current_target.z = 0.0
+		elif is_orbiting:
+			target_yaw -= mm.relative.x * orbit_speed
+			target_pitch = clampf(target_pitch - mm.relative.y * orbit_speed, deg_to_rad(-40.0), deg_to_rad(60.0))
 
 
 func _process(delta: float) -> void:
+	# 5. Smooth Laptop Keyboard Navigation (WASD / Arrows to Pan, Q/E or +/- to Zoom, R to Reset)
+	var pan_kb := Vector2.ZERO
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		pan_kb.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		pan_kb.x += 1.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		pan_kb.y += 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		pan_kb.y -= 1.0
+
+	if pan_kb != Vector2.ZERO:
+		pan_kb = pan_kb.normalized()
+		var right_vec := global_transform.basis.x
+		var up_vec := global_transform.basis.y
+		var kb_speed: float = 3.6 * delta
+		current_target += (right_vec * pan_kb.x + up_vec * pan_kb.y) * kb_speed
+		current_target.x = clampf(current_target.x, -3.8, 3.8)
+		current_target.y = clampf(current_target.y, 0.4, 3.8)
+		current_target.z = 0.0
+
+	var zoom_kb: float = 0.0
+	if Input.is_key_pressed(KEY_E) or Input.is_key_pressed(KEY_EQUAL):
+		zoom_kb -= 1.0
+	if Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_MINUS):
+		zoom_kb += 1.0
+	if zoom_kb != 0.0:
+		target_distance = clampf(target_distance + zoom_kb * 5.0 * delta, min_distance, max_distance)
+
+	if Input.is_key_pressed(KEY_R):
+		if not is_following_rig:
+			reset_camera()
 	if is_following_rig and follow_target_node != null and is_instance_valid(follow_target_node):
 		var target_y: float = follow_target_node.global_position.y - 1.2
 		if follow_target_node.has_method("get_base_resting_H"):

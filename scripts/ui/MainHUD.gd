@@ -19,6 +19,8 @@ signal slow_mo_toggled(is_slow_mo: bool)
 signal theme_toggled(is_dark: bool)
 signal formulas_requested()
 signal reset_view_requested()
+signal zoom_in_requested()
+signal zoom_out_requested()
 signal sim_speed_changed(val: float)
 signal sim_pause_toggled(is_paused: bool)
 signal damping_changed(val: float)
@@ -121,6 +123,8 @@ var btn_slow_mo: Button
 var btn_theme: Button
 var btn_formulas: Button
 var btn_reset_view: Button
+var btn_zoom_in: Button
+var btn_zoom_out: Button
 
 # Telemetry Metric Tiles (3x2 Grid)
 var tile_val_h: Label
@@ -284,9 +288,26 @@ func _build_desktop_layout() -> void:
 	)
 	top_hbox.add_child(btn_formulas)
 
+	btn_zoom_in = Button.new()
+	btn_zoom_in.text = "+"
+	btn_zoom_in.tooltip_text = "Zoom In (E or +)"
+	btn_zoom_in.custom_minimum_size = Vector2(34, 34)
+	btn_zoom_in.add_theme_font_size_override("font_size", 13)
+	btn_zoom_in.pressed.connect(func(): zoom_in_requested.emit())
+	top_hbox.add_child(btn_zoom_in)
+
+	btn_zoom_out = Button.new()
+	btn_zoom_out.text = "-"
+	btn_zoom_out.tooltip_text = "Zoom Out (Q or -)"
+	btn_zoom_out.custom_minimum_size = Vector2(34, 34)
+	btn_zoom_out.add_theme_font_size_override("font_size", 13)
+	btn_zoom_out.pressed.connect(func(): zoom_out_requested.emit())
+	top_hbox.add_child(btn_zoom_out)
+
 	btn_reset_view = Button.new()
-	btn_reset_view.text = "RESET"
-	btn_reset_view.custom_minimum_size = Vector2(75, 34)
+	btn_reset_view.text = "RESET VIEW"
+	btn_reset_view.tooltip_text = "Reset Camera View (R)\nControls: Left-Drag=Orbit | Shift/Right-Drag=Pan | WASD/Arrows=Move | Q/E=Zoom"
+	btn_reset_view.custom_minimum_size = Vector2(85, 34)
 	btn_reset_view.add_theme_font_size_override("font_size", 11)
 	btn_reset_view.pressed.connect(func(): reset_view_requested.emit())
 	top_hbox.add_child(btn_reset_view)
@@ -508,14 +529,14 @@ func _build_mobile_layout() -> void:
 	tab_bar.add_theme_constant_override("separation", 8)
 
 	btn_mob_tab_ctrl = Button.new()
-	btn_mob_tab_ctrl.text = "🎛 Controls"
+	btn_mob_tab_ctrl.text = "Controls"
 	btn_mob_tab_ctrl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_mob_tab_ctrl.custom_minimum_size = Vector2(0, 36)
 	btn_mob_tab_ctrl.pressed.connect(func(): _switch_mobile_tab(0))
 	tab_bar.add_child(btn_mob_tab_ctrl)
 
 	btn_mob_tab_graph = Button.new()
-	btn_mob_tab_graph.text = "📈 L(m) Profile"
+	btn_mob_tab_graph.text = "L(m) Profile"
 	btn_mob_tab_graph.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_mob_tab_graph.custom_minimum_size = Vector2(0, 36)
 	btn_mob_tab_graph.pressed.connect(func(): _switch_mobile_tab(1))
@@ -544,7 +565,7 @@ func _build_mobile_layout() -> void:
 	m_row.add_child(m_sp)
 
 	var btn_m_dec := Button.new()
-	btn_m_dec.text = "−0.05"
+	btn_m_dec.text = "-0.05"
 	btn_m_dec.custom_minimum_size = Vector2(60, 32)
 	btn_m_dec.pressed.connect(func(): _adjust_mass(-0.05))
 	m_row.add_child(btn_m_dec)
@@ -595,8 +616,8 @@ func _build_mobile_layout() -> void:
 	mob_vec_row2.add_theme_constant_override("separation", 6)
 
 	var m_cfgs := [
-		{"id": "upper_beam", "label": "Upper ↗", "row": mob_vec_row1},
-		{"id": "lower_beam", "label": "Lower ↙", "row": mob_vec_row1},
+		{"id": "upper_beam", "label": "Upper", "row": mob_vec_row1},
+		{"id": "lower_beam", "label": "Lower", "row": mob_vec_row1},
 		{"id": "friction", "label": "Friction (fs)", "row": mob_vec_row1},
 		{"id": "equilibrium", "label": "ΣF = 0 (Pin)", "row": mob_vec_row2},
 		{"id": "projections", "label": "Fx / Fy", "row": mob_vec_row2}
@@ -659,8 +680,8 @@ func _build_desktop_vector_panel() -> void:
 	hbox.add_child(lbl_tag)
 
 	var cfgs := [
-		{"id": "upper_beam", "label": "Upper ↗", "tooltip": "Show forces on Upper Beam (R_upper, Fx_up, Fy_up)"},
-		{"id": "lower_beam", "label": "Lower ↙", "tooltip": "Show forces on Lower Beam (R_down, Fx_down, Fy_down)"},
+		{"id": "upper_beam", "label": "Upper", "tooltip": "Show forces on Upper Beam (R_upper, Fx_up, Fy_up)"},
+		{"id": "lower_beam", "label": "Lower", "tooltip": "Show forces on Lower Beam (R_down, Fx_down, Fy_down)"},
 		{"id": "friction", "label": "Friction fs", "tooltip": "Show static friction vector fs holding the joint"},
 		{"id": "equilibrium", "label": "ΣF = 0 (Pin)", "tooltip": "Show complete static pin equilibrium: R_upper + R_down + fs = 0"},
 		{"id": "projections", "label": "Fx / Fy", "tooltip": "Show orthogonal Fx and Fy projections"}
@@ -696,6 +717,7 @@ func _toggle_vector_group(group_id: String) -> void:
 	# If user manually disables upper, lower, or friction while equilibrium was on, turn off equilibrium
 	if (group_id == "upper_beam" or group_id == "lower_beam" or group_id == "friction") and not new_state:
 		vector_active_groups["equilibrium"] = false
+		vector_group_toggled.emit("equilibrium", false)
 
 	_update_vector_group_buttons()
 	vector_group_toggled.emit(group_id, new_state)
@@ -998,7 +1020,7 @@ func _build_control_card_tabs(ctrl_vbox: VBoxContainer) -> void:
 	mass_row.add_child(mass_sp)
 
 	btn_mass_dec = Button.new()
-	btn_mass_dec.text = "−0.05"
+	btn_mass_dec.text = "-0.05"
 	btn_mass_dec.custom_minimum_size = Vector2(46, 24)
 	btn_mass_dec.add_theme_font_size_override("font_size", 10)
 	btn_mass_dec.pressed.connect(func(): _adjust_mass(-0.05))
@@ -1260,7 +1282,7 @@ func _build_control_card_tabs(ctrl_vbox: VBoxContainer) -> void:
 	time_presets.add_theme_constant_override("separation", 4)
 
 	btn_play_pause = Button.new()
-	btn_play_pause.text = "⏸ PAUSE"
+	btn_play_pause.text = "PAUSE"
 	btn_play_pause.custom_minimum_size = Vector2(80, 26)
 	btn_play_pause.add_theme_font_size_override("font_size", 10)
 	btn_play_pause.pressed.connect(_on_play_pause_pressed)
@@ -1289,7 +1311,7 @@ func _build_control_card_tabs(ctrl_vbox: VBoxContainer) -> void:
 	action_row.add_theme_constant_override("separation", 6)
 
 	btn_jolt = Button.new()
-	btn_jolt.text = "⚡ JOLT IMPULSE (+0.1 m/s)"
+	btn_jolt.text = "JOLT IMPULSE (+0.1 m/s)"
 	btn_jolt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_jolt.custom_minimum_size = Vector2(0, 26)
 	btn_jolt.add_theme_font_size_override("font_size", 10)
@@ -1298,7 +1320,7 @@ func _build_control_card_tabs(ctrl_vbox: VBoxContainer) -> void:
 	all_param_preset_buttons.append(btn_jolt)
 
 	btn_deselect_pin = Button.new()
-	btn_deselect_pin.text = "✕ HIDE 3D VECTORS"
+	btn_deselect_pin.text = "HIDE 3D VECTORS"
 	btn_deselect_pin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_deselect_pin.custom_minimum_size = Vector2(0, 26)
 	btn_deselect_pin.add_theme_font_size_override("font_size", 10)
@@ -1449,7 +1471,7 @@ func _on_sim_speed_slider_changed(val: float) -> void:
 func _on_play_pause_pressed() -> void:
 	is_sim_paused = not is_sim_paused
 	if btn_play_pause:
-		btn_play_pause.text = "▶ RESUME" if is_sim_paused else "⏸ PAUSE"
+		btn_play_pause.text = "RESUME" if is_sim_paused else "PAUSE"
 	if lbl_speed_val:
 		var mode := " [PAUSED]" if is_sim_paused else ""
 		lbl_speed_val.text = "%.2fx%s" % [current_sim_speed, mode]
@@ -1528,7 +1550,7 @@ func apply_theme(is_dark: bool) -> void:
 	var active_btn_sb := ThemeManager.create_button_style(is_dark, true, false, 4)
 
 	var all_buttons := [
-		btn_slow_mo, btn_theme, btn_formulas, btn_reset_view,
+		btn_slow_mo, btn_theme, btn_formulas, btn_zoom_in, btn_zoom_out, btn_reset_view,
 		btn_mass_dec, btn_mass_inc, btn_beam_toggle, btn_friction_toggle,
 		btn_play_pause, btn_jolt, btn_deselect_pin,
 		btn_mob_slow, btn_mob_th, btn_mob_form

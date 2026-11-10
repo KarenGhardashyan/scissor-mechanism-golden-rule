@@ -344,9 +344,9 @@ func _cycle_mobile_speed() -> void:
 func _update_speed_ui() -> void:
 	var speed_str := "%.2f×" % current_sim_speed
 	if lbl_speed_val != null:
-		lbl_speed_val.text = ("⏸ " if is_sim_paused else "") + speed_str
+		lbl_speed_val.text = ("PAUSED " if is_sim_paused else "") + speed_str
 	if btn_mob_speed != null:
-		btn_mob_speed.text = ("⏸ " if is_sim_paused else "") + speed_str
+		btn_mob_speed.text = ("PAUSED " if is_sim_paused else "") + speed_str
 
 
 func _setup_pure_light_studio() -> void:
@@ -642,13 +642,18 @@ func _build_liquid_glass_ui() -> void:
 				vector_show_projections = is_active
 			"upper_beam":
 				vector_show_upper_beam = is_active
+				if not is_active:
+					vector_show_equilibrium = false
 			"lower_beam":
 				vector_show_lower_beam = is_active
+				if not is_active:
+					vector_show_equilibrium = false
 			"equilibrium":
 				vector_show_equilibrium = is_active
 				if is_active:
 					vector_show_upper_beam = true
 					vector_show_lower_beam = true
+					vector_show_friction = true
 					main_hud.sync_vector_toggle_states({
 						"projections": vector_show_projections,
 						"upper_beam": vector_show_upper_beam,
@@ -658,7 +663,18 @@ func _build_liquid_glass_ui() -> void:
 					})
 			"friction":
 				vector_show_friction = is_active
-		if inspected_rig != null and is_instance_valid(inspected_rig):
+				if not is_active:
+					vector_show_equilibrium = false
+
+		if inspected_rig == null or not is_instance_valid(inspected_rig):
+			var target_rig: PantographRig = rig_a
+			if current_rig_id == "RIG_B" and rig_b:
+				target_rig = rig_b
+			elif current_rig_id == "RIG_C" and rig_c:
+				target_rig = rig_c
+			if target_rig != null:
+				_on_pin_clicked(target_rig, 1, target_rig.get_pin_global_position(1))
+		else:
 			_update_force_visualizer()
 	)
 	main_hud.beam_reaction_toggled.connect(func(is_upper: bool):
@@ -693,6 +709,14 @@ func _build_liquid_glass_ui() -> void:
 	main_hud.reset_view_requested.connect(func():
 		if camera != null:
 			camera.reset_camera()
+	)
+	main_hud.zoom_in_requested.connect(func():
+		if camera != null:
+			camera.zoom_in(0.8)
+	)
+	main_hud.zoom_out_requested.connect(func():
+		if camera != null:
+			camera.zoom_out(0.8)
 	)
 	main_hud.formulas_requested.connect(func():
 		if main_hud != null:
@@ -815,7 +839,7 @@ func _build_liquid_glass_ui() -> void:
 			Engine.time_scale = current_sim_speed
 			lbl_speed_val.text = "%.2f×" % current_sim_speed
 		else:
-			lbl_speed_val.text = "⏸ %.2f×" % current_sim_speed
+			lbl_speed_val.text = "PAUSED %.2f×" % current_sim_speed
 	)
 	_style_tech_slider(slider_speed)
 	speed_box.add_child(slider_speed)
@@ -1430,7 +1454,7 @@ func _build_liquid_glass_ui() -> void:
 	btn_toggle_vector_mode.pressed.connect(_on_toggle_vector_mode)
 	btn_row_modes.add_child(btn_toggle_vector_mode)
 
-	btn_toggle_force_dir = _create_liquid_button("Upper Beam (Reaction ↗)", "arrow_up")
+	btn_toggle_force_dir = _create_liquid_button("Upper Beam (Reaction)", "arrow_up")
 	btn_toggle_force_dir.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_toggle_force_dir.custom_minimum_size = Vector2(0, 26)
 	btn_toggle_force_dir.add_theme_font_size_override("font_size", 10)
@@ -3268,9 +3292,9 @@ func _update_force_visualizer() -> void:
 
 	# COMMON CONCURRENT ANCHOR & VECTOR MODE FILTERING
 	var show_proj: bool = vector_show_projections and not is_resultant_only_mode
-	var show_upper: bool = vector_show_upper_beam or vector_show_equilibrium
-	var show_lower: bool = vector_show_lower_beam or vector_show_equilibrium
-	var show_fric: bool = vector_show_friction or vector_show_equilibrium
+	var show_upper: bool = vector_show_upper_beam
+	var show_lower: bool = vector_show_lower_beam
+	var show_fric: bool = vector_show_friction
 
 	if is_resultant_only_mode:
 		# Mode: Resultant (R Only)
