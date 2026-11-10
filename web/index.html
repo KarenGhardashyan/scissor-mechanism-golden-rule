@@ -228,6 +228,131 @@ body {
 			margin: 12px 0;
 			overflow-x: auto;
 		}
+		
+		/* Mobile Device Warning Modal */
+		#mobile-warning-overlay {
+			position: fixed;
+			inset: 0;
+			z-index: 1000000;
+			display: none;
+			align-items: center;
+			justify-content: center;
+			background: rgba(5, 8, 15, 0.90);
+			backdrop-filter: blur(14px);
+			-webkit-backdrop-filter: blur(14px);
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			padding: 16px;
+			box-sizing: border-box;
+		}
+		#mobile-warning-card {
+			background: #0f172a;
+			border: 1px solid rgba(255, 255, 255, 0.16);
+			border-radius: 20px;
+			max-width: 440px;
+			width: 100%;
+			padding: 28px 24px;
+			text-align: center;
+			color: #f8fafc;
+			box-shadow: 0 25px 60px rgba(0, 0, 0, 0.70), 0 0 40px rgba(0, 113, 227, 0.15);
+			box-sizing: border-box;
+			animation: mobileFadeIn 0.25s ease-out;
+		}
+		@keyframes mobileFadeIn {
+			from { opacity: 0; transform: scale(0.95); }
+			to { opacity: 1; transform: scale(1); }
+		}
+		.mobile-warning-badge {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			background: rgba(255, 255, 255, 0.06);
+			border: 1px solid rgba(255, 255, 255, 0.12);
+			padding: 8px 18px;
+			border-radius: 30px;
+			margin-bottom: 16px;
+			font-size: 1.4rem;
+		}
+		.mobile-warning-title {
+			margin: 0 0 6px 0;
+			font-size: 1.25rem;
+			font-weight: 700;
+			letter-spacing: 0.01em;
+			color: #ffffff;
+		}
+		.mobile-warning-subtitle {
+			font-size: 0.80rem;
+			color: #38bdf8;
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			font-weight: 600;
+			margin-bottom: 16px;
+		}
+		.mobile-warning-body {
+			font-size: 0.92rem;
+			line-height: 1.55;
+			color: #cbd5e1;
+			margin-bottom: 22px;
+			text-align: center;
+		}
+		.mobile-warning-body p {
+			margin: 0 0 10px 0;
+		}
+		.mobile-warning-note {
+			font-size: 0.86rem;
+			color: #facc15;
+			background: rgba(250, 204, 21, 0.10);
+			border: 1px solid rgba(250, 204, 21, 0.25);
+			border-radius: 8px;
+			padding: 8px 12px;
+		}
+		.mobile-warning-en {
+			font-size: 0.78rem;
+			color: #94a3b8;
+			margin-top: 10px !important;
+		}
+		.mobile-warning-actions {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.btn-mobile {
+			width: 100%;
+			padding: 13px 18px;
+			border-radius: 10px;
+			font-size: 0.92rem;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.15s ease-in-out;
+			box-sizing: border-box;
+			font-family: inherit;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+		}
+		.btn-mobile-exit {
+			background: rgba(239, 68, 68, 0.14);
+			border: 1px solid rgba(239, 68, 68, 0.40);
+			color: #fca5a5;
+		}
+		.btn-mobile-exit:hover, .btn-mobile-exit:active {
+			background: #ef4444;
+			color: #ffffff;
+			border-color: #ef4444;
+		}
+		.btn-mobile-continue {
+			background: linear-gradient(135deg, #0071e3 0%, #0056b3 100%);
+			border: 1px solid #38bdf8;
+			color: #ffffff;
+			box-shadow: 0 4px 14px rgba(0, 113, 227, 0.35);
+		}
+		.btn-mobile-continue:hover, .btn-mobile-continue:active {
+			background: #0077ed;
+			border-color: #60a5fa;
+			box-shadow: 0 6px 18px rgba(0, 113, 227, 0.55);
+		}
+
 		</style>
 	</head>
 	<body>
@@ -238,6 +363,41 @@ body {
 		<noscript>
 			Your browser does not support JavaScript.
 		</noscript>
+
+		
+		<!-- Mobile Device Warning Modal -->
+		<div id="mobile-warning-overlay">
+			<div id="mobile-warning-card">
+				<div class="mobile-warning-badge">
+					<span>📱</span>
+					<span style="font-size: 1.1rem; opacity: 0.7;">➔</span>
+					<span>💻</span>
+				</div>
+				<h2 class="mobile-warning-title">Рекомендуется запуск с ПК</h2>
+				<div class="mobile-warning-subtitle">Desktop Computer Recommended</div>
+				
+				<div class="mobile-warning-body">
+					<p>
+						Эта 3D-симуляция и физический движок (400 Hz Velocity Verlet) созданы для компьютеров с клавиатурой и мышью.
+					</p>
+					<p class="mobile-warning-note">
+						На смартфонах симуляция работает плохо или нестабильно.<br><strong>(Мы ещё работаем над этим!)</strong>
+					</p>
+					<p class="mobile-warning-en">
+						For full 3D viewport navigation, telemetry scope, and parameter sweeps, please open this page on a desktop PC.
+					</p>
+				</div>
+
+				<div class="mobile-warning-actions">
+					<button class="btn-mobile btn-mobile-continue" onclick="handleMobileContinue();">
+						Всё равно продолжить ▶
+					</button>
+					<button class="btn-mobile btn-mobile-exit" onclick="handleMobileExit();">
+						✕ Закрыть проект
+					</button>
+				</div>
+			</div>
+		</div>
 
 		<div id="status">
 			<img id="status-splash" class="show-image--true fullsize--true use-filter--true" src="index.png" alt="">
@@ -257,6 +417,50 @@ if ('serviceWorker' in navigator) {
 const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":391940,"index.wasm":38057390},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
+
+window.isMobileDevice = function() {
+	const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+	const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua);
+	const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 1);
+	const isSmallScreen = window.innerWidth <= 840 || window.innerHeight <= 600;
+	return isMobileUA || (hasTouch && isSmallScreen);
+};
+
+let pendingSimulationStart = null;
+
+window.showMobileWarning = function(onProceed) {
+	pendingSimulationStart = onProceed;
+	const overlay = document.getElementById('mobile-warning-overlay');
+	if (overlay) {
+		overlay.style.display = 'flex';
+	} else if (typeof onProceed === 'function') {
+		onProceed();
+	}
+};
+
+window.handleMobileContinue = function() {
+	try {
+		sessionStorage.setItem('mobile_warning_dismissed', '1');
+	} catch (e) {}
+	const overlay = document.getElementById('mobile-warning-overlay');
+	if (overlay) {
+		overlay.style.display = 'none';
+	}
+	if (typeof pendingSimulationStart === 'function') {
+		const startFn = pendingSimulationStart;
+		pendingSimulationStart = null;
+		startFn();
+	}
+};
+
+window.handleMobileExit = function() {
+	if (window.history.length > 1) {
+		window.history.back();
+	}
+	setTimeout(function() {
+		window.location.href = 'https://github.com/KarenGhardashyan/scissor-mechanism-golden-rule';
+	}, 200);
+};
 
 (function () {
 	const statusOverlay = document.getElementById('status');
@@ -341,20 +545,28 @@ const engine = new Engine(GODOT_CONFIG);
 			displayFailureNotice(missingMsg + missing.join('\n'));
 		}
 	} else {
-		setStatusMode('progress');
-		engine.startGame({
-			'onProgress': function (current, total) {
-				if (current > 0 && total > 0) {
-					statusProgress.value = current;
-					statusProgress.max = total;
-				} else {
-					statusProgress.removeAttribute('value');
-					statusProgress.removeAttribute('max');
-				}
-			},
-		}).then(() => {
-			setStatusMode('hidden');
-		}, displayFailureNotice);
+		function launchEngine() {
+			setStatusMode('progress');
+			engine.startGame({
+				'onProgress': function (current, total) {
+					if (current > 0 && total > 0) {
+						statusProgress.value = current;
+						statusProgress.max = total;
+					} else {
+						statusProgress.removeAttribute('value');
+						statusProgress.removeAttribute('max');
+					}
+				},
+			}).then(() => {
+				setStatusMode('hidden');
+			}, displayFailureNotice);
+		}
+
+		if (window.isMobileDevice && window.isMobileDevice() && !sessionStorage.getItem('mobile_warning_dismissed')) {
+			window.showMobileWarning(launchEngine);
+		} else {
+			launchEngine();
+		}
 	}
 }());
 		</script>
